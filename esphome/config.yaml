@@ -1,0 +1,53 @@
+# for flashing : press boot button for 2-3 seconds before the serial connection initialize
+# After OTA update, the EN (reset) button must be pressed to run firmware
+# do not use gpio12 (MTDI)
+
+substitutions:
+  name: h2_sensor
+  friendly_name: "H2 sensor board"
+
+  ### board
+  board_type: az-delivery-devkit-v4  # nodemcu-32s, esp-wrover-kit
+
+  ### time
+  TZ: "Europe/Zurich"  # timezone
+
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+
+# Enable logging
+logger:
+  level: DEBUG  # NONE / ERROR / INFO / DEBUG / VERBOSE
+  # baud_rate: 0  # to disable logging via UART (fully headless)
+  logs:
+    text_sensor: ERROR
+    homeassistant.sensor: ERROR
+    canbus: ERROR  # setting log level for canbus lower than INFO may crash  : esphome/issues#4051
+    uptime: ERROR
+    uptime.sensor: ERROR
+    wifi_signal: ERROR
+    wifi_signal.sensor: ERROR
+    esp32.preferences: ERROR
+    internal_temperature: ERROR
+    esp-idf: ERROR
+    select: ERROR
+    number: ERROR
+    sensor: INFO
+
+
+packages:
+  wifi: !include packages/wifi.yaml
+  board: !include packages/board.yaml
+  time: !include packages/time.yaml
+  sensors_others: !include packages/sensors_others.yaml
+  switch: !include packages/switch.yaml
+  mq8: !include packages/mq8.yaml
+  # debug: !include packages/debug.yaml
+
+# web_server:
+#   port: 80
+#   log: false

@@ -1,0 +1,82 @@
+# MQ-8 hydrogen sensor (MQ_gas_sensors component, H2 curve: a=976.97, b=-0.688).
+#
+# Wiring
+#   VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider.
+#   The module's AO output can go up to VCC (5 V) while the ESP32 ADC is limited
+#   to about 3.1 V at 12 dB attenuation, so use a divider (10k / 20k = AO * 2/3)
+#   and set `voltage_multiplier` to the inverse of the divider ratio (1.5).
+#
+# Calibration
+#   The first boot calibrates R0 in clean air after `calibration.delay` and stores
+#   it in flash (restored on the next boots, so the calibration is not repeated
+#   while hydrogen is present). To force a new calibration:
+#       esphome: on_boot: - lambda: id(mq8).request_calibration();
+#   The calibrated value is logged as "R0 = ... kOhm" - it can also be pinned in
+#   the YAML with `r0: <value>`.
+
+substitutions:
+  mq8_pin: GPIO34  # ADC1_CH6 (input only pin), change to match your wiring
+  mq8_multiplier: "1.5"  # 1.5 for a 2:1 divider (AO -> 2/3), 1.0 if wired directly
+  mq8_rl: "10.0"  # load resistor of the module in kOhm
+
+sensor:
+  - platform: adc
+    id: ${name}_mq8_adc
+    name: "${friendly_name} MQ-8 AO voltage"
+    pin: ${mq8_pin}
+    attenuation: 12db
+    update_interval: 30s
+    accuracy_decimals: 3
+    entity_category: diagnostic
+
+  - platform: MQ_gas_sensors
+    id: mq8
+    name: "${friendly_name} H2 (MQ-8)"
+    sensor_type: MQ-8
+    gas: H2
+    voltage: ${name}_mq8_adc
+    voltage_multiplier: ${mq8_multiplier}
+    vcc: 5.0
+    rl: ${mq8_rl}
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 0s  # set to 24h for the burn-in of a brand new sensor
+    # The MQ-8 saturates around 10 000 ppm = 25 % of the H2 LEL (LEL = 40 000 ppm)
+    min_ppm: 0
+    max_ppm: 10000
+    calibration:
+      ratio_in_clean_air: 70  # RS/R0 in clean air (MQ-8 datasheet)
+      delay: 5min  # wait for the boot + heater stabilisation before calibrating
+      samples: 50
+      persist: true  # store R0 in flash and reuse it after a reboot
+    ratio_sensor: ${name}_mq8_ratio
+    rs_sensor: ${name}_mq8_rs
+
+  # Diagnostics (remove if not needed)
+  - platform: template
+    id: ${name}_mq8_ratio
+    name: "${friendly_name} MQ-8 RS-R0 ratio"
+    accuracy_decimals: 3
+    icon: mdi:chart-line
+    entity_category: diagnostic
+
+  - platform: template
+    id: ${name}_mq8_rs
+    name: "${friendly_name} MQ-8 RS"
+    unit_of_measurement: kOhm
+    accuracy_decimals: 3
+    icon: mdi:omega
+    entity_category: diagnostic
+
+# Reference thresholds for hydrogen in battery rooms (see documentation/H2_lie_limits.txt):
+#   4 000 ppm  = 10 % LEL  -> early warning
+#   10 000 ppm = 25 % LEL  -> pre-alarm (sensor upper range, NFPA 855 design target)
+#   20 000 ppm = 50 % LEL  -> immediate action (ventilate / stop charging)
+# Alerting is best done in Home Assistant, or with an on_value automation, e.g.:
+#     on_value:
+#       - if:
+#           condition:
+#             sensor.in_range: { above: 10000 }
+#           then:
+#             - logger.log: "H2 pre-alarm!"

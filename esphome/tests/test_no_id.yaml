@@ -1,0 +1,25 @@
+# Validation-only regression config (run: esphome config tests/test_no_id.yaml)
+#
+#   * MQ sensor without an explicit `id:` (name only)
+#   * `pin:` sugar with a lowercase `gas:` and a fixed `r0:` (no calibration)
+esphome:
+  name: mq_no_id_test
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+sensor:
+  - platform: MQ_gas_sensors
+    name: "H2 without id"
+    sensor_type: mq-8
+    gas: h2
+    pin: GPIO35
+    adc_attenuation: 12db
+    r0: 0.29
+    voltage_multiplier: 1.5

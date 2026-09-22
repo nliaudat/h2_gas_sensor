@@ -1,0 +1,7 @@
+sensor:
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+    entity_category: "diagnostic"
+    id: ${name}_wifi_signal_db
+
