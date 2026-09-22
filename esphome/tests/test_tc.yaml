@@ -1,0 +1,57 @@
+# Validation-only regression config for the MQDataScience extras
+# (run: esphome config tests/test_tc.yaml)
+#
+#   * temperature/humidity correction enabled (`correction_mode: mqdatascience`)
+#     driven by two template sensors (no I2C hardware needed for validation)
+#   * alternative MQ-8 H2 coefficient dataset (`curve: mqdatascience`)
+#   * correction diagnostic + `correction_clamp: scaled` (their own behaviour)
+esphome:
+  name: mq_tc_test
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+sensor:
+  - platform: template
+    id: test_temperature
+    name: "Test temperature"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 2
+    update_interval: 60s
+
+  - platform: template
+    id: test_humidity
+    name: "Test humidity"
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 60s
+
+  - platform: template
+    id: test_correction
+    name: "Test correction factor"
+    accuracy_decimals: 4
+
+  - platform: MQ_gas_sensors
+    id: mq8_tc
+    name: "H2 with T-RH correction"
+    sensor_type: MQ-8
+    gas: H2
+    pin: GPIO35
+    adc_attenuation: 12db
+    voltage_multiplier: 1.5
+    rl: 10.0
+    r0: 0.29
+    curve: mqdatascience
+    temperature: test_temperature
+    humidity: test_humidity
+    correction_mode: mqdatascience
+    correction_clamp: scaled
+    correction_sensor: test_correction
+    min_ppm: 0
+    max_ppm: 10000

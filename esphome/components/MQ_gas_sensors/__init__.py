@@ -12,6 +12,13 @@ It supports every MQ sensor of the MQUnifiedsensor family:
 The analog signal is either taken from an existing ESPHome voltage-sampler
 sensor (``voltage:``) or from a pin owned by this component (``pin:``, which
 creates a hidden, internal ``adc`` sensor for you).
+
+Optional extras ported from https://github.com/abcdaaaaaaaaa/MQDataScience:
+
+* ``correction_mode: mqdatascience`` compensates the RS/R0 ratio for the
+  ambient temperature and humidity (``temperature:``/``humidity:`` sensor ids).
+* ``curve: mqdatascience`` selects their ``a`` / ``b`` coefficient dataset
+  instead of the SolderedElectronics/MQUnifiedsensor one.
 """
 
 import esphome.codegen as cg
@@ -49,15 +56,38 @@ CONF_WARMUP_TIME = "warmup_time"
 CONF_MIN_PPM = "min_ppm"
 CONF_MAX_PPM = "max_ppm"
 CONF_CORRECTION_FACTOR = "correction_factor"
+CONF_CORRECTION_MODE = "correction_mode"
+CONF_CORRECTION_CLAMP = "correction_clamp"
+CONF_CORRECTION_SENSOR = "correction_sensor"
+CONF_CURVE = "curve"
+CONF_HUMIDITY = "humidity"
 CONF_PERSIST = "persist"
 CONF_RATIO_SENSOR = "ratio_sensor"
 CONF_RS_SENSOR = "rs_sensor"
+CONF_TEMPERATURE = "temperature"
 CONF_VOLTAGE_SENSOR = "voltage_sensor"
 
-# MQUnifiedsensor::setRegressionMethod() values.
+# MQUnifiedsensor::setRegressionMethod() values plus the MQDataScience inverse
+# form (used by their published MQ-8 H2 coefficients: ppm = (ratio / a)^(1 / b)).
 REGRESSION_METHODS = {
     "exponential": 1,  # _PPM = a * ratio^b
     "linear": 2,  # log10(_PPM) = (log10(ratio) - b) / a
+    "inverse": 3,  # _PPM = (ratio / a)^(1 / b)
+}
+
+# Temperature/humidity compensation of the RS/R0 ratio.
+CORRECTION_MODES = {
+    "none": 0,  # no compensation (default)
+    "mqdatascience": 1,  # a + c * exp(b * T), MQDataScience Correction.cpp
+}
+
+# How the corrected PPM value is clamped.
+CORRECTION_CLAMPS = {
+    # Clip to the configured max_ppm - the alarm ceiling never moves.
+    "absolute": 0,
+    # Clip to max_ppm * correction - MQDataScience's own behaviour, the ceiling
+    # drops with the correction (not recommended for a safety limit).
+    "scaled": 1,
 }
 
 # MQUnifiedsensor uses R0/RS (see readSensorR0Rs(), "INVERTED for MQ-131"),

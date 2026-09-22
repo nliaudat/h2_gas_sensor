@@ -1,0 +1,102 @@
+# H2 gas sensor — documentation
+
+Hydrogen monitoring for a battery room (nickel-iron / Edison cells) with an
+ESP32, an **MQ-8** sensor and ESPHome. This folder is the versioned
+documentation; the measured numbers are asserted by
+[`../esphome/tests/mq_math_test.cpp`](../esphome/tests/mq_math_test.cpp), so the
+docs and the firmware cannot drift apart silently.
+
+`documentation/` (local only, **git-ignored**) holds the private reading notes,
+the article list and the reference PDF.
+
+## Documents
+
+| Document | Content |
+|---|---|
+| [`mq8_sensor_guide.md`](mq8_sensor_guide.md) | Wiring, 5 V supply, AO divider, real load resistor, burn-in, R0 calibration workflow, placement |
+| [`mq8_h2_curve.md`](mq8_h2_curve.md) | The measurement chain V → RS → RS/R0 → ppm, why `ratio_in_clean_air` is 70, provenance of `a`/`b`, ratio→ppm table |
+| [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
+| [`temperature_humidity_correction.md`](temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation: model, constants, effect envelope, configuration, safety rules |
+| [`mqdatascience_comparison.md`](mqdatascience_comparison.md) | MQ-8 H2 curve comparison (standard vs MQDataScience), what was adopted and what was deliberately skipped |
+
+## Firmware layout
+
+```
+esphome/
+├── config.yaml                     entry point (substitutions + package includes)
+├── packages/
+│   ├── mq8.yaml                    MQ-8 only (default, no compensation)
+│   ├── mq8_tc.yaml                 MQ-8 + I2C T/RH sensor + MQDataScience compensation
+│   ├── board.yaml, wifi.yaml, time.yaml, sensors_others.yaml, switch.yaml
+├── components/MQ_gas_sensors/      the custom ESPHome component (see its README.md)
+└── tests/                          host test + config validation fixtures
+```
+
+Only one MQ-8 package may be included at a time — both define `id: mq8`.
+
+Build, flash and test:
+
+```bash
+cd esphome
+esphome config config.yaml            # validate the configuration
+esphome compile config.yaml           # full ESP-IDF build
+esphome run config.yaml               # flash (OTA or serial)
+
+cd tests
+g++ -std=c++17 -O2 -I ../components/MQ_gas_sensors mq_math_test.cpp -o mq_math_test && ./mq_math_test
+```
+
+## Verification status
+
+**Verified** (asserted by the host test):
+
+* the measurement chain (`voltage_from_adc`, `rs_from_voltage`, `ratio_from_rs`,
+  `r0_from_clean_air`, `ppm_from_ratio`), including the overflow/NaN guards;
+* the MQ-8 H2 curve values in these documents (`a = 976.97`, `b = -0.688`,
+  RS/R0 = 70 in clean air → 52.5 ppm);
+* the MQDataScience alternative curve (`a = 18391.5667`, `b = -1.4494`, inverse
+  form) and its −11 % offset against the standard dataset;
+* every correction factor quoted in
+  [`temperature_humidity_correction.md`](temperature_humidity_correction.md)
+  (e.g. RH 40 %/20 °C → 0.8997, i.e. ppm × 0.9297).
+
+**Verified** (ESPHome 2026.9.0 / ESP-IDF 5.5.5, 23.09.2026):
+
+* `esphome config config.yaml`, `esphome config tests/test_no_id.yaml` and
+  `esphome config tests/test_tc.yaml` all report `Configuration is valid!`;
+* `esphome compile config.yaml` succeeds with `packages/mq8.yaml` **and** with
+  `packages/mq8_tc.yaml` (`Successfully compiled program.`, no compiler
+  warnings, 46.1 % flash with the plain package);
+* the compile-time rejections behave as documented: `correction_mode` without
+  `temperature:`/`humidity:`, `curve:` combined with `a:`/`b:`, and
+  `correction_mode` on a type without constants (MQ-9) each fail with an
+  explanatory message and the list of supported types;
+* `flake8 --config .flake8 components/MQ_gas_sensors tests` is clean; the host
+  test builds warning-free with `-Wall -Wextra`.
+
+**Unverified / unavailable:**
+
+* the article `zbotic.in/mq-8-hydrogen-sensor-detect-h2-gas-for-battery-monitoring/`
+  is behind a Cloudflare CAPTCHA (HTTP 403) — its numbers could not be
+  cross-checked;
+* the STEL / preheat / RL tables of MQDataScience are **PNG images** in their
+  README, not machine-readable tables, so only the MQ-8 relevant values are
+  quoted here;
+* their "76 models / 3D surface / 4D prediction" platform was **not** reproduced
+  (it needs their Python environment and does not run on an ESP32);
+* no measurement was taken against a calibrated hydrogen source: the curve is a
+  datasheet fit and the sensor-to-sensor spread of an MQ-8 is around ±30 %.
+
+## Sources
+
+| Source | Used for |
+|---|---|
+| [SolderedElectronics/Soldered-MQ-Gas-Sensor-Arduino-Library](https://github.com/SolderedElectronics/Soldered-MQ-Gas-Sensor-Arduino-Library) | `sensorConfigData.h` curve table of the component (`coefficients.py`) |
+| [miguel5612/MQSensorsLib](https://github.com/miguel5612/MQSensorsLib) | original MQUnifiedsensor PPM model (`mq_math.h`) |
+| [RapportTecnologia esp-iot-solution MQSensorLIB](https://github.com/RapportTecnologia/esp-iot-solution/tree/MQSensorLib/components/sensors/gas/MQSensorLIB) | ESP-IDF port + ratio discussion |
+| [abcdaaaaaaaaa/MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience) (MIT, v6.0.0 "MQSpaceData") | T/RH correction model, alternative MQ-8 H2 curve, reference tables |
+| `documentation/H2_lie_limits.txt`, `documentation/9.2024SmartAirMonitoring…pdf` | H2 LEL reference values (local, git-ignored) |
+
+The MQ-8 datasheet and the MQUnifiedsensor/MQDataScience fits describe the
+**same** log-log curve; the differences between the datasets are documented in
+[`mqdatascience_comparison.md`](mqdatascience_comparison.md).

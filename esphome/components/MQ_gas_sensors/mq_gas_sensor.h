@@ -47,6 +47,13 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void set_min_ppm(float ppm) { this->min_ppm_ = ppm; }
   void set_max_ppm(float ppm) { this->max_ppm_ = ppm; }
   void set_correction_factor(float factor) { this->correction_factor_ = factor; }
+  void set_correction_mode(uint8_t mode) { this->correction_mode_ = mode; }
+  void set_correction_clamp(uint8_t mode) { this->correction_clamp_ = mode; }
+  void set_tc_coefficients(float a33, float b33, float c33, float a85, float b85, float c85) {
+    this->tc_ = mqmath::TcCorrectionCoefficients{a33, b33, c33, a85, b85, c85};
+  }
+  void set_temperature_source(sensor::Sensor *sensor) { this->temperature_source_ = sensor; }
+  void set_humidity_source(sensor::Sensor *sensor) { this->humidity_source_ = sensor; }
   void set_samples(uint8_t samples) { this->samples_ = samples; }
   void set_sample_interval(uint32_t interval) { this->sample_interval_ = interval; }
   void set_warmup_time(uint32_t warmup) { this->warmup_time_ = warmup; }
@@ -55,6 +62,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void set_ratio_sensor(sensor::Sensor *sensor) { this->ratio_sensor_ = sensor; }
   void set_rs_sensor(sensor::Sensor *sensor) { this->rs_sensor_ = sensor; }
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
+  void set_correction_sensor(sensor::Sensor *sensor) { this->correction_sensor_ = sensor; }
 
   // ----------------------------------------------------------------- runtime
   /// (Re)start an R0 calibration in clean air.
@@ -65,6 +73,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   float get_r0() const { return this->r0_; }
   float get_rs() const { return this->rs_; }
   float get_ratio() const { return this->ratio_; }
+  float get_correction() const { return this->correction_; }
   float get_sensor_voltage() const { return this->sensor_voltage_; }
 
  protected:
@@ -74,6 +83,8 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   float current_rs_() const;
   /// RS/R0 (respecting `ratio_mode_`) for the current `sensor_voltage_`.
   float current_ratio_() const;
+  /// Temperature/humidity correction factor (1.0 = uncorrected).
+  float compute_correction_();
   /// Full MQUnifiedsensor pipeline; returns NAN when no valid reading exists.
   float read_ppm_();
 
@@ -89,6 +100,8 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   std::string type_{"MQ"};
   std::string gas_{"CUSTOM"};
   voltage_sampler::VoltageSampler *source_{nullptr};
+  sensor::Sensor *temperature_source_{nullptr};
+  sensor::Sensor *humidity_source_{nullptr};
 
   float a_{0.0f};
   float b_{0.0f};
@@ -102,6 +115,9 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   float min_ppm_{0.0f};
   float max_ppm_{10000.0f};
   float correction_factor_{0.0f};
+  uint8_t correction_mode_{mqmath::CORRECTION_NONE};
+  uint8_t correction_clamp_{mqmath::CLAMP_ABSOLUTE};
+  mqmath::TcCorrectionCoefficients tc_{};
   uint8_t samples_{2};
   uint32_t sample_interval_{20};
   uint32_t warmup_time_{0};
@@ -127,13 +143,16 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   bool warmup_notified_{false};
   bool warned_no_r0_{false};
   bool warned_voltage_{false};
+  bool warned_correction_{false};
   float sensor_voltage_{0.0f};
   float rs_{0.0f};
   float ratio_{0.0f};
+  float correction_{1.0f};
 
   sensor::Sensor *ratio_sensor_{nullptr};
   sensor::Sensor *rs_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
+  sensor::Sensor *correction_sensor_{nullptr};
 
   ESPPreferenceObject r0_pref_{};
 };

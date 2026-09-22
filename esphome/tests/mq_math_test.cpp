@@ -118,6 +118,99 @@ int main() {
   check_true("will_overflow(1e6)", will_overflow(1e6));
   check_true("!will_overflow(2)", !will_overflow(2.0));
 
+  std::printf("\n== MQDataScience inverse regression (method 3) ==\n");
+  // Their MQ-8 H2 curve: a = 18391.5667, b = -1.4494, PPM = (ratio / a)^(1 / b).
+  const float ds_a = 18391.5667f;
+  const float ds_b = -1.4494f;
+  check_close("inverse: ppm at ratio = 70 (clean air)",
+              ppm_from_ratio(ds_a, ds_b, 70.0f, REGRESSION_INVERSE),
+              std::pow(70.0 / 18391.5667, 1.0 / -1.4494));
+  check_close("inverse: ppm at ratio = 70 ~ 46.7 (published value)",
+              ppm_from_ratio(ds_a, ds_b, 70.0f, REGRESSION_INVERSE), 46.7, 0.5);
+  check_close("inverse: ppm at ratio = 10",
+              ppm_from_ratio(ds_a, ds_b, 10.0f, REGRESSION_INVERSE),
+              std::pow(10.0 / 18391.5667, 1.0 / -1.4494));
+  check_close("inverse: ppm at ratio = 1",
+              ppm_from_ratio(ds_a, ds_b, 1.0f, REGRESSION_INVERSE), 875.4, 5.0);
+  // A' = a^(-1/b), b' = 1/b  =>  a' * ratio^b' reproduces the inverse form.
+  check_close("inverse == exponential with a'=875.4, b'=-0.68994 (ratio 70)",
+              ppm_from_ratio(ds_a, ds_b, 70.0f, REGRESSION_INVERSE),
+              875.4 * std::pow(70.0, -0.68994), 0.1);
+  check_close("inverse == exponential with a'=875.4, b'=-0.68994 (ratio 1)",
+              ppm_from_ratio(ds_a, ds_b, 1.0f, REGRESSION_INVERSE),
+              875.4 * std::pow(1.0, -0.68994), 0.5);
+  check_close("inverse: the two MQ-8 datasets differ by ~11 % in clean air",
+              100.0 * (ppm_from_ratio(ds_a, ds_b, 70.0f, REGRESSION_INVERSE) /
+                           ppm_from_ratio(mq8_a, mq8_b, 70.0f, REGRESSION_EXPONENTIAL) -
+                       1.0),
+              -11.1, 0.2);
+  check_close("inverse: ratio 0 -> 0 ppm", ppm_from_ratio(ds_a, ds_b, 0.0f, REGRESSION_INVERSE),
+              0.0);
+  check_close("inverse: a = 0 -> 0 ppm", ppm_from_ratio(0.0f, ds_b, 3.0f, REGRESSION_INVERSE),
+              0.0);
+
+  std::printf("\n== Temperature/humidity correction (MQDataScience Correction.cpp) ==\n");
+  // MQ-8 constants: a 0.8559 -> 0.8201, b -0.0611 -> -0.0606, c 0.1673 -> 0.1492.
+  const TcCorrectionCoefficients mq8_tc{0.8559f, -0.0611f, 0.1673f, 0.8201f, -0.0606f, 0.1492f};
+  // ppm scales with correction**|b'|, i.e. correction**(1 / 1.4494) = correction**0.68994.
+  const double tc_scale_exponent = 0.68994;
+
+  check_close("linear_interpolate at x0", linear_interpolate(33.0f, 33.0f, 85.0f, 1.0f, 3.0f), 1.0);
+  check_close("linear_interpolate at x1", linear_interpolate(85.0f, 33.0f, 85.0f, 1.0f, 3.0f), 3.0);
+  check_close("linear_interpolate at the midpoint",
+              linear_interpolate(59.0f, 33.0f, 85.0f, 1.0f, 3.0f), 2.0);
+  check_close("linear_interpolate with x1 == x0", linear_interpolate(59.0f, 33.0f, 33.0f, 1.0f, 3.0f),
+              1.0);
+
+  check_close("correction(RH 40, 20 degC) ~ 0.8997 (documented value)",
+              correction_coefficient(40.0f, 20.0f, mq8_tc), 0.8997, 1e-3);
+  // At the RH midpoint (59 %) a, b and c are the arithmetic means of the table.
+  check_close("correction(RH 59, 20 degC) uses the interpolated midpoints",
+              correction_coefficient(59.0f, 20.0f, mq8_tc),
+              (0.8559 + 0.8201) / 2.0 +
+                  0.5 * (0.1673 + 0.1492) * std::exp(0.5 * (-0.0611 - 0.0606) * 20.0),
+              1e-3);
+  check_close("correction at RH 33, T 20 (table edge)",
+              correction_coefficient(33.0f, 20.0f, mq8_tc),
+              0.8559 + 0.1673 * std::exp(-0.0611 * 20.0), 1e-5);
+  check_close("correction at RH 85, T 20 (table edge)",
+              correction_coefficient(85.0f, 20.0f, mq8_tc),
+              0.8201 + 0.1492 * std::exp(-0.0606 * 20.0), 1e-5);
+  check_close("RH below 33 is clamped", correction_coefficient(10.0f, 20.0f, mq8_tc),
+              correction_coefficient(33.0f, 20.0f, mq8_tc));
+  check_close("RH above 85 is clamped", correction_coefficient(120.0f, 20.0f, mq8_tc),
+              correction_coefficient(85.0f, 20.0f, mq8_tc));
+  check_close("T below -10 is clamped", correction_coefficient(50.0f, -40.0f, mq8_tc),
+              correction_coefficient(50.0f, -10.0f, mq8_tc));
+  check_close("T above 50 is clamped", correction_coefficient(50.0f, 80.0f, mq8_tc),
+              correction_coefficient(50.0f, 50.0f, mq8_tc));
+  check_true("missing humidity (NAN) -> no correction",
+             correction_coefficient(NAN, 20.0f, mq8_tc) == 1.0f);
+  check_true("missing temperature (NAN) -> no correction",
+             correction_coefficient(40.0f, NAN, mq8_tc) == 1.0f);
+  check_true("infinite temperature -> no correction",
+             correction_coefficient(40.0f, INFINITY, mq8_tc) == 1.0f);
+
+  std::printf("\n== Correction application (ratio / correction) ==\n");
+  check_close("apply_correction(70, 0.9)", apply_correction(70.0f, 0.9f), 70.0 / 0.9);
+  check_close("apply_correction(70, 1) is a no-op", apply_correction(70.0f, 1.0f), 70.0);
+  check_close("apply_correction(70, 0) is a no-op", apply_correction(70.0f, 0.0f), 70.0);
+  check_close("apply_correction(70, NAN) is a no-op", apply_correction(70.0f, NAN), 70.0);
+  check_true("apply_correction(NAN, 0.9) stays NAN", std::isnan(apply_correction(NAN, 0.9f)));
+
+  const float corr_40_20 = correction_coefficient(40.0f, 20.0f, mq8_tc);
+  check_close("clean air (ratio 70) at RH 40 / 20 degC: ~48.8 instead of 52.5 ppm",
+              ppm_from_ratio(mq8_a, mq8_b, apply_correction(70.0f, corr_40_20),
+                             REGRESSION_EXPONENTIAL),
+              976.97 * std::pow(70.0 / 0.8997, -0.688), 0.5);
+  check_close("ppm scaling exponent used by the docs is |b'| = 0.68994",
+              100.0 * (std::pow(static_cast<double>(corr_40_20), tc_scale_exponent) - 1.0), -7.0,
+              0.2);
+  // An uncorrected reading must be bit-identical to the regression alone.
+  check_close("correction = 1 reproduces the uncorrected curve",
+              ppm_from_ratio(mq8_a, mq8_b, apply_correction(70.0f, 1.0f), REGRESSION_EXPONENTIAL),
+              976.97 * std::pow(70.0, -0.688));
+
   if (failures == 0) {
     std::printf("\nAll mq_math tests passed.\n");
     return EXIT_SUCCESS;

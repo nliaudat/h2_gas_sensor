@@ -13,6 +13,18 @@ static const char *const TAG = "mq_gas_sensors";
 /// Version tag mixed into the preference key of the persisted R0 value.
 static constexpr uint32_t R0_PREFERENCE_VERSION = 0x00000001;
 
+/// Human readable name of a `mqmath::RegressionMethod` value.
+static const char *regression_method_name(uint8_t method) {
+  switch (method) {
+    case mqmath::REGRESSION_LINEAR:
+      return "linear";
+    case mqmath::REGRESSION_INVERSE:
+      return "inverse";
+    default:
+      return "exponential";
+  }
+}
+
 void MQGasSensor::setup() {
   this->r0_pref_ = this->make_entity_preference<float>(R0_PREFERENCE_VERSION);
 
@@ -61,9 +73,7 @@ void MQGasSensor::log_config_() {
   ESP_LOGCONFIG(TAG, "  Type: %s", this->type_.c_str());
   ESP_LOGCONFIG(TAG, "  Target gas: %s", this->gas_.c_str());
   ESP_LOGCONFIG(TAG, "  Curve: %s (a=%.6g, b=%.6g), ratio: %s",
-                this->regression_method_ == mqmath::REGRESSION_EXPONENTIAL ? "exponential"
-                                                                          : "linear",
-                this->a_, this->b_,
+                regression_method_name(this->regression_method_), this->a_, this->b_,
                 this->ratio_mode_ == mqmath::RATIO_R0_RS ? "R0/RS (MQUnifiedsensor)"
                                                          : "RS/R0 (datasheet)");
   ESP_LOGCONFIG(TAG, "  VCC: %.2f V, RL: %.2f kOhm, AO multiplier: x%.3f", this->vcc_, this->rl_,
@@ -81,6 +91,20 @@ void MQGasSensor::log_config_() {
                 this->ratio_in_clean_air_, this->correction_factor_);
   ESP_LOGCONFIG(TAG, "  Warm-up: %" PRIu32 " s, auto calibration: %s", this->warmup_time_ / 1000,
                 this->calibration_enabled_ ? "enabled" : "disabled");
+
+  const bool tc_enabled = this->correction_mode_ == mqmath::CORRECTION_MQDATASCIENCE;
+  ESP_LOGCONFIG(TAG, "  Temperature/humidity correction: %s",
+                tc_enabled ? "mqdatascience (ratio / (a + c * exp(b * T)))" : "none");
+  if (tc_enabled) {
+    ESP_LOGCONFIG(TAG, "  Correction constants (RH 33%%/85%%): a %.4f/%.4f, b %.4f/%.4f, c %.4f/%.4f",
+                  this->tc_.a33, this->tc_.a85, this->tc_.b33, this->tc_.b85, this->tc_.c33,
+                  this->tc_.c85);
+    ESP_LOGCONFIG(TAG, "  Correction sources: temperature %s, humidity %s, clamp: %s",
+                  this->temperature_source_ != nullptr ? "wired" : "MISSING",
+                  this->humidity_source_ != nullptr ? "wired" : "MISSING",
+                  this->correction_clamp_ == mqmath::CLAMP_SCALED ? "max_ppm * correction"
+                                                                  : "absolute max_ppm");
+  }
 }
 
 void MQGasSensor::dump_config() {
@@ -110,13 +134,49 @@ float MQGasSensor::current_ratio_() const {
                               static_cast<mqmath::RatioMode>(this->ratio_mode_));
 }
 
+float MQGasSensor::compute_correction_() {
+  if (this->correction_mode_ != mqmath::CORRECTION_MQDATASCIENCE)
+    return 1.0f;
+
+  if (this->temperature_source_ == nullptr || this->humidity_source_ == nullptr) {
+    if (!this->warned_correction_) {
+      this->warned_correction_ = true;
+      ESP_LOGW(TAG,
+               "'%s %s': temperature/humidity correction is enabled but a source is missing - "
+               "publishing the uncorrected value",
+               this->type_.c_str(), this->gas_.c_str());
+    }
+    return 1.0f;
+  }
+
+  // Sensor::state is NAN until the first valid publication, so a source that is
+  // still booting (or has failed) simply leaves the reading uncorrected.
+  const float temperature = this->temperature_source_->state;
+  const float humidity = this->humidity_source_->state;
+  if (!std::isfinite(temperature) || !std::isfinite(humidity)) {
+    if (!this->warned_correction_) {
+      this->warned_correction_ = true;
+      ESP_LOGW(TAG,
+               "'%s %s': no valid temperature/humidity reading yet (T=%.1f, RH=%.1f) - "
+               "publishing the uncorrected value",
+               this->type_.c_str(), this->gas_.c_str(), temperature, humidity);
+    }
+    return 1.0f;
+  }
+
+  this->warned_correction_ = false;
+  return mqmath::correction_coefficient(humidity, temperature, this->tc_);
+}
+
 float MQGasSensor::read_ppm_() {
+  const float ratio = mqmath::apply_correction(this->ratio_, this->correction_);
   const float ppm = mqmath::ppm_from_ratio(
-      this->a_, this->b_, this->ratio_,
+      this->a_, this->b_, ratio,
       static_cast<mqmath::RegressionMethod>(this->regression_method_));
   if (!std::isfinite(ppm))
     return NAN;
-  return mqmath::clamp_ppm(ppm, this->min_ppm_, this->max_ppm_);
+  return mqmath::clamp_ppm_corrected(ppm, this->min_ppm_, this->max_ppm_, this->correction_,
+                                     static_cast<mqmath::CorrectionClamp>(this->correction_clamp_));
 }
 
 void MQGasSensor::publish_diagnostics_() {
@@ -126,6 +186,8 @@ void MQGasSensor::publish_diagnostics_() {
     this->rs_sensor_->publish_state(this->rs_);
   if (this->ratio_sensor_ != nullptr)
     this->ratio_sensor_->publish_state(this->ratio_);
+  if (this->correction_sensor_ != nullptr)
+    this->correction_sensor_->publish_state(this->correction_);
 }
 
 void MQGasSensor::update() {
@@ -182,10 +244,13 @@ void MQGasSensor::update() {
 
   this->rs_ = this->current_rs_();
   this->ratio_ = this->current_ratio_();
+  this->correction_ = this->compute_correction_();
   const float ppm = this->read_ppm_();
 
-  ESP_LOGD(TAG, "'%s %s': V=%.4f V, RS=%.4f kOhm, ratio=%.4f -> %.1f ppm", this->type_.c_str(),
-           this->gas_.c_str(), this->sensor_voltage_, this->rs_, this->ratio_, ppm);
+  ESP_LOGD(TAG,
+           "'%s %s': V=%.4f V, RS=%.4f kOhm, ratio=%.4f (correction=%.4f) -> %.1f ppm",
+           this->type_.c_str(), this->gas_.c_str(), this->sensor_voltage_, this->rs_,
+           this->ratio_, this->correction_, ppm);
 
   this->publish_diagnostics_();
   this->publish_state(ppm);

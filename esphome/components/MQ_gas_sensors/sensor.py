@@ -33,8 +33,13 @@ from . import (
     CONF_ADC_ATTENUATION,
     CONF_ADC_SAMPLES,
     CONF_B,
+    CONF_CORRECTION_CLAMP,
     CONF_CORRECTION_FACTOR,
+    CONF_CORRECTION_MODE,
+    CONF_CORRECTION_SENSOR,
+    CONF_CURVE,
     CONF_GAS,
+    CONF_HUMIDITY,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
     CONF_PERSIST,
@@ -48,16 +53,22 @@ from . import (
     CONF_SAMPLES,
     CONF_SAMPLE_INTERVAL,
     CONF_SENSOR_TYPE,
+    CONF_TEMPERATURE,
     CONF_VCC,
     CONF_VOLTAGE_MULTIPLIER,
     CONF_VOLTAGE_SENSOR,
     CONF_WARMUP_TIME,
+    CORRECTION_CLAMPS,
+    CORRECTION_MODES,
     MQGasSensor,
     RATIO_MODES,
     REGRESSION_METHODS,
 )
 from .coefficients import (
+    CURVES,
+    CURVE_STANDARD,
     SENSOR_TYPES,
+    corrected_types,
     label_for,
     normalize_gas,
     normalize_type,
@@ -151,6 +162,7 @@ def _validate_config(config: ConfigType) -> ConfigType:
             vcc=config.get(CONF_VCC),
             min_ppm=config.get(CONF_MIN_PPM),
             max_ppm=config.get(CONF_MAX_PPM),
+            curve=config[CONF_CURVE],
         )
     except ValueError as err:
         raise cv.Invalid(str(err)) from err
@@ -159,6 +171,44 @@ def _validate_config(config: ConfigType) -> ConfigType:
         raise cv.Invalid(
             f"max_ppm ({resolved.max_ppm}) must be greater than "
             f"min_ppm ({resolved.min_ppm})"
+        )
+
+    correction_mode = config[CONF_CORRECTION_MODE]
+    missing_sources = [
+        key
+        for key in (CONF_TEMPERATURE, CONF_HUMIDITY)
+        if config.get(key) is None
+    ]
+    if correction_mode != "none":
+        if missing_sources:
+            raise cv.Invalid(
+                f"'correction_mode: {correction_mode}' needs ambient measurements, "
+                f"missing: {', '.join(missing_sources)}"
+            )
+        if resolved.tc is None:
+            raise cv.Invalid(
+                f"{label} has no temperature/humidity correction model, "
+                f"supported types: {', '.join(corrected_types())}"
+            )
+    elif not missing_sources:
+        _LOGGER.warning(
+            "%s: 'temperature:'/'humidity:' are configured but 'correction_mode' is "
+            "'none' - the PPM value is published without temperature/humidity "
+            "compensation",
+            label,
+        )
+
+    if resolved.curve != CURVE_STANDARD:
+        _LOGGER.info(
+            "%s %s: coefficient dataset '%s' selected (a=%s, b=%s, method=%s) - "
+            "the published PPM values differ from the '%s' dataset",
+            label,
+            resolved.gas,
+            resolved.curve,
+            resolved.a,
+            resolved.b,
+            resolved.method,
+            CURVE_STANDARD,
         )
 
     if CONF_R0 in config and CONF_CALIBRATION in config:
@@ -234,10 +284,22 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MIN_PPM): cv.float_,
             cv.Optional(CONF_MAX_PPM): cv.positive_not_null_float,
             cv.Optional(CONF_CORRECTION_FACTOR, default=0.0): cv.float_,
+            cv.Optional(CONF_CORRECTION_MODE, default="none"): cv.one_of(
+                *CORRECTION_MODES, lower=True
+            ),
+            cv.Optional(CONF_CORRECTION_CLAMP, default="absolute"): cv.one_of(
+                *CORRECTION_CLAMPS, lower=True
+            ),
+            cv.Optional(CONF_CURVE, default=CURVE_STANDARD): cv.one_of(
+                *CURVES, lower=True
+            ),
+            cv.Optional(CONF_TEMPERATURE): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_HUMIDITY): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_CALIBRATION): CALIBRATION_SCHEMA,
             cv.Optional(CONF_RATIO_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_RS_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_CORRECTION_SENSOR): cv.use_id(sensor.Sensor),
         }
     )
     .extend(cv.polling_component_schema("60s")),
@@ -279,6 +341,7 @@ async def to_code(config: ConfigType) -> None:
         vcc=config.get(CONF_VCC),
         min_ppm=config.get(CONF_MIN_PPM),
         max_ppm=config.get(CONF_MAX_PPM),
+        curve=config[CONF_CURVE],
     )
 
     calibration = config.get(CONF_CALIBRATION)
@@ -305,6 +368,19 @@ async def to_code(config: ConfigType) -> None:
     cg.add(var.set_sample_interval(config[CONF_SAMPLE_INTERVAL]))
     cg.add(var.set_warmup_time(config[CONF_WARMUP_TIME]))
     cg.add(var.set_correction_factor(config[CONF_CORRECTION_FACTOR]))
+    cg.add(var.set_correction_mode(CORRECTION_MODES[config[CONF_CORRECTION_MODE]]))
+    cg.add(var.set_correction_clamp(CORRECTION_CLAMPS[config[CONF_CORRECTION_CLAMP]]))
+
+    if config[CONF_CORRECTION_MODE] != "none":
+        tc = resolved.tc
+        if tc is None:  # pragma: no cover - already rejected by _validate_config
+            raise ValueError(
+                f"correction_mode is enabled but {resolved.label} has no "
+                "temperature/humidity correction model"
+            )
+        cg.add(var.set_tc_coefficients(tc.a33, tc.b33, tc.c33, tc.a85, tc.b85, tc.c85))
+        cg.add(var.set_temperature_source(await cg.get_variable(config[CONF_TEMPERATURE])))
+        cg.add(var.set_humidity_source(await cg.get_variable(config[CONF_HUMIDITY])))
 
     if (r0 := config.get(CONF_R0)) is not None:
         cg.add(var.set_r0(r0))
@@ -330,22 +406,24 @@ async def to_code(config: ConfigType) -> None:
         (CONF_RATIO_SENSOR, var.set_ratio_sensor),
         (CONF_RS_SENSOR, var.set_rs_sensor),
         (CONF_VOLTAGE_SENSOR, var.set_voltage_sensor),
+        (CONF_CORRECTION_SENSOR, var.set_correction_sensor),
     ):
         if (target := config.get(key)) is not None:
             cg.add(setter(await cg.get_variable(target)))
 
     _LOGGER.debug(
-        "%s %s: a=%s b=%s method=%s ratio_in_clean_air=%s rl=%s vcc=%s range=%s..%s ppm",
+        "%s %s: a=%s b=%s method=%s curve=%s ratio_in_clean_air=%s rl=%s vcc=%s "
+        "range=%s..%s ppm correction=%s",
         resolved.label,
         resolved.gas,
         resolved.a,
         resolved.b,
         resolved.method,
+        resolved.curve,
         ratio_in_clean_air,
         resolved.rl,
         resolved.vcc,
         resolved.min_ppm,
         resolved.max_ppm,
+        config[CONF_CORRECTION_MODE],
     )
-
-

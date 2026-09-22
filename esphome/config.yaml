@@ -46,6 +46,9 @@ packages:
   sensors_others: !include packages/sensors_others.yaml
   switch: !include packages/switch.yaml
   mq8: !include packages/mq8.yaml
+  # Include this one INSTEAD of `mq8` when an I2C temperature/humidity sensor is
+  # wired (adds the MQDataScience T/RH correction, do not enable both):
+  # mq8: !include packages/mq8_tc.yaml
   # debug: !include packages/debug.yaml
 
 # web_server:

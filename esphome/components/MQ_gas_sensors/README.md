@@ -15,7 +15,16 @@ RS     = (VCC * RL) / V - RL                        (RS_Calc / getRS())
 ratio  = RS / R0                                    (datasheet convention)
 PPM    = a * ratio^b                                regression method "exponential"
 log10(PPM) = (log10(ratio) - b) / a                 regression method "linear"
+PPM    = (ratio / a)^(1/b)                          regression method "inverse" (MQDataScience)
 R0     = RS_air / ratio_in_clean_air                calibrate()
+```
+
+Optionally the ratio is compensated for the ambient temperature and humidity
+with MQDataScience's model (`correction_mode: mqdatascience`):
+
+```
+correction = a + c * exp(b * T)   a/b/c interpolated over RH, T clamped to -10..50 degC
+ratio_eff  = ratio / correction
 ```
 
 plus the reference implementation's guards (`safe_pow`, `will_overflow`,
@@ -27,6 +36,12 @@ averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
 * Supports **all MQ sensor types** with the `a` / `b` / regression method /
   clean-air ratio tables built in (see `coefficients.py`) - a wrong
   `sensor_type`/`gas` combination fails the build instead of producing nonsense.
+* Optional temperature/humidity compensation (`correction_mode: mqdatascience`,
+  needs `temperature:`/`humidity:` sensor ids) ported from
+  [MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience) - see
+  [`docs/temperature_humidity_correction.md`](../../../docs/temperature_humidity_correction.md).
+* Optional alternative coefficient dataset (`curve: mqdatascience`) for a
+  side-by-side comparison; the default `curve: standard` is unchanged.
 * Analog input from an existing voltage sampler (`voltage:`) **or** from a pin
   this component owns (`pin:` - it creates the hidden `adc` entry for you).
 * R0 from the configuration, from a **flash-persisted calibration**, or from an
@@ -90,6 +105,11 @@ sensor:
 | `warmup_time` | `0s` | Burn-in/warm-up: nothing is published (state `unknown`) before it elapses. Use `24h`+ for a new sensor. |
 | `min_ppm`, `max_ppm` | table/datasheet | Clamp of the published value (`MQ-8`: 0 … 10 000 ppm). |
 | `correction_factor` | `0.0` | Added to the ratio (and to R0) as in `MQUnifiedsensor` (`readSensor(correctionFactor)`). |
+| `correction_mode` | `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Needs `temperature:`/`humidity:` and a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
+| `correction_clamp` | `absolute` | `absolute` clips to `max_ppm` (the alarm ceiling does not move); `scaled` clips to `max_ppm * correction` (MQDataScience's own behaviour). |
+| `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `a:`/`b:`. |
+| `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors used by `correction_mode`. |
+| `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
 | `update_interval` | `60s` | Normal sensor polling interval. |
@@ -149,6 +169,42 @@ Other calibration facts:
   reported (`calibration failed, none of the N samples produced a valid RS`)
   and the previous `R0` is kept.
 
+## Temperature/humidity correction (optional)
+
+`correction_mode: mqdatascience` compensates the RS/R0 ratio for the ambient
+conditions with the model of
+[MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience)
+(`Correction.cpp`): `correction = a + c * exp(b * T)`, with `a`/`b`/`c`
+interpolated between RH 33 % and RH 85 %, `T` clamped to -10 … 50 °C, applied as
+`ratio_eff = ratio / correction`.
+
+* Needs the `temperature:` and `humidity:` sensor ids; the type must have
+  constants (`MQ2` … `MQ8`, `MQ135` … `MQ138`, `MQ214`), otherwise `esphome
+  config` fails with the list of supported types. MQ-9/MQ-131 use a different
+  two-segment model and are not supported.
+* For the MQ-8 the factor is 0.8997 at RH 40 %/20 °C (ppm × 0.9297) and stays
+  between 0.898 and 0.948 over a normal indoor range - a ±3 % refinement, and
+  it shifts the clean-air baseline to ≈ 48.8 ppm instead of 52.5 ppm.
+* **Fail-open**: a missing/stale/NaN T/RH reading leaves the value uncorrected
+  (factor 1.0000) with a one-time warning - the gas measurement is never
+  suppressed or zeroed by an auxiliary sensor.
+* `correction_clamp: absolute` (default) keeps `max_ppm` as the ceiling;
+  `scaled` reproduces MQDataScience's `max_ppm * correction` (which would lower
+  the 10 000 ppm pre-alarm to ≈ 8 900 ppm in warm humid air).
+* `ratio_sensor` keeps publishing the *measured* RS/R0; `correction_sensor`
+  publishes the factor that was applied.
+
+```yaml
+    temperature: air_temperature
+    humidity: air_humidity
+    correction_mode: mqdatascience
+    correction_clamp: absolute
+    correction_sensor: mq8_correction
+```
+
+Details, constants and the full effect table: `docs/temperature_humidity_correction.md`.
+A ready-made package (I2C `sht4x` + wiring) is `packages/mq8_tc.yaml`.
+
 ## Wiring
 
 * MQ modules need **5 V** on `VCC` (the MQ-7/MQ-136/MQ-303A/MQ-309A also need a
@@ -165,7 +221,7 @@ Other calibration facts:
 
 ## Hydrogen thresholds (this project)
 
-Reference values from `documentation/H2_lie_limits.txt`
+Reference values from `docs/h2_thresholds.md`
 (H2 LEL = 4 % vol = 40 000 ppm):
 
 | H2 concentration | Meaning |
@@ -204,6 +260,25 @@ were cross-checked against the per-sensor tables printed in the
 `examples/` of miguel5612/MQSensorsLib (MQ-4 CH4 `1012.7 / -2.786`,
 MQ-8 H2 `976.97 / -0.688`, MQ-3 alcohol `0.3934 / -1.504`, …).
 
+### Alternative datasets (`curve:`)
+
+`curve: mqdatascience` replaces the coefficients, the regression method and (for
+MQ-8 H2) the whole dataset with the values published by MQDataScience - useful to
+A/B compare both on the same hardware:
+
+| RS/R0 | `curve: standard` (default) | `curve: mqdatascience` | Δ |
+|---|---|---|---|
+| 70 (clean air) | 52.5 ppm | 46.7 ppm | -11.1 % |
+| 10 | 200.4 ppm | 178.8 ppm | -10.8 % |
+| 1 | 977.0 ppm | 875.4 ppm | -10.4 % |
+
+The slope is the same (0.688 vs 0.68994): their dataset is the same datasheet fit
+anchored ≈ 11 % lower, not a more accurate one - which is why `standard` stays
+the default. `curve:` cannot be combined with `a:`/`b:`/`regression_method:` (the
+dataset defines them); the regression method `inverse` (`ppm = (ratio/a)^(1/b)`,
+their `inverseYaxb()`) is available for hand-written coefficients as well.
+Background: `docs/mqdatascience_comparison.md`.
+
 ### Deviation from `MQUnifiedsensor::readSensorR0Rs()`
 
 The ESP-IDF port computes the ratio **inverted** (`R0 / RS`, see the comment
@@ -223,7 +298,12 @@ your own coefficients fitted to the port's convention.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
   broken sensor cannot look like clean air.
-* Out-of-range results (overflow, `FLT_MAX`) are clamped to `max_ppm`.
+* Out-of-range results (overflow, `FLT_MAX`) are clamped to `max_ppm`; with
+  `correction_clamp: scaled` the ceiling follows the correction factor.
+* With `correction_mode: mqdatascience` the ratio is divided by the T/RH
+  correction before the regression; `ratio_sensor` still publishes the measured
+  RS/R0, `correction_sensor` the applied factor, and the debug log shows
+  `V=… RS=… ratio=… (correction=…) -> … ppm`.
 * Configuration problems (unknown `sensor_type`, gas without a curve, missing
   `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`) are reported at
   compile time; missing calibration and heater notes are logged as warnings.
@@ -237,6 +317,7 @@ your own coefficients fitted to the port's convention.
 | PPM far too low / flat | `rl:` does not match the module's real load resistor, or the divider ratio is not compensated with `voltage_multiplier` |
 | PPM pinned at `max_ppm` | wrong `a`/`b` for the selected gas, or `ratio_mode` mismatch |
 | Values drift over weeks | MQ sensors drift; re-run `request_calibration()` in clean air |
+| `correction_sensor` stays at 1.0000 | the T/RH sensor has no state yet (check the one-time warning in the log), or `correction_mode` is `none` |
 
 ## Tests
 
@@ -255,8 +336,14 @@ Validation helpers (no hardware needed):
 esphome config config.yaml                # validate the project configuration
 esphome compile config.yaml               # full ESP-IDF build
 esphome config tests/test_no_id.yaml      # sensor without `id:`, `pin:`, fixed r0
+esphome config tests/test_tc.yaml         # T/RH correction + `curve: mqdatascience`
 python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
 ```
+
+## Documentation
+
+Project documentation (hardware, thresholds, curve provenance, comparison with
+MQDataScience) lives in [`docs/`](../../../docs/README.md) at the repository root.
 
 ## Credits
 
@@ -265,6 +352,9 @@ python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
   Mario A. Rodriguez O. (MIT).
 * ESP-IDF port (`MQSensorLIB`, `espidf_adc_helper.h`) and the ratio discussion -
   Carlos Delfino.
+* Temperature/humidity correction model, alternative MQ-8 H2 dataset and the
+  reference tables - `abcdaaaaaaaaa` / `MQDataScience` (`MQSpaceData` v6.0.0,
+  MIT; `src/Correction.cpp`, `src/SensorDefinitions.cpp`).
 * Curve table (`sensorConfigData.h`) - SolderedElectronics (GPL-3.0 data
   reference; the values themselves are the datasheet/miguel5612 fits).
 

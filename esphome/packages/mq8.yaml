@@ -1,5 +1,11 @@
 # MQ-8 hydrogen sensor (MQ_gas_sensors component, H2 curve: a=976.97, b=-0.688).
 #
+# This is the plain variant (no temperature/humidity compensation). For the
+# MQDataScience compensation of the RS/R0 ratio include `packages/mq8_tc.yaml`
+# instead (it needs an I2C temperature/humidity sensor).
+# Documentation: ../../docs/mq8_sensor_guide.md, ../../docs/mq8_h2_curve.md,
+# ../../docs/temperature_humidity_correction.md, ../../docs/h2_thresholds.md
+#
 # Wiring
 #   VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider.
 #   The module's AO output can go up to VCC (5 V) while the ESP32 ADC is limited
@@ -69,7 +75,7 @@ sensor:
     icon: mdi:omega
     entity_category: diagnostic
 
-# Reference thresholds for hydrogen in battery rooms (see documentation/H2_lie_limits.txt):
+# Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning
 #   10 000 ppm = 25 % LEL  -> pre-alarm (sensor upper range, NFPA 855 design target)
 #   20 000 ppm = 50 % LEL  -> immediate action (ventilate / stop charging)
