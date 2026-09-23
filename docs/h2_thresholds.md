@@ -1,8 +1,9 @@
 # Hydrogen thresholds for a battery room
 
-Reference values used by this project. Source: the local notes in
-`documentation/H2_lie_limits.txt` (French) plus the NFPA 855 design target;
-see [`README.md`](README.md#sources) for the full source list.
+Reference values used by this project. The LEL of hydrogen (4 % vol = 40 000 ppm)
+is physical data; the 25 % LEL pre-alarm follows the NFPA 855 design target for
+stationary battery installations. See [`README.md`](README.md#sources) for the
+source list.
 
 ## Conversion
 

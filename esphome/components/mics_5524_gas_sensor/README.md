@@ -154,3 +154,7 @@ esphome config tests/test_mics_package.yaml  # the shipped package
   (posts 8, 11 and 13), which also documents the ADS1115 front-end.
 * Hardware and usage tutorial - <https://www.makerguides.com/fermion-mems-multi-gas-sensor-mics-5524-with-arduino/>.
 
+The repository itself is dual-licensed **Apache-2.0 OR MIT** - see
+[`LICENSE-APACHE`](../../../LICENSE-APACHE) and
+[`LICENSE-MIT`](../../../LICENSE-MIT). The upstream material credited above
+keeps its own licence.

@@ -372,4 +372,7 @@ MQDataScience) lives in [`docs/`](../../../docs/README.md) at the repository roo
 * Curve table (`sensorConfigData.h`) - SolderedElectronics (GPL-3.0 data
   reference; the values themselves are the datasheet/miguel5612 fits).
 
-
+The repository itself is dual-licensed **Apache-2.0 OR MIT** - see
+[`LICENSE-APACHE`](../../../LICENSE-APACHE) and
+[`LICENSE-MIT`](../../../LICENSE-MIT). The upstream material credited above
+keeps its own licence.
