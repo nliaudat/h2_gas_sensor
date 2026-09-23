@@ -19,7 +19,7 @@ repos:
         additional_dependencies:
           - flake8-docstrings==1.7.0
           - pydocstyle==5.1.1
-        files: ^(tools|script)/.+\.py$
+        files: ^esphome/.+\.py$
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -42,7 +42,7 @@ repos:
     rev: v1.37.1
     hooks:
       - id: yamllint
-        exclude: ^(\.clang-format|\.clang-tidy)$
+        exclude: (^|/)\.clang-(format|tidy)$
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v13.0.1
     hooks:
@@ -52,10 +52,9 @@ repos:
     hooks:
       - id: ci-custom
         name: ci-custom
-        entry: python script/ci-custom.py
-        language: system
-      - id: verify-tflm-operators
-        name: verify-tflm-operators
-        entry: python script/verify_tflm_operators.py
+        # Vendored copy of ESPHome's CI linter (see esphome/script/README.md).
+        # The wrapper runs it with esphome/ as the working directory, which is
+        # required for the namespace and import checks to be active.
+        entry: python esphome/script/run_ci_custom.py
         language: system
         pass_filenames: false

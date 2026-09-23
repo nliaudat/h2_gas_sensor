@@ -1,0 +1,22 @@
+# Normalise line endings to LF.
+#
+# The ESPHome tooling this repository is linted with requires Unix line endings:
+#   * .editorconfig          -> end_of_line = lf
+#   * .pre-commit-config.yaml -> mixed-line-ending --fix=lf
+#   * .yamllint              -> new-lines (unix)
+#   * script/ci-custom.py    -> lint_newline / lint_trailing_whitespace
+#
+# Without this file `core.autocrlf=true` checks the files out as CRLF, which
+# makes all four of the checks above fail on a clean clone.
+* text=auto eol=lf
+
+# Never convert or diff binary files.
+*.exe binary
+*.bin binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

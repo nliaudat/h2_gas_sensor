@@ -1,4 +1,4 @@
-# MQ_gas_sensors
+# mq_gas_sensors
 
 ESPHome sensor platform for **every MQ gas sensor** of the
 [MQUnifiedsensor](https://github.com/miguel5612/MQSensorsLib) family
@@ -64,7 +64,7 @@ sensor:
     update_interval: 30s
     entity_category: diagnostic
 
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     id: mq8
     name: "H2 concentration"
     sensor_type: MQ-8          # MQ-2, MQ-3, ... MQ-309A, CUSTOM
@@ -326,7 +326,7 @@ covered by a host test:
 
 ```bash
 cd esphome/tests
-g++ -std=c++17 -O2 -I ../components/MQ_gas_sensors mq_math_test.cpp -o mq_math_test
+g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test
 ./mq_math_test
 ```
 

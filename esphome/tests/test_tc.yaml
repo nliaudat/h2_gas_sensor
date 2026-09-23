@@ -21,7 +21,6 @@ sensor:
   - platform: template
     id: test_temperature
     name: "Test temperature"
-    unit_of_measurement: "°C"
     accuracy_decimals: 2
     update_interval: 60s
 
@@ -37,7 +36,7 @@ sensor:
     name: "Test correction factor"
     accuracy_decimals: 4
 
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     id: mq8_tc
     name: "H2 with T-RH correction"
     sensor_type: MQ-8

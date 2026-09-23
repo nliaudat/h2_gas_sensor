@@ -72,7 +72,7 @@ sensor:
     temperature: { id: air_temperature, name: "Ambient temperature" }
     humidity:    { id: air_humidity,    name: "Ambient humidity" }
 
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     id: mq8
     sensor_type: MQ-8
     gas: H2

@@ -3,8 +3,8 @@
 Usage: python tests/inspect_config.py tests/test_no_id.yaml
 """
 
-import sys
 from pathlib import Path
+import sys
 
 import esphome.config as cfg
 from esphome.core import CORE
@@ -15,7 +15,7 @@ def main() -> int:
     CORE.config_path = path
     config = cfg.read_config(path)
     for entry in config.get("sensor", []):
-        if entry.get("platform") == "MQ_gas_sensors":
+        if entry.get("platform") == "mq_gas_sensors":
             print(f"keys : {sorted(entry)}")
             print(f"id   : {entry.get('id')!r}")
             print(f"type : {entry.get('id').__class__.__name__}")

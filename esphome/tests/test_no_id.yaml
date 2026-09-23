@@ -15,7 +15,7 @@ external_components:
       type: local
       path: ../components
 sensor:
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     name: "H2 without id"
     sensor_type: mq-8
     gas: h2

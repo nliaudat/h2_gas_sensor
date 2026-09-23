@@ -1,0 +1,75 @@
+# Ruff configuration for the ESPHome component and the host tests.
+#
+# These settings mirror the ones ESPHome uses in its own repository
+# (esphome/esphome/pyproject.toml) so that the ruff hooks of
+# .pre-commit-config.yaml behave exactly like ESPHome's CI.
+# See .ai/instructions.md, section "Python".
+
+[tool.ruff]
+required-version = ">=0.5.0"
+target-version = "py312"
+exclude = [
+  "generated",
+  # Vendored verbatim from esphome/esphome (see script/README.md) - linting the
+  # upstream copy would only produce noise and make updates harder.
+  "script/ci-custom.py",
+  "script/helpers.py",
+]
+
+[tool.ruff.lint]
+# Preview mode is scoped: with explicit-preview-rules only rules named in
+# select run in preview, prefixes like "PL" keep their stable set.
+preview = true
+explicit-preview-rules = true
+select = [
+  "B",     # flake8-bugbear
+  "BLE",   # flake8-blind-except
+  "C4",    # flake8-comprehensions
+  "DTZ",   # flake8-datetimez
+  "E",     # pycodestyle
+  "EXE",   # flake8-executable
+  "F",     # pyflakes/autoflake
+  "FA",    # flake8-future-annotations
+  "FLY",   # flynt: convert string formatting to f-strings
+  "FURB",  # refurb
+  "G",     # flake8-logging-format
+  "I",     # isort
+  "ICN",   # flake8-import-conventions
+  "ISC",   # flake8-implicit-str-concat
+  "LOG",   # flake8-logging
+  "PERF",  # performance
+  "PGH",   # pygrep-hooks
+  "PIE",   # flake8-pie
+  "PL",    # pylint
+  "PLW1514", # require explicit encoding on text file I/O
+  "PTH",   # flake8-use-pathlib
+  "PYI",   # flake8-pyi
+  "Q",     # flake8-quotes
+  "RSE",   # flake8-raise
+  "SIM",   # flake8-simplify
+  "SLOT",  # flake8-slots
+  "RET",   # flake8-ret
+  "T10",   # flake8-debugger
+  "UP",    # pyupgrade
+  "W",     # pycodestyle warnings
+  "YTT",   # flake8-2020
+]
+
+ignore = [
+  "E501", # line too long
+  "PLC0415", # `import` should be at the top-level of a file
+  "PLR0911", # too many return statements
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments to function call
+  "PLR0915", # too many statements
+  "PLR0917", # too many positional arguments
+  "PLW1641", # object does not implement `__hash__`
+  "PLR2004", # magic value used in comparison
+  "PLW2901", # outer variable overwritten by inner target
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["esphome"]
+combine-as-imports = true
+split-on-trailing-comma = false

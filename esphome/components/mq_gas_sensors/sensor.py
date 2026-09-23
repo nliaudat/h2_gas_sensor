@@ -1,4 +1,4 @@
-"""``MQ_gas_sensors`` - ESPHome sensor platform for MQ gas sensors.
+"""``mq_gas_sensors`` - ESPHome sensor platform for MQ gas sensors.
 
 One entry configures one MQ sensor (MQ-2 ... MQ-309A, see ``coefficients.py``).
 The analog signal comes either from an existing voltage sampler (``voltage:``,
@@ -43,15 +43,15 @@ from . import (
     CONF_MAX_PPM,
     CONF_MIN_PPM,
     CONF_PERSIST,
+    CONF_R0,
     CONF_RATIO_IN_CLEAN_AIR,
     CONF_RATIO_MODE,
     CONF_RATIO_SENSOR,
     CONF_REGRESSION_METHOD,
     CONF_RL,
     CONF_RS_SENSOR,
-    CONF_R0,
-    CONF_SAMPLES,
     CONF_SAMPLE_INTERVAL,
+    CONF_SAMPLES,
     CONF_SENSOR_TYPE,
     CONF_TEMPERATURE,
     CONF_VCC,
@@ -60,13 +60,13 @@ from . import (
     CONF_WARMUP_TIME,
     CORRECTION_CLAMPS,
     CORRECTION_MODES,
-    MQGasSensor,
     RATIO_MODES,
     REGRESSION_METHODS,
+    MQGasSensor,
 )
 from .coefficients import (
-    CURVES,
     CURVE_STANDARD,
+    CURVES,
     SENSOR_TYPES,
     corrected_types,
     label_for,
@@ -175,9 +175,7 @@ def _validate_config(config: ConfigType) -> ConfigType:
 
     correction_mode = config[CONF_CORRECTION_MODE]
     missing_sources = [
-        key
-        for key in (CONF_TEMPERATURE, CONF_HUMIDITY)
-        if config.get(key) is None
+        key for key in (CONF_TEMPERATURE, CONF_HUMIDITY) if config.get(key) is None
     ]
     if correction_mode != "none":
         if missing_sources:
@@ -379,7 +377,9 @@ async def to_code(config: ConfigType) -> None:
                 "temperature/humidity correction model"
             )
         cg.add(var.set_tc_coefficients(tc.a33, tc.b33, tc.c33, tc.a85, tc.b85, tc.c85))
-        cg.add(var.set_temperature_source(await cg.get_variable(config[CONF_TEMPERATURE])))
+        cg.add(
+            var.set_temperature_source(await cg.get_variable(config[CONF_TEMPERATURE]))
+        )
         cg.add(var.set_humidity_source(await cg.get_variable(config[CONF_HUMIDITY])))
 
     if (r0 := config.get(CONF_R0)) is not None:

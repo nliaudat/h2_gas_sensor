@@ -13,6 +13,7 @@ the article list and the reference PDF.
 
 | Document | Content |
 |---|---|
+| [`../.ai/instructions.md`](../.ai/instructions.md) | Rule book for contributors and AI agents: lint commands, C++/Python/YAML style, domain and safety rules |
 | [`mq8_sensor_guide.md`](mq8_sensor_guide.md) | Wiring, 5 V supply, AO divider, real load resistor, burn-in, R0 calibration workflow, placement |
 | [`mq8_h2_curve.md`](mq8_h2_curve.md) | The measurement chain V → RS → RS/R0 → ppm, why `ratio_in_clean_air` is 70, provenance of `a`/`b`, ratio→ppm table |
 | [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
@@ -28,7 +29,7 @@ esphome/
 │   ├── mq8.yaml                    MQ-8 only (default, no compensation)
 │   ├── mq8_tc.yaml                 MQ-8 + I2C T/RH sensor + MQDataScience compensation
 │   ├── board.yaml, wifi.yaml, time.yaml, sensors_others.yaml, switch.yaml
-├── components/MQ_gas_sensors/      the custom ESPHome component (see its README.md)
+├── components/mq_gas_sensors/      the custom ESPHome component (see its README.md)
 └── tests/                          host test + config validation fixtures
 ```
 
@@ -43,7 +44,7 @@ esphome compile config.yaml           # full ESP-IDF build
 esphome run config.yaml               # flash (OTA or serial)
 
 cd tests
-g++ -std=c++17 -O2 -I ../components/MQ_gas_sensors mq_math_test.cpp -o mq_math_test && ./mq_math_test
+g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test && ./mq_math_test
 ```
 
 ## Verification status
@@ -71,8 +72,22 @@ g++ -std=c++17 -O2 -I ../components/MQ_gas_sensors mq_math_test.cpp -o mq_math_t
   `temperature:`/`humidity:`, `curve:` combined with `a:`/`b:`, and
   `correction_mode` on a type without constants (MQ-9) each fail with an
   explanatory message and the list of supported types;
-* `flake8 --config .flake8 components/MQ_gas_sensors tests` is clean; the host
+* `flake8 --config .flake8 components/mq_gas_sensors tests` is clean; the host
   test builds warning-free with `-Wall -Wextra`.
+
+**Verified** (ESPHome CI compliance, 23.09.2026 - see
+[`../.ai/instructions.md`](../.ai/instructions.md) section 3):
+
+* `python script/ci-custom.py` (ESPHome's own CI linter, vendored) reports
+  **0 findings** - it reported 2 492 before the cleanup (line endings, trailing
+  whitespace, non-ASCII characters, namespace);
+* `clang-format --dry-run --Werror` is clean with the **pinned v13.0.1** (newer
+  clang-format versions format differently against this `.clang-format`);
+* `yamllint -c .yamllint .`, `flake8 --config .flake8 components tests script`,
+  `ruff check .` and `ruff format --check .` are all clean;
+* the component lives in `esphome/components/mq_gas_sensors` (lower case) and the
+  YAML platform is `platform: mq_gas_sensors`, as ESPHome's namespace check
+  requires.
 
 **Unverified / unavailable:**
 

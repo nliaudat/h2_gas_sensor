@@ -7,6 +7,10 @@ secrets.yaml
 .vscode
 .venv
 
-# host test binary (components/MQ_gas_sensors/README.md, "Tests")
+# host test binary (components/mq_gas_sensors/README.md, "Tests")
 tests/mq_math_test
 tests/mq_math_test.exe
+
+# ruff cache (esphome/pyproject.toml)
+.ruff_cache/
+__pycache__/

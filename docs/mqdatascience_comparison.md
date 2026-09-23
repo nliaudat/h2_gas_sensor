@@ -36,7 +36,7 @@ switching it would silently shift every statistic in Home Assistant (about
 variant is only for A/B comparison:
 
 ```yaml
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     sensor_type: MQ-8
     gas: H2
     curve: mqdatascience       # optional, default: standard

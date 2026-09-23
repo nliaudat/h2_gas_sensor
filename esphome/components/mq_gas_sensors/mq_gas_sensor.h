@@ -57,8 +57,8 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void set_samples(uint8_t samples) { this->samples_ = samples; }
   void set_sample_interval(uint32_t interval) { this->sample_interval_ = interval; }
   void set_warmup_time(uint32_t warmup) { this->warmup_time_ = warmup; }
-  void set_calibration(bool enabled, float ratio_in_clean_air, uint32_t delay,
-                       uint32_t duration, uint32_t samples, bool persist);
+  void set_calibration(bool enabled, float ratio_in_clean_air, uint32_t delay, uint32_t duration, uint32_t samples,
+                       bool persist);
   void set_ratio_sensor(sensor::Sensor *sensor) { this->ratio_sensor_ = sensor; }
   void set_rs_sensor(sensor::Sensor *sensor) { this->rs_sensor_ = sensor; }
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
@@ -133,7 +133,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   // ------------------------------------------------------------------ runtime
   bool calibrating_{false};
   bool calibration_pending_{false};
-  uint32_t calibration_due_{0};  ///< when the pending calibration starts
+  uint32_t calibration_due_{0};    ///< when the pending calibration starts
   uint32_t calibration_start_{0};  ///< when the running calibration started
   uint32_t calibration_last_sample_{0};
   uint32_t calibration_count_{0};
@@ -158,4 +158,3 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
 };
 
 }  // namespace esphome::mq_gas_sensors
-

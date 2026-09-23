@@ -1,7 +1,7 @@
 # The MQ-8 H2 curve and how a ppm value is produced
 
 Everything in this document is implemented in
-[`../esphome/components/MQ_gas_sensors/mq_math.h`](../esphome/components/MQ_gas_sensors/mq_math.h)
+[`../esphome/components/mq_gas_sensors/mq_math.h`](../esphome/components/mq_gas_sensors/mq_math.h)
 and asserted by [`../esphome/tests/mq_math_test.cpp`](../esphome/tests/mq_math_test.cpp).
 
 ## Measurement chain

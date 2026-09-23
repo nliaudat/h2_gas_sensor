@@ -72,8 +72,7 @@ CURVE_VARIANTS: dict[tuple[str, str], dict[str, tuple[float, float, str]]] = {
 
 def curves_for(type_key: str, gas: str) -> list[str]:
     """Curve names available for a type/gas pair (`standard` always works)."""
-    available = [CURVE_STANDARD, *CURVE_VARIANTS.get((type_key, gas), {})]
-    return available
+    return [CURVE_STANDARD, *CURVE_VARIANTS.get((type_key, gas), {})]
 
 
 # ---------------------------------------------------------------------------
@@ -123,14 +122,16 @@ def correction_for(type_key: str) -> TcCoefficients | None:
 
 
 def _type_sort_key(type_key: str) -> tuple[int, str]:
-    """``MQ2`` < ``MQ3`` < … < ``MQ8`` < ``MQ135`` < … (numeric, not lexicographic)."""
+    """``MQ2`` < ``MQ3`` < ... < ``MQ8`` < ``MQ135`` < ... (numeric, not lexicographic)."""
     digits = "".join(char for char in type_key if char.isdigit())
     return (int(digits) if digits else 0, type_key)
 
 
 def corrected_types() -> list[str]:
     """Datasheet names of the types that support the correction model, in order."""
-    return [label_for(key) for key in sorted(CORRECTION_COEFFICIENTS, key=_type_sort_key)]
+    return [
+        label_for(key) for key in sorted(CORRECTION_COEFFICIENTS, key=_type_sort_key)
+    ]
 
 
 @dataclass(frozen=True)

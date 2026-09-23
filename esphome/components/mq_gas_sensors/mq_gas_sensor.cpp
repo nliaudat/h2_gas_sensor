@@ -35,17 +35,16 @@ void MQGasSensor::setup() {
   }
 
   if (this->r0_configured_) {
-    ESP_LOGI(TAG, "'%s %s': using the R0 from the configuration (%.4f kOhm)", this->type_.c_str(),
-             this->gas_.c_str(), this->r0_);
+    ESP_LOGI(TAG, "'%s %s': using the R0 from the configuration (%.4f kOhm)", this->type_.c_str(), this->gas_.c_str(),
+             this->r0_);
   } else if (this->persist_ && this->load_r0_()) {
-    ESP_LOGI(TAG, "'%s %s': restored R0 from flash (%.4f kOhm)", this->type_.c_str(),
-             this->gas_.c_str(), this->r0_);
+    ESP_LOGI(TAG, "'%s %s': restored R0 from flash (%.4f kOhm)", this->type_.c_str(), this->gas_.c_str(), this->r0_);
   }
 
   if (this->warmup_time_ > 0) {
     this->warmup_end_ = millis() + this->warmup_time_;
-    ESP_LOGI(TAG, "'%s %s': warm-up/burn-in of %" PRIu32 " s - no readings published before that",
-             this->type_.c_str(), this->gas_.c_str(), this->warmup_time_ / 1000);
+    ESP_LOGI(TAG, "'%s %s': warm-up/burn-in of %" PRIu32 " s - no readings published before that", this->type_.c_str(),
+             this->gas_.c_str(), this->warmup_time_ / 1000);
   }
 
   if (this->calibration_enabled_) {
@@ -58,13 +57,13 @@ void MQGasSensor::setup() {
       const uint32_t delay = std::max(this->calibration_delay_, this->warmup_time_);
       this->calibration_due_ = millis() + delay;
       this->calibration_pending_ = true;
-      ESP_LOGI(TAG, "'%s %s': R0 calibration scheduled in %" PRIu32
-                    " s - the sensor must be in clean air",
+      ESP_LOGI(TAG, "'%s %s': R0 calibration scheduled in %" PRIu32 " s - the sensor must be in clean air",
                this->type_.c_str(), this->gas_.c_str(), delay / 1000);
     }
   } else if (!this->has_r0()) {
-    ESP_LOGW(TAG, "'%s %s': no R0 available, set 'r0:' or 'calibration:' - the PPM value stays "
-                  "unknown until then",
+    ESP_LOGW(TAG,
+             "'%s %s': no R0 available, set 'r0:' or 'calibration:' - the PPM value stays "
+             "unknown until then",
              this->type_.c_str(), this->gas_.c_str());
   }
 }
@@ -72,23 +71,20 @@ void MQGasSensor::setup() {
 void MQGasSensor::log_config_() {
   ESP_LOGCONFIG(TAG, "  Type: %s", this->type_.c_str());
   ESP_LOGCONFIG(TAG, "  Target gas: %s", this->gas_.c_str());
-  ESP_LOGCONFIG(TAG, "  Curve: %s (a=%.6g, b=%.6g), ratio: %s",
-                regression_method_name(this->regression_method_), this->a_, this->b_,
-                this->ratio_mode_ == mqmath::RATIO_R0_RS ? "R0/RS (MQUnifiedsensor)"
-                                                         : "RS/R0 (datasheet)");
+  ESP_LOGCONFIG(TAG, "  Curve: %s (a=%.6g, b=%.6g), ratio: %s", regression_method_name(this->regression_method_),
+                this->a_, this->b_,
+                this->ratio_mode_ == mqmath::RATIO_R0_RS ? "R0/RS (MQUnifiedsensor)" : "RS/R0 (datasheet)");
   ESP_LOGCONFIG(TAG, "  VCC: %.2f V, RL: %.2f kOhm, AO multiplier: x%.3f", this->vcc_, this->rl_,
                 this->voltage_multiplier_);
-  ESP_LOGCONFIG(TAG, "  Range: %.1f - %.1f ppm, samples: %u x %" PRIu32 " ms",
-                this->min_ppm_, this->max_ppm_, static_cast<unsigned>(this->samples_),
-                this->sample_interval_);
+  ESP_LOGCONFIG(TAG, "  Range: %.1f - %.1f ppm, samples: %u x %" PRIu32 " ms", this->min_ppm_, this->max_ppm_,
+                static_cast<unsigned>(this->samples_), this->sample_interval_);
   if (this->has_r0()) {
-    ESP_LOGCONFIG(TAG, "  R0: %.4f kOhm (%s)", this->r0_,
-                  this->r0_configured_ ? "configured" : "calibrated/restored");
+    ESP_LOGCONFIG(TAG, "  R0: %.4f kOhm (%s)", this->r0_, this->r0_configured_ ? "configured" : "calibrated/restored");
   } else {
     ESP_LOGCONFIG(TAG, "  R0: not available yet");
   }
-  ESP_LOGCONFIG(TAG, "  RS/R0 in clean air: %.2f, correction factor: %.4f",
-                this->ratio_in_clean_air_, this->correction_factor_);
+  ESP_LOGCONFIG(TAG, "  RS/R0 in clean air: %.2f, correction factor: %.4f", this->ratio_in_clean_air_,
+                this->correction_factor_);
   ESP_LOGCONFIG(TAG, "  Warm-up: %" PRIu32 " s, auto calibration: %s", this->warmup_time_ / 1000,
                 this->calibration_enabled_ ? "enabled" : "disabled");
 
@@ -96,14 +92,12 @@ void MQGasSensor::log_config_() {
   ESP_LOGCONFIG(TAG, "  Temperature/humidity correction: %s",
                 tc_enabled ? "mqdatascience (ratio / (a + c * exp(b * T)))" : "none");
   if (tc_enabled) {
-    ESP_LOGCONFIG(TAG, "  Correction constants (RH 33%%/85%%): a %.4f/%.4f, b %.4f/%.4f, c %.4f/%.4f",
-                  this->tc_.a33, this->tc_.a85, this->tc_.b33, this->tc_.b85, this->tc_.c33,
-                  this->tc_.c85);
+    ESP_LOGCONFIG(TAG, "  Correction constants (RH 33%%/85%%): a %.4f/%.4f, b %.4f/%.4f, c %.4f/%.4f", this->tc_.a33,
+                  this->tc_.a85, this->tc_.b33, this->tc_.b85, this->tc_.c33, this->tc_.c85);
     ESP_LOGCONFIG(TAG, "  Correction sources: temperature %s, humidity %s, clamp: %s",
                   this->temperature_source_ != nullptr ? "wired" : "MISSING",
                   this->humidity_source_ != nullptr ? "wired" : "MISSING",
-                  this->correction_clamp_ == mqmath::CLAMP_SCALED ? "max_ppm * correction"
-                                                                  : "absolute max_ppm");
+                  this->correction_clamp_ == mqmath::CLAMP_SCALED ? "max_ppm * correction" : "absolute max_ppm");
   }
 }
 
@@ -125,13 +119,11 @@ float MQGasSensor::sample_voltage_() {
   return (sum / static_cast<float>(this->samples_)) * this->voltage_multiplier_;
 }
 
-float MQGasSensor::current_rs_() const {
-  return mqmath::rs_from_voltage(this->sensor_voltage_, this->vcc_, this->rl_);
-}
+float MQGasSensor::current_rs_() const { return mqmath::rs_from_voltage(this->sensor_voltage_, this->vcc_, this->rl_); }
 
 float MQGasSensor::current_ratio_() const {
   return mqmath::ratio_from_rs(this->rs_, this->r0_, this->correction_factor_,
-                              static_cast<mqmath::RatioMode>(this->ratio_mode_));
+                               static_cast<mqmath::RatioMode>(this->ratio_mode_));
 }
 
 float MQGasSensor::compute_correction_() {
@@ -170,9 +162,8 @@ float MQGasSensor::compute_correction_() {
 
 float MQGasSensor::read_ppm_() {
   const float ratio = mqmath::apply_correction(this->ratio_, this->correction_);
-  const float ppm = mqmath::ppm_from_ratio(
-      this->a_, this->b_, ratio,
-      static_cast<mqmath::RegressionMethod>(this->regression_method_));
+  const float ppm = mqmath::ppm_from_ratio(this->a_, this->b_, ratio,
+                                           static_cast<mqmath::RegressionMethod>(this->regression_method_));
   if (!std::isfinite(ppm))
     return NAN;
   return mqmath::clamp_ppm_corrected(ppm, this->min_ppm_, this->max_ppm_, this->correction_,
@@ -195,8 +186,7 @@ void MQGasSensor::update() {
     return;
 
   if (this->calibrating_) {
-    ESP_LOGD(TAG, "'%s %s': update skipped, calibration in progress", this->type_.c_str(),
-             this->gas_.c_str());
+    ESP_LOGD(TAG, "'%s %s': update skipped, calibration in progress", this->type_.c_str(), this->gas_.c_str());
     return;
   }
 
@@ -209,8 +199,8 @@ void MQGasSensor::update() {
     if (!this->warmup_notified_) {
       this->warmup_notified_ = true;
       this->publish_state(NAN);
-      ESP_LOGI(TAG, "'%s %s': warming up, %" PRIu32 " s to go", this->type_.c_str(),
-               this->gas_.c_str(), (this->warmup_end_ - millis()) / 1000);
+      ESP_LOGI(TAG, "'%s %s': warming up, %" PRIu32 " s to go", this->type_.c_str(), this->gas_.c_str(),
+               (this->warmup_end_ - millis()) / 1000);
     }
     return;
   }
@@ -218,8 +208,8 @@ void MQGasSensor::update() {
   if (!this->has_r0()) {
     if (!this->warned_no_r0_) {
       this->warned_no_r0_ = true;
-      ESP_LOGW(TAG, "'%s %s': R0 unknown - publish 'calibration:' or 'r0:' in the configuration",
-               this->type_.c_str(), this->gas_.c_str());
+      ESP_LOGW(TAG, "'%s %s': R0 unknown - publish 'calibration:' or 'r0:' in the configuration", this->type_.c_str(),
+               this->gas_.c_str());
     }
     this->publish_state(NAN);
     return;
@@ -247,17 +237,15 @@ void MQGasSensor::update() {
   this->correction_ = this->compute_correction_();
   const float ppm = this->read_ppm_();
 
-  ESP_LOGD(TAG,
-           "'%s %s': V=%.4f V, RS=%.4f kOhm, ratio=%.4f (correction=%.4f) -> %.1f ppm",
-           this->type_.c_str(), this->gas_.c_str(), this->sensor_voltage_, this->rs_,
-           this->ratio_, this->correction_, ppm);
+  ESP_LOGD(TAG, "'%s %s': V=%.4f V, RS=%.4f kOhm, ratio=%.4f (correction=%.4f) -> %.1f ppm", this->type_.c_str(),
+           this->gas_.c_str(), this->sensor_voltage_, this->rs_, this->ratio_, this->correction_, ppm);
 
   this->publish_diagnostics_();
   this->publish_state(ppm);
 }
 
-void MQGasSensor::set_calibration(bool enabled, float ratio_in_clean_air, uint32_t delay,
-                                  uint32_t duration, uint32_t samples, bool persist) {
+void MQGasSensor::set_calibration(bool enabled, float ratio_in_clean_air, uint32_t delay, uint32_t duration,
+                                  uint32_t samples, bool persist) {
   this->calibration_enabled_ = enabled;
   this->ratio_in_clean_air_ = ratio_in_clean_air;
   this->calibration_delay_ = delay;
@@ -272,8 +260,8 @@ void MQGasSensor::request_calibration() {
     return;
   }
   if (!(this->ratio_in_clean_air_ > 0.0f)) {
-    ESP_LOGE(TAG, "'%s %s': cannot calibrate without a valid 'ratio_in_clean_air'",
-             this->type_.c_str(), this->gas_.c_str());
+    ESP_LOGE(TAG, "'%s %s': cannot calibrate without a valid 'ratio_in_clean_air'", this->type_.c_str(),
+             this->gas_.c_str());
     return;
   }
   this->calibration_due_ = millis();
@@ -311,10 +299,8 @@ void MQGasSensor::begin_calibration_() {
   this->calibration_sum_ = 0.0f;
 
   ESP_LOGI(TAG,
-           "'%s %s': calibrating R0 (RS/R0 in clean air = %.2f), %" PRIu32
-           " samples - keep the sensor in clean air",
-           this->type_.c_str(), this->gas_.c_str(), this->ratio_in_clean_air_,
-           this->calibration_samples_);
+           "'%s %s': calibrating R0 (RS/R0 in clean air = %.2f), %" PRIu32 " samples - keep the sensor in clean air",
+           this->type_.c_str(), this->gas_.c_str(), this->ratio_in_clean_air_, this->calibration_samples_);
 }
 
 void MQGasSensor::process_calibration_() {
@@ -324,8 +310,7 @@ void MQGasSensor::process_calibration_() {
   if (std::isfinite(voltage) && voltage > 0.01f) {
     this->sensor_voltage_ = voltage;
     this->rs_ = this->current_rs_();
-    const float r0 =
-        mqmath::r0_from_clean_air(this->rs_, this->ratio_in_clean_air_, this->correction_factor_);
+    const float r0 = mqmath::r0_from_clean_air(this->rs_, this->ratio_in_clean_air_, this->correction_factor_);
     if (r0 > 0.0f) {
       this->calibration_sum_ += r0;
       this->calibration_count_++;
@@ -333,8 +318,8 @@ void MQGasSensor::process_calibration_() {
   }
 
   const bool samples_done = this->calibration_attempts_ >= this->calibration_samples_;
-  const bool timed_out = this->calibration_duration_ > 0 &&
-                         (millis() - this->calibration_start_) >= this->calibration_duration_;
+  const bool timed_out =
+      this->calibration_duration_ > 0 && (millis() - this->calibration_start_) >= this->calibration_duration_;
   if (samples_done || timed_out)
     this->finish_calibration_();
 }
@@ -354,8 +339,7 @@ void MQGasSensor::finish_calibration_() {
 
   const float r0 = this->calibration_sum_ / static_cast<float>(valid);
   if (!std::isfinite(r0) || r0 <= 0.0f) {
-    ESP_LOGE(TAG, "'%s %s': calibration produced an invalid R0 (%.6f)", this->type_.c_str(),
-             this->gas_.c_str(), r0);
+    ESP_LOGE(TAG, "'%s %s': calibration produced an invalid R0 (%.6f)", this->type_.c_str(), this->gas_.c_str(), r0);
     return;
   }
 
@@ -363,12 +347,10 @@ void MQGasSensor::finish_calibration_() {
   if (this->persist_)
     this->save_r0_();
 
-  ESP_LOGI(TAG, "'%s %s': R0 = %.4f kOhm (%" PRIu32 "/%" PRIu32 " samples valid)%s",
-           this->type_.c_str(), this->gas_.c_str(), this->r0_, valid, attempts,
-           this->persist_ ? ", stored in flash" : "");
+  ESP_LOGI(TAG, "'%s %s': R0 = %.4f kOhm (%" PRIu32 "/%" PRIu32 " samples valid)%s", this->type_.c_str(),
+           this->gas_.c_str(), this->r0_, valid, attempts, this->persist_ ? ", stored in flash" : "");
   if (!this->persist_) {
-    ESP_LOGI(TAG, "  -> hard-code 'r0: %.4f' in the YAML to skip the calibration at boot",
-             this->r0_);
+    ESP_LOGI(TAG, "  -> hard-code 'r0: %.4f' in the YAML to skip the calibration at boot", this->r0_);
   }
 }
 
@@ -378,8 +360,8 @@ void MQGasSensor::save_r0_() {
     return;
   }
   if (!global_preferences->sync()) {
-    ESP_LOGW(TAG, "'%s %s': R0 stored but the flash sync failed (will be written later)",
-             this->type_.c_str(), this->gas_.c_str());
+    ESP_LOGW(TAG, "'%s %s': R0 stored but the flash sync failed (will be written later)", this->type_.c_str(),
+             this->gas_.c_str());
   }
   ESP_LOGD(TAG, "'%s %s': R0 %.4f kOhm saved", this->type_.c_str(), this->gas_.c_str(), this->r0_);
 }
@@ -395,5 +377,3 @@ bool MQGasSensor::load_r0_() {
 }
 
 }  // namespace esphome::mq_gas_sensors
-
-

@@ -1,4 +1,4 @@
-# MQ-8 hydrogen sensor (MQ_gas_sensors component, H2 curve: a=976.97, b=-0.688).
+# MQ-8 hydrogen sensor (mq_gas_sensors component, H2 curve: a=976.97, b=-0.688).
 #
 # This is the plain variant (no temperature/humidity compensation). For the
 # MQDataScience compensation of the RS/R0 ratio include `packages/mq8_tc.yaml`
@@ -35,7 +35,7 @@ sensor:
     accuracy_decimals: 3
     entity_category: diagnostic
 
-  - platform: MQ_gas_sensors
+  - platform: mq_gas_sensors
     id: mq8
     name: "${friendly_name} H2 (MQ-8)"
     sensor_type: MQ-8

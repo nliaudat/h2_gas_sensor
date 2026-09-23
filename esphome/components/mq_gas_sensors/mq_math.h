@@ -95,8 +95,7 @@ inline float voltage_from_adc(uint32_t raw, uint8_t bits, float volt_resolution)
   const double full_scale = safe_pow(2.0, static_cast<double>(bits)) - 1.0;
   if (full_scale <= 0.0)
     return 0.0f;
-  return static_cast<float>(static_cast<double>(raw) * static_cast<double>(volt_resolution) /
-                            full_scale);
+  return static_cast<float>(static_cast<double>(raw) * static_cast<double>(volt_resolution) / full_scale);
 }
 
 /// Sensor resistance in kOhm, MQUnifiedsensor::getRS() / calibrate().
@@ -104,9 +103,8 @@ inline float voltage_from_adc(uint32_t raw, uint8_t bits, float volt_resolution)
 inline float rs_from_voltage(float voltage, float vcc, float rl) {
   if (!std::isfinite(voltage) || voltage <= 0.0f)
     return 0.0f;
-  const double rs = (static_cast<double>(vcc) * static_cast<double>(rl) /
-                     static_cast<double>(voltage)) -
-                    static_cast<double>(rl);
+  const double rs =
+      (static_cast<double>(vcc) * static_cast<double>(rl) / static_cast<double>(voltage)) - static_cast<double>(rl);
   if (!std::isfinite(rs) || rs < 0.0)
     return 0.0f;
   return static_cast<float>(rs);
@@ -131,8 +129,7 @@ inline float ratio_from_rs(float rs, float r0, float correction_factor, RatioMod
 /// R0 from a clean air reading, MQUnifiedsensor::calibrate().
 /// `ratio_in_clean_air` is the RS/R0 value taken from the sensor datasheet.
 inline float r0_from_clean_air(float rs_air, float ratio_in_clean_air, float correction_factor) {
-  if (!std::isfinite(rs_air) || rs_air <= 0.0f || !std::isfinite(ratio_in_clean_air) ||
-      ratio_in_clean_air <= 0.0f)
+  if (!std::isfinite(rs_air) || rs_air <= 0.0f || !std::isfinite(ratio_in_clean_air) || ratio_in_clean_air <= 0.0f)
     return 0.0f;
   double r0 = static_cast<double>(rs_air) / static_cast<double>(ratio_in_clean_air);
   r0 += static_cast<double>(correction_factor);
@@ -149,15 +146,12 @@ inline float ppm_from_ratio(float a, float b, float ratio, RegressionMethod meth
 
   double log_ppm;
   if (method == REGRESSION_EXPONENTIAL) {
-    log_ppm = std::log10(static_cast<double>(a)) +
-              static_cast<double>(b) * std::log10(static_cast<double>(ratio));
+    log_ppm = std::log10(static_cast<double>(a)) + static_cast<double>(b) * std::log10(static_cast<double>(ratio));
   } else if (method == REGRESSION_INVERSE) {
     // PPM = (ratio / a)^(1/b), MQDataScience inverseYaxb().
-    log_ppm = (std::log10(static_cast<double>(ratio)) - std::log10(static_cast<double>(a))) /
-              static_cast<double>(b);
+    log_ppm = (std::log10(static_cast<double>(ratio)) - std::log10(static_cast<double>(a))) / static_cast<double>(b);
   } else {
-    log_ppm = (std::log10(static_cast<double>(ratio)) - static_cast<double>(b)) /
-              static_cast<double>(a);
+    log_ppm = (std::log10(static_cast<double>(ratio)) - static_cast<double>(b)) / static_cast<double>(a);
   }
 
   double ppm;
@@ -226,8 +220,7 @@ inline float linear_interpolate(float x, float x0, float x1, float y0, float y1)
 /// [-10, 50] degC. Returns 1.0 (i.e. "no correction") when an input is not a
 /// finite number or the model degenerates, so a missing/failed temperature or
 /// humidity reading can never invalidate the PPM measurement.
-inline float correction_coefficient(float rh, float temperature,
-                                    const TcCorrectionCoefficients &coeffs) {
+inline float correction_coefficient(float rh, float temperature, const TcCorrectionCoefficients &coeffs) {
   if (!std::isfinite(rh) || !std::isfinite(temperature))
     return 1.0f;
 
@@ -243,16 +236,12 @@ inline float correction_coefficient(float rh, float temperature,
   if (t_clamped > MQ_TC_TEMP_MAX)
     t_clamped = MQ_TC_TEMP_MAX;
 
-  const float a = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.a33,
-                                     coeffs.a85);
-  const float b = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.b33,
-                                     coeffs.b85);
-  const float c = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.c33,
-                                     coeffs.c85);
+  const float a = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.a33, coeffs.a85);
+  const float b = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.b33, coeffs.b85);
+  const float c = linear_interpolate(rh_clamped, MQ_TC_RH_MIN, MQ_TC_RH_MAX, coeffs.c33, coeffs.c85);
 
   const double correction = static_cast<double>(a) +
-                            static_cast<double>(c) * std::exp(static_cast<double>(b) *
-                                                              static_cast<double>(t_clamped));
+                            static_cast<double>(c) * std::exp(static_cast<double>(b) * static_cast<double>(t_clamped));
   if (!std::isfinite(correction) || correction <= 0.0)
     return 1.0f;
   return static_cast<float>(correction);
@@ -268,7 +257,7 @@ inline float apply_correction(float ratio, float correction) {
 
 /// Where the correction comes from (mirrors `CORRECTION_MODES` in `__init__.py`).
 enum CorrectionMode : uint8_t {
-  CORRECTION_NONE = 0,         ///< no compensation (default)
+  CORRECTION_NONE = 0,           ///< no compensation (default)
   CORRECTION_MQDATASCIENCE = 1,  ///< `a + c * exp(b * T)`
 };
 
@@ -279,8 +268,7 @@ enum CorrectionClamp : uint8_t {
 };
 
 /// Clamp a (possibly corrected) PPM value to the configured range.
-inline float clamp_ppm_corrected(float ppm, float min_ppm, float max_ppm, float correction,
-                                CorrectionClamp mode) {
+inline float clamp_ppm_corrected(float ppm, float min_ppm, float max_ppm, float correction, CorrectionClamp mode) {
   float upper = max_ppm;
   if (mode == CLAMP_SCALED)
     upper = static_cast<float>(static_cast<double>(max_ppm) * static_cast<double>(correction));

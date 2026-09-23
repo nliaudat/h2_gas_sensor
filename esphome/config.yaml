@@ -12,12 +12,10 @@ substitutions:
   ### time
   TZ: "Europe/Zurich"  # timezone
 
-
 external_components:
   - source:
       type: local
       path: components
-
 
 # Enable logging
 logger:
@@ -37,7 +35,6 @@ logger:
     select: ERROR
     number: ERROR
     sensor: INFO
-
 
 packages:
   wifi: !include packages/wifi.yaml
