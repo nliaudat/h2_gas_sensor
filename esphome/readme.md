@@ -256,8 +256,10 @@ attribution is in
 
 ## Licence
 
-This repository's own code, configuration and documentation are released under
-the **Apache License 2.0** - see [`../LICENSE`](../LICENSE).
+This repository's own code, configuration and documentation are dual-licensed
+under the **Apache License 2.0** *or* the **MIT License**, at your option - see
+[`../LICENSE`](../LICENSE), [`../LICENSE-APACHE`](../LICENSE-APACHE) and
+[`../LICENSE-MIT`](../LICENSE-MIT).
 
 Third-party material that is vendored, quoted or derived here keeps its own
 licence and is attributed where it is used:

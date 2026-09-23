@@ -161,8 +161,10 @@ The MQ-8 datasheet and the MQUnifiedsensor/MQDataScience fits describe the
 
 ## Licence
 
-This project is released under the **Apache License 2.0**
-([`../LICENSE`](../LICENSE)). The third-party material used by the firmware
+This project is dual-licensed under the **Apache License 2.0** *or* the **MIT
+License**, at your option ([`../LICENSE`](../LICENSE),
+[`../LICENSE-APACHE`](../LICENSE-APACHE),
+[`../LICENSE-MIT`](../LICENSE-MIT)). The third-party material used by the firmware
 (MQUnifiedsensor, SolderedElectronics, MQDataScience, DFRobot_MICS, the vendored
 ESPHome CI script) is listed with its own licence in
 [`../esphome/readme.md#licence`](../esphome/readme.md#licence).

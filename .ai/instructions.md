@@ -4,7 +4,7 @@
 **Primary goal:** measure hydrogen with an MQ-8 sensor and publish a trustworthy ppm value for Home Assistant
 **Hardware:** ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) + MQ-8 module (+ optional SHT4x)
 **Toolchain:** ESPHome 2026.9.0, ESP-IDF 5.5.5, C++17-compatible code, Python 3.12
-**License:** Apache-2.0 (this repo); component data/credits: MQUnifiedsensor (MIT), SolderedElectronics (data), MQDataScience (MIT)
+**License:** Apache-2.0 OR MIT (dual, at your option - this repo); component data/credits: MQUnifiedsensor (MIT), SolderedElectronics (data), MQDataScience (MIT)
 
 > **This file is the single source of truth for rules in this repository.**
 > Generic advice ("just use std::string", "add a delay", "store it in JSON", ...) is
@@ -54,7 +54,9 @@ h2_gas_sensor/                      git root
 ├── .ai/                            this guide
 ├── docs/                           versioned project documentation (EN)
 ├── documentation/                  local scratch: notes, articles, PDFs - GIT-IGNORED
-├── LICENSE                         Apache-2.0
+├── LICENSE                         dual-licence overview (Apache-2.0 OR MIT)
+├── LICENSE-APACHE                  Apache License 2.0 (full text)
+├── LICENSE-MIT                     MIT License (full text, real copyright line)
 ├── .gitattributes                  * text=auto eol=lf (keep LF everywhere)
 └── esphome/                        the ESPHome project
     ├── config.yaml                 entry point: substitutions + package includes
@@ -313,6 +315,3 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 | Copying a curve constant into a doc without a test | assert it in `mq_math_test.cpp` and cite it in `docs/` |
 | Vendored file edited to silence a lint | update from upstream or exclude it explicitly |
 | Committing build artifacts or secrets | keep them ignored (`mq_math_test.exe`, `secrets.yaml`) |
-
-
-
