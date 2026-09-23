@@ -1,218 +1,276 @@
-# TopTronic component reference
+# H2 sensor board - ESPHome firmware
 
-The `toptronic:` component talks to Hoval TopTronic heating / ventilation devices
-over the CAN bus (50 kbps). It is configured once **per device** (device type +
-address) and auto-generates all its entities from the bundled presets.
+ESPHome firmware for a battery-room **hydrogen monitor**: an ESP32 reads an MQ-8
+(and optionally a MiCS-5524) gas sensor, converts the analog output into a ppm
+value and publishes it to Home Assistant.
 
-> **Note for users of the `legacy` branch** — the core was refactored:
-> device addressing moved from each entity to the hub, presets moved into the
-> component, and you can now declare multiple `toptronic:` blocks in `config.yaml`.
-> See the migration section at the bottom.
+| | |
+|---|---|
+| Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
+| Sensors | MQ-8 (4000 - 10000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1000 ppm trace band) |
+| Optional | SHT4x (I2C) for the MQDataScience temperature/humidity compensation |
+| Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A) and `components/mics_5524_gas_sensor/` (MiCS-5524) |
+| Documentation | [`../docs/`](../docs/README.md) (hardware, curves, thresholds, conversions) and [`../.ai/instructions.md`](../.ai/instructions.md) (the rule book) |
+
+The measurement chain, the safety rules and the pitfalls live in the docs - read
+[`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) (or
+[`../docs/mics5524_guide.md`](../docs/mics5524_guide.md)) before wiring anything.
 
 ---
 
-## Before you start — user-editable files
-
-The firmware is organized as ESPHome packages. Before flashing, customize these
-files in the `esphome/` folder (full checklist in the root
-[`README.md`](../README.md)):
+## Before you start - user-editable files
 
 | File | Purpose | Usually edited? |
 |---|---|---|
-| `secrets.yaml` | WiFi credentials + fallback AP password (**gitignored**, create it) | **Always** |
-| `config.yaml` | `substitutions:` (`name`, `can_tx_pin`, `can_rx_pin`, `board_type`, `TZ`) + `toptronic:` hub blocks | **Always** |
-| `packages/wifi.yaml` | WiFi network list (`!secret` references) | Almost always |
-| `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA | Rarely |
-| `packages/canbus.yaml` | 50 kbps `esp32_can` bus | Rarely |
-| `packages/debug.yaml` | Opt-in synthetic-frame test buttons + CRC logging | Only for reverse-engineering |
+| `secrets.yaml` | WiFi credentials + fallback AP password (**git-ignored**, create it - see `packages/wifi.yaml` for the keys) | **Always** |
+| `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
+| `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) | Yes |
+| `packages/mq8_tc.yaml` | Same, plus the I2C T/RH sensor and the MQDataScience correction | Only with an SHT4x |
+| `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN (optional hardware) | Only with a MiCS-5524 |
+| `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
+| `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
+| `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |
+| `packages/switch.yaml`, `packages/sensors_others.yaml` | Restart switch, WiFi signal diagnostics | Rarely |
 
-> The refresh button and the OTA pause/resume lambdas call fan-out methods
-> (`refresh_all()` / `request_pause_all()` / `request_resume_all()`), so they
-> work with any hub id and any number of hubs — no per-hub list to maintain.
+## Repository layout
 
----
+```
+esphome/
+├── config.yaml                       entry point: substitutions + package includes
+├── secrets.yaml                      credentials (git-ignored)
+├── components/mq_gas_sensors/        MQ sensor platform (see its README.md)
+├── components/mics_5524_gas_sensor/  MiCS-5524 platform (see its README.md)
+├── packages/                         mq8.yaml, mq8_tc.yaml, mics5524.yaml, board.yaml, wifi.yaml, ...
+├── script/                           vendored ESPHome CI linter + wrapper (see its README.md)
+├── tests/                            host tests + config validation fixtures
+└── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml pyproject.toml
+```
 
-## Hub configuration
+## Packages - pick the right combination
 
 ```yaml
-substitutions:
-  name: canbus
-  friendly_name: "CanBus Controller"
-
-  ### canbus
-  can_tx_pin: "GPIO22"  # GPIO5
-  can_rx_pin: "GPIO21"  # GPIO4
-
-  ### board
-  board_type: az-delivery-devkit-v4 #nodemcu-32s #esp-wrover-kit
-
-  ### time
-  TZ: "Europe/Zurich"  # timezone
-
-toptronic:
-  - id: toptronic_HV  # HomeVent
-    canbus_id: cbus  # the canbus bit_rate must be 50kbps. do not change name as it used in canbus.yaml
-    device_type: HV  # WEZ, SOL, PS, FW, HK, MWA, GLT, HV, BM, GW (BD is an alias for BM and BM must be used)
-    device_addr: 8  # defaults are : HV=8, BM=8, WEZ=1
-    language: en  # de, en, fr, it
-
-  # - id: toptronic_BM  # display
-    # canbus_id: cbus  # the canbus bit_rate must be 50kbps
-    # device_type: BM
-    # device_addr: 8
-    # language: en
+packages:
+  wifi: !include packages/wifi.yaml
+  board: !include packages/board.yaml
+  time: !include packages/time.yaml
+  sensors_others: !include packages/sensors_others.yaml
+  switch: !include packages/switch.yaml
+  mq8: !include packages/mq8.yaml          # or mq8_tc.yaml - never both (both use id: mq8)
+  # mics5524: !include packages/mics5524.yaml   # additive, optional hardware
 ```
 
-| Option | Required | Default | Description |
-|---|---|---|---|
-| `id` | yes | — | Unique hub id (used by `board.yaml` OTA pause/resume and the auto-generated refresh-all button). |
-| `canbus_id` | yes | — | Id of the `canbus:` component. Must run at **50 kbps**. |
-| `device_type` | yes | — | One of `WEZ`, `SOL`, `PS`, `FW`, `HK`, `MWA`, `GLT`, `HV`, `BM`, `GW` (`BD` is an alias for `BM`; use `BM`). |
-| `device_addr` | yes | — | Bus address (typical defaults: `HV=8`, `BM=8`, `WEZ=1` — find it on the room control unit). |
-| `language` | no | `en` | Preset language: `de`, `en`, `fr`, `it`. |
-| `name_prefix` | no | device type | Prefix prepended to every entity name generated from this hub's presets. Defaults to the device type when more than one hub is configured (the address is appended when two hubs share a type) and is empty for a single-hub build. Set it explicitly to override. See [`docs/toptronic_internals.md`](../docs/toptronic_internals.md) §1 for the full resolution order. |
-| `boot_refresh_delay` | no | `30s` | One-shot full refresh after boot; `0` disables it. |
-| `max_pending_messages` | no | `32` | Max concurrently reassembled multi-frame messages (per hub). Raise on a large multi-hub bus. |
-| `max_pending_age` | no | `5000ms` | A pending message with no continuation frame this long is considered lost. |
-| `cleanup_interval` | no | `5000ms` | Interval between stale-fragment sweeps in `loop()`. |
-| `max_refresh_per_loop` | no | `8` | GET burst budget per `refresh_gap_ms` window. Combined with `refresh_gap_ms` it sets the effective per-GET spacing (`refresh_gap_ms / max_refresh_per_loop`). |
-| `max_frames_per_message` | no | `8` | Max total frames a start frame may claim; larger counts are rejected as corrupted headers. |
-| `refresh_gap_ms` | no | `50ms` | Refresh window length. The burst budget (`max_refresh_per_loop`) GETs are spread across it; effective spacing = `refresh_gap_ms / max_refresh_per_loop` (default 6.25 ms), keeping responses interleaved so the main loop is not swamped. |
-| `max_refresh_retries` | no | `0` | Re-sends of an unanswered GET during a refresh burst (`0` = single-pass, no retries; the normal 30 s poll is the backstop). |
-| `refresh_retry_interval_ms` | no | `200ms` | Wall-clock delay before an unanswered GET in a burst is re-sent (only used when `max_refresh_retries` > 0). |
-| `write_min_interval` | no | `2s` | Write-safety: minimum spacing between two SET requests to the **same datapoint**; faster writes are ignored and logged at WARN. `0` disables the rate limit. |
-| `reject_writes_before_read` | no | `true` | Write-safety (cold-cache guard): reject a SET until that datapoint has delivered at least one RESPONSE since boot, so the gateway never writes blind. Datapoints with no read sensor (e.g. the filter-maintenance button) are exempt. |
-| `update_interval` | no | `30s` | Polling interval for the read-only entities (`sensor`/`text_sensor`) generated from this hub's presets; each poll sends a GET_REQUEST. Entity-level key (configured in the preset files), not a hub configuration key — write entities never poll. |
+| Package | Sensor | Notes |
+|---|---|---|
+| `mq8.yaml` | MQ-8 | plain, no compensation (default) |
+| `mq8_tc.yaml` | MQ-8 + SHT4x | adds the MQDataScience temperature/humidity correction |
+| `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
-`MULTI_CONF = true` — declare as many hubs as you have devices.
+Only **one** MQ-8 package may be included: both define `id: mq8`. `mics5524.yaml`
+can be added on top of either and keeps the defaults of the MQ-8 package
+untouched.
 
-> **Multiple devices:** preset entity names are only unique within one device
-> type (e.g. `FW` and `WEZ` both expose `AF1 - outdoor sensor 1`). Because
-> ESPHome requires entity names to be unique build-wide, each hub's generated
-> entities are prefixed with the device type whenever more than one hub is
-> configured (see `name_prefix`). A single-hub build is left unchanged, so its
-> entity names and object ids are unaffected.
->
-> Generated entity names never contain `/` (ESPHome's reserved URL path
-> separator) — any `/` in a preset name is rewritten to `_`.
->
-> See [`docs/toptronic_internals.md`](../docs/toptronic_internals.md) §1 for the
-> full prefix rules, unique entity ids for same-type hubs, and the
-> duplicate-hub validation.
-
----
-
-## Presets
-
-Entities are generated from YAML files in
-`esphome/components/toptronic/presets/<DEVICE_TYPE>/`:
+## Wiring in one screen
 
 ```
-presets/
-├── WEZ/
-│   ├── sensors_<lang>.yaml
-│   └── inputs_<lang>.yaml
-├── SOL/
-│   ├── sensors_<lang>.yaml
-│   └── inputs_<lang>.yaml
-├── PS/
-│   ├── sensors_<lang>.yaml
-│   └── inputs_<lang>.yaml
-├── FW/
-│   ├── sensors_<lang>.yaml
-│   └── inputs_<lang>.yaml
-├── HK/
-│   ├── sensors_<lang>.yaml
-│   └── inputs_<lang>.yaml
-├── MWA/
-│   └── sensors_<lang>.yaml
-├── GLT/
-│   └── sensors_<lang>.yaml
-├── HV/
-│   ├── sensors_<lang>.yaml
-│   ├── inputs_<lang>.yaml
-│   └── buttons_<lang>.yaml
-├── BM/
-│   └── sensors_<lang>.yaml
-└── GW/
-    └── sensors_<lang>.yaml
+MQ-8 / MiCS-5524 at 5 V
+   VCC -> 5V (module GND to the ESP32 GND)
+   AO  -> [ 10k ] --> ADC1 pin (GPIO32-39)
+                  |
+                [ 20k ]
+                  |
+                 GND            ->  divider: {r1: 10.0, r2: 20.0}  (multiplier 1.5)
+   EN (MiCS-5524 only) -> GPIO4, `inverted: true` (the module is enabled by LOW)
 ```
 
-Supported device types: `WEZ` heat generator, `SOL` solar module, `PS` buffer storage tank,
-`FW` district heating, `HK` heating circuit, `MWA` energy meter module, `GLT` building
-management system (BMS), `HV` HomeVent ventilation, `BM` control module / display (`BD` is
-an alias for `BM`), and `GW` Modbus/KNX gateway. `BM`, `GLT`, `GW` and `MWA` presets are
-read-only (sensors only); the others also expose writable inputs, and `HV` additionally
-exposes buttons.
+* The analog output can reach 5 V while the **ESP32 ADC pins are not 5 V
+  tolerant** (absolute maximum VDD + 0.3 V = 3.6 V): always keep the divider.
+  Never wire the sensor output straight to a GPIO.
+* The recommended 10k/20k divider maps 5 V to 3.33 V, a hair above the ADC's
+  3.3 V recommended maximum - the packages therefore declare
+  `adc_input_max: 3.33`, and the component **rejects** any configuration whose
+  divider could exceed `adc_pin_max` (3.6 V) at compile time. Use 10k/10k
+  (`r1: 10.0, r2: 10.0`, 5 V -> 2.5 V) or an ADS1115 (0-5 V input,
+  `voltage_multiplier: 1.0`, `adc_input_max`/`adc_pin_max: 6.144`) instead.
+* Use an ADC1 pin (GPIO32-39); ADC2 is unusable while WiFi is active, and GPIO12
+  must not be used.
 
-Each file defines the entities of one platform (`sensor`, `text_sensor`, `number`,
-`select`, `button`). The `_load_entities()` codegen strips `platform`,
-`device_type`, and `device_addr` from each entry — the hub config is authoritative.
+## First run
 
-To regenerate or extend presets, see
-[`hoval_data_processing`](../hoval_data_processing/readme.md):
+1. Copy `secrets.yaml.example`-style credentials into `secrets.yaml` (create the
+   file - it is git-ignored) and adjust the `substitutions:` in `config.yaml`
+   (`name`, `friendly_name`, `board_type`, `TZ`).
+2. Validate and flash:
+
+   ```bash
+   esphome config config.yaml        # fast validation
+   esphome compile config.yaml       # full ESP-IDF build
+   esphome run config.yaml           # flash over USB or OTA
+   ```
+
+   For the first **serial** flash: hold `BOOT` for 2-3 s while the connection
+   initialises. After an OTA update press `EN` once to run the new firmware.
+3. Let the sensor burn in (24 - 48 h for a new MQ-8; the packages use
+   `warmup_time: 0s`, set `24h` while it stabilises).
+4. Calibrate in **clean air**: `r0` for the MQ-8 (`calibration:` block in
+   `mq8.yaml`), the vendor "air reference" for the MiCS-5524. Both are stored in
+   flash and logged; they can be pinned in the YAML afterwards
+   (`r0:` / `air_reference:`). Re-calibrate after changing the wiring or the
+   divider, and every few months - the sensors drift.
+
+   ```yaml
+   esphome:
+     on_boot:
+       - delay: 5min
+       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
+   ```
+
+## Thresholds and alerting
+
+| H2 concentration | Meaning |
+|---|---|
+| 100 - 300 ppm | trace / early detection (MiCS-5524 band) |
+| 4 000 ppm | 10 % of the LEL - early warning (MQ-8) |
+| 10 000 ppm | 25 % of the LEL - pre-alarm, NFPA 855 design target (MQ-8 upper range) |
+| 20 000 ppm | 50 % of the LEL - immediate action |
+
+Details and the reasoning: [`../docs/h2_thresholds.md`](../docs/h2_thresholds.md).
+Alerting belongs in Home Assistant (or an `on_value` automation), not in the
+component - and keep the thresholds on the **absolute** ppm value
+(`correction_clamp: absolute`, the default).
+
+## Build, validate, test
 
 ```bash
-python hoval_data_processing/generate_presets.py esphome/components/toptronic/presets
+cd esphome
+esphome config config.yaml                     # validate the project configuration
+esphome compile config.yaml                    # full ESP-IDF build
+esphome run config.yaml                        # flash (OTA or serial)
+
+# config-only fixtures (no hardware needed)
+esphome config tests/test_no_id.yaml           # MQ-8 without id:, pin: sugar, fixed r0
+esphome config tests/test_tc.yaml              # T/RH correction + curve: mqdatascience
+esphome config tests/test_mics.yaml            # MiCS: both conversion models, divider, ADS1115 case
+esphome config tests/test_mics_package.yaml    # the shipped MiCS package
+python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
+
+# host tests for the pure math of both components
+cd tests
+g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe
+g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe
 ```
 
-### Manual entities
+## Linting (must be clean before a change is done)
 
-You can also declare entities manually instead of relying on a preset, using the
-same keys as the preset files (`function_group`, `function_number`, `datapoint`,
-plus the platform-specific options). Read-only entities accept the standard
-`update_interval` key (default `30s`); write entities ignore it.
+The full rule book is [`../.ai/instructions.md`](../.ai/instructions.md) section 3.
 
----
+```bash
+cd esphome
+python script/ci-custom.py                    # ESPHome's own CI checks -> 0 findings
+yamllint -c .yamllint .                       # YAML style
+flake8 --config .flake8 components tests script
+ruff check . && ruff format --check .         # settings in pyproject.toml
 
-## Runtime behaviour
+# from the git root (the pin is clang-format v13.0.1 - newer versions format differently)
+pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files
+```
 
-- **Polling** — read-only entities (`sensor`/`text_sensor`) extend `PollingComponent`
-  and poll at `update_interval` (default `30s`); each poll sends a `GET_REQUEST`
-  frame for its datapoint. Write entities (`number`/`select`/`button`) never poll
-  — they only send SET_REQUEST frames on user action (and mirror their linked
-  read sensor), so they carry no scheduler tick.
-- **Post-boot refresh** — `boot_refresh_delay` (default `30s`) after setup the hub
-  fires a one-shot `update_all()` to catch values that changed while the CAN
-  gateway was settling; `0` disables it.
-- **Throttled refresh** — `update_all()` enqueues sensors and `loop()` spreads
-  `max_refresh_per_loop` GETs (default 8) across each `refresh_gap_ms` window
-  (default 50 ms), so the effective per-GET spacing is
-  `refresh_gap_ms / max_refresh_per_loop` (default 6.25 ms). Large presets do
-  not saturate the 50 kbps bus and the boiler's responses come back interleaved
-  instead of as a single main-loop-stalling avalanche. Both knobs drive the
-  refresh throughput.
-- **Refresh-burst monitoring** - every `update_all()` burst logs a completion
-  summary (`N queued, A answered, D dropped`). If a burst ever stops making
-  progress for > 5 s (no GETs sent, no responses), `loop()` aborts it so the
-  next refresh can start fresh instead of wedging the queue.
-- **Multi-frame reassembly** — long responses (U32/S32/S64) are reassembled with
-  CRC-16 validation (lookup-table accelerated); stale fragments are evicted after
-  `max_pending_age` (default 5 s) by the throttled `loop()` sweep.
-- **OTA** — `board.yaml` calls `pause()` / `resume()` on every hub during OTA so
-  frame processing does not starve the update path.
-- **Refresh button** — the component auto-generates one "Refresh all" button
-  (`TopTronicRefreshButton`). Pressing it calls `refresh_all()`, which fans out
-  to every hub and staggers each hub's batch by 15 s.
-- **Debug switches** — `switch.yaml` provides two on/off toggles: **"candump
-  debug"** logs every CAN frame (tag `candump`, including the gateway's own
-  GET/SET request frames) and **"find can_id debug"** logs
-  only 0x42/0x40 frames (tag `toptronic` WARN, also routed to the `main_logs`
-  text sensor). Both reset to OFF on reboot and must not be left on permanently;
-  they supersede the old commented `on_frame` blocks in `canbus.yaml`.
-- **Thread-safe command bridge** — `request_refresh()`, `request_pause()`,
-  `request_resume()` may be called from any FreeRTOS task; they enqueue a command
-  that the main loop task executes (no blocking, no data races).
+`script/ci-custom.py` and `script/helpers.py` are vendored verbatim from
+`esphome/esphome` (MIT, see `script/README.md`) and must be run with `esphome/`
+as the working directory - the pre-commit hook does that through
+`script/run_ci_custom.py`. The host test binaries (`tests/*.exe`) and the
+`.esphome/` build cache are git-ignored; never commit them.
 
----
+## Operations
 
-## Migration from `legacy`
+* **Logging** - `logger:` in `config.yaml` runs at `DEBUG` with per-tag
+  overrides; `esphome logs config.yaml` (or the web log) shows the raw values
+  (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
+  calibration result).
+* **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
+  06:00 (SNTP must be synced first). Useful to recover from long-run drift; the
+  calibration is in flash and survives it.
+* **Watchdog / performance** - `packages/board.yaml` sets a 30 s task watchdog,
+  240 MHz, `FREERTOS_HZ 1000` and TLS 1.3. `preferences.flash_write_interval:
+  60min` keeps flash writes (the calibration) gentle; `safe_mode:` and
+  `api: reboot_timeout: 30min` provide the usual recovery paths.
+* **Dropbox** - the project lives inside a Dropbox folder, and the ESP-IDF build
+  cache (`esphome/.esphome/`) gets locked while Dropbox indexes it, which makes
+  `esphome compile` fail with `PermissionError: ... being used by another
+  process` during ninja's cleanup. Exclude `.esphome/` from the Dropbox sync if
+  that happens (or copy the project outside Dropbox to build).
 
-| Aspect | `legacy` branch | New core |
+## Troubleshooting (quick pointers)
+
+| Symptom | Where to look |
+|---|---|
+| state stays `unknown`, `R0 unknown` / `no air reference` | the calibration section above, then the component README |
+| `analog output reads 0.0000 V` warning | AO wiring, 5 V supply, EN polarity (MiCS) |
+| ppm far too low / flat, or pinned at `max_ppm` | `rl:` (MQ-8), `divider:`/`voltage_multiplier`, `ratio_mode`, curve dataset |
+| values jump around | ADC noise - raise `samples`, add 100 nF at the pin, or use an ADS1115 |
+| `... can damage the pin` at config time | the divider is too small for a 5 V output: see "Wiring in one screen" |
+| values drift over weeks | re-calibrate in clean air (MQ sensors drift) |
+
+Per-sensor details: [`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md)
+and [`../docs/mics5524_guide.md`](../docs/mics5524_guide.md).
+
+## Documentation index
+
+| Document | Content |
+|---|---|
+| [`../docs/README.md`](../docs/README.md) | Project documentation index + verification status (what has been verified and how) |
+| [`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) | MQ-8 wiring, divider, RL, burn-in, R0 calibration, placement |
+| [`../docs/mq8_h2_curve.md`](../docs/mq8_h2_curve.md) | The V -> RS -> RS/R0 -> ppm chain, curve provenance, ratio -> ppm table |
+| [`../docs/mics5524_guide.md`](../docs/mics5524_guide.md) | MiCS-5524 hardware, EN pin, ADS1115 option, ADC limits, calibration |
+| [`../docs/mics5524_conversion.md`](../docs/mics5524_conversion.md) | Both MiCS conversion models, constants, the 2-point fit recipe |
+| [`../docs/h2_thresholds.md`](../docs/h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds |
+| [`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation (model, effect, settings) |
+| [`../docs/mqdatascience_comparison.md`](../docs/mqdatascience_comparison.md) | MQ-8 curve comparison and what was deliberately skipped |
+| [`../.ai/instructions.md`](../.ai/instructions.md) | Rule book: lint commands, C++/Python/YAML style, domain and safety rules |
+| [`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md) | MQ component reference (all options, calibration, behaviour) |
+| [`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md) | MiCS-5524 component reference |
+| [`script/README.md`](script/README.md) | Provenance of the vendored ESPHome CI linter |
+
+## Known leftovers
+
+* `config.yaml` still carries log-level lines for `canbus` and `toptronic` (from
+  the parent project) and references a commented `packages/debug.yaml` that is
+  not shipped. Add the package or delete the line.
+* `documentation/` (root, **git-ignored**) holds local notes, articles and a
+  reference PDF; it is not versioned, so nothing here should depend on it.
+
+## Credits
+
+The components embed data and formulas from MIT-licensed projects - the full
+attribution is in
+[`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md),
+[`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md),
+[`script/README.md`](script/README.md) and
+[`../docs/README.md`](../docs/README.md):
+
+* MQUnifiedsensor / MQSensorsLib - the PPM model of the MQ component.
+* SolderedElectronics - the `a`/`b` curve table.
+* MQDataScience (abcdaaaaaaaaa, MIT) - the T/RH correction and the alternative
+  MQ-8 dataset.
+* DFRobot_MICS (MIT) - the MiCS-5524 vendor model and its thresholds.
+* ESPHome (MIT) - the vendored CI linter in `script/`.
+
+## Licence
+
+This repository's own code, configuration and documentation are released under
+the **Apache License 2.0** - see [`../LICENSE`](../LICENSE).
+
+Third-party material that is vendored, quoted or derived here keeps its own
+licence and is attributed where it is used:
+
+| Material | Where it is used | Licence |
 |---|---|---|
-| Device addressing | Per entity (`device_type` + `device_addr` on each sensor/input) | On the hub, once per `toptronic:` block |
-| Config | One `toptronic:` block, entities hand-written | Multiple `toptronic:` blocks; entities auto-generated from presets |
-| Language | Code only | Presets per language (`de`/`en`/`fr`/`it`) |
-| Sender CAN id | Based on `device_type` | Always `GW` (0x481) + `device_addr` — matches gateway behaviour |
-| Button support | Not available | `button` platform with `value`/`type` |
-| Update trigger | Template button only | `update_all()` + 30 s post-boot `set_timeout` + thread-safe `request_*()` bridge |
+| MQUnifiedsensor / MQSensorsLib - PPM model, and the `a`/`b` coefficients cross-checked against its examples | `components/mq_gas_sensors/` (`mq_math.h`, `coefficients.py`) | MIT |
+| SolderedElectronics MQ library - `sensorConfigData.h` referenced for the curve table (the values themselves are the datasheet / MQUnifiedsensor fits) | `components/mq_gas_sensors/coefficients.py` | GPL-3.0 (data reference only) |
+| MQDataScience (`MQSpaceData` v6.0.0) - temperature/humidity correction model and the alternative MQ-8 dataset | `components/mq_gas_sensors/`, `docs/mqdatascience_comparison.md` | MIT |
+| DFRobot_MICS - MiCS-5524 vendor thresholds, gains and measuring ranges | `components/mics_5524_gas_sensor/coefficients.py` | MIT |
+| ESPHome - `script/ci-custom.py` and `script/helpers.py`, vendored verbatim | `script/`, used by the `ci-custom` pre-commit hook | MIT |
+| ESPHome framework itself (not vendored; the firmware is compiled against it like any ESPHome project) | the build | MIT for the Python codebase, GPLv3 for the C++/runtime files |
+| Datasheet fits quoted from community sources (e.g. the MiCS-5524 CO two-point fit) | `docs/mics5524_conversion.md`, `docs/mq8_h2_curve.md` | facts / derivations - attributed to the sources in `docs/README.md` |
+
+The ESP-IDF / ESP32 toolchain, the Espressif SDK and the MQ/MiCS sensor
+datasheets are used under their owners' terms and are not redistributed here.

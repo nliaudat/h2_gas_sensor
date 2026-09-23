@@ -14,6 +14,7 @@ the article list and the reference PDF.
 | Document | Content |
 |---|---|
 | [`../.ai/instructions.md`](../.ai/instructions.md) | Rule book for contributors and AI agents: lint commands, C++/Python/YAML style, domain and safety rules |
+| [`../esphome/readme.md`](../esphome/readme.md) | ESPHome-side guide: packages, wiring, first run, calibration, thresholds, build/test commands, operations, line linting |
 | [`mq8_sensor_guide.md`](mq8_sensor_guide.md) | Wiring, 5 V supply, AO divider, real load resistor, burn-in, R0 calibration workflow, placement |
 | [`mq8_h2_curve.md`](mq8_h2_curve.md) | The measurement chain V → RS → RS/R0 → ppm, why `ratio_in_clean_air` is 70, provenance of `a`/`b`, ratio→ppm table |
 | [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
@@ -157,3 +158,11 @@ g++ -std=c++17 -O2 -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o m
 The MQ-8 datasheet and the MQUnifiedsensor/MQDataScience fits describe the
 **same** log-log curve; the differences between the datasets are documented in
 [`mqdatascience_comparison.md`](mqdatascience_comparison.md).
+
+## Licence
+
+This project is released under the **Apache License 2.0**
+([`../LICENSE`](../LICENSE)). The third-party material used by the firmware
+(MQUnifiedsensor, SolderedElectronics, MQDataScience, DFRobot_MICS, the vendored
+ESPHome CI script) is listed with its own licence in
+[`../esphome/readme.md#licence`](../esphome/readme.md#licence).

@@ -58,6 +58,7 @@ h2_gas_sensor/                      git root
 ├── .gitattributes                  * text=auto eol=lf (keep LF everywhere)
 └── esphome/                        the ESPHome project
     ├── config.yaml                 entry point: substitutions + package includes
+    ├── readme.md                   ESPHome-side guide (packages, build, calibration, operations, linting)
     ├── secrets.yaml                wifi credentials - GIT-IGNORED
     ├── pyproject.toml              ruff settings (ESPHome parity)
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
