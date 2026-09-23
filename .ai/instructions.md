@@ -106,8 +106,8 @@ Notes and gotchas:
 
 * `pre-commit` must be invoked with `-c esphome/.pre-commit-config.yaml` because the
   git root is the parent directory of the ESPHome project. Its
-  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master`: work on a
-  branch.
+  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master` - the human's
+  concern only: the AI does not commit at all (section 10).
 * `script/ci-custom.py` and `script/helpers.py` are **vendored verbatim** (MIT) from
   `esphome/esphome`; `script/run_ci_custom.py` is the local wrapper that runs the
   linter with `esphome/` as CWD. That CWD matters: upstream only performs the
@@ -291,10 +291,21 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 
 ## 10. Git, workflow and AI behaviour
 
-* Work on a **branch** (`no-commit-to-branch` blocks `main`/`dev`/`master`). The AI
-  edits files and reports; unless explicitly asked, the AI does **not** commit.
-* Commit messages: imperative, one concern, reference a document when the change is
-  data/provenance related.
+* **The AI never commits - a human reviews and commits.** No `git commit`, no
+  `git push`, no `git merge`/`rebase`/`cherry-pick`/`reset`, no tag, no branch
+  deletion: whatever the instruction, whatever the size of the change, even when
+  the pre-commit hooks are not installed. Staging is allowed (`git add`) because
+  the vendored linter only sees tracked files, and it is reversible with
+  `git restore --staged`. The AI leaves the work in the working tree, lists every
+  file it touched and how it was verified, and stops there. The human reviews
+  (`git status`, `git diff --cached`) and creates the commit.
+* The human commits on a **branch** (`no-commit-to-branch` blocks
+  `main`/`dev`/`master`); commit messages are imperative, one concern, and
+  reference a document when the change is data/provenance related.
+* Before anything that can move the git state - creating or switching a branch,
+  `checkout`, `stash`, a tool that restores a checkpoint - copy the pending
+  changes to a scratch folder outside the repository, or ask the human to commit
+  first. Uncommitted work has already been wiped that way once in this repository.
 * Before saying a task is done: run the section 3 commands, re-read the changed
   files, and report the results (command -> result), including anything that could
   not be verified locally.
@@ -317,3 +328,4 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 | Copying a curve constant into a doc without a test | assert it in `mq_math_test.cpp` and cite it in `docs/` |
 | Vendored file edited to silence a lint | update from upstream or exclude it explicitly |
 | Committing build artifacts or secrets | keep them ignored (`mq_math_test.exe`, `secrets.yaml`) |
+| `git commit`, `git push`, `git merge`/`rebase`, `git reset`, branch deletion, a tag | leave the changes in the working tree and report them; the human reviews the diff and commits (section 10) |

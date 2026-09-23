@@ -78,6 +78,8 @@ adding anything. A new constant has to be asserted in the host test and cited in
 
 ## Workflow
 
+* **AI agents never commit.** Every change is left in the working tree, listed file
+  by file, and reviewed (then committed) by a human.
 * Work on a **branch** - `main` is protected by the `no-commit-to-branch` hook.
 * `docs/` is the user-facing documentation: update it in the same change as the
   behaviour it describes.
