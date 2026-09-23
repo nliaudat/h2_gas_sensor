@@ -83,13 +83,14 @@ Plus the diagnostics (`MQ-8 AO voltage`, `MQ-8 RS-R0 ratio`, `MQ-8 RS`,
 paste-ready automations: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
 
 ```yaml
-# Home Assistant (automations.yaml) - pre-alarm at 25 % of the LEL
-# Adjust the entity_id to the one your device created.
+# Home Assistant (automations.yaml) - pre-alarm at the top of the MQ-8 range.
+# Adjust the entity_id to the one your device created. The component clamps at
+# 10 000 ppm and numeric_state's `above:` is exclusive, so a numeric_state
+# trigger at 10 000 would never fire - hence the template trigger (>=).
 - alias: "H2 pre-alarm (10 000 ppm)"
   trigger:
-    - platform: numeric_state
-      entity_id: sensor.h2_sensor_board_h2_mq_8
-      above: 10000
+    - platform: template
+      value_template: "{{ states('sensor.h2_sensor_board_h2_mq_8') | float(0) >= 10000 }}"
       for: "00:02:00"
   action:
     - service: notify.mobile_app_your_phone
