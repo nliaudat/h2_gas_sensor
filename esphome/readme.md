@@ -7,46 +7,17 @@ value and publishes it to Home Assistant.
 | | |
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
-| Sensors | MQ-8 (4000 - 10000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1000 ppm trace band) |
+| Sensors | MQ-8 (4 000 - 10 000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
 | Optional | SHT4x (I2C) for the MQDataScience temperature/humidity compensation |
 | Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A) and `components/mics_5524_gas_sensor/` (MiCS-5524) |
-| Documentation | [`../docs/`](../docs/README.md) (hardware, curves, thresholds, conversions) and [`../.ai/instructions.md`](../.ai/instructions.md) (the rule book) |
 
-The measurement chain, the safety rules and the pitfalls live in the docs - read
-[`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) (or
-[`../docs/mics5524_guide.md`](../docs/mics5524_guide.md)) before wiring anything.
+This file is the **firmware reference**: which package does what, where every
+setting lives and how the board behaves in operation. For the first install read
+[`../docs/getting_started.md`](../docs/getting_started.md); for the entities,
+thresholds and automations see
+[`../docs/home_assistant_alerts.md`](../docs/home_assistant_alerts.md).
 
----
-
-## Before you start - user-editable files
-
-| File | Purpose | Usually edited? |
-|---|---|---|
-| `secrets.yaml` | WiFi credentials + fallback AP password (**git-ignored**, create it - see `packages/wifi.yaml` for the keys) | **Always** |
-| `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
-| `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) | Yes |
-| `packages/mq8_tc.yaml` | Same, plus the I2C T/RH sensor and the MQDataScience correction | Only with an SHT4x |
-| `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN (optional hardware) | Only with a MiCS-5524 |
-| `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
-| `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
-| `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |
-| `packages/switch.yaml`, `packages/sensors_others.yaml` | Restart switch, WiFi signal diagnostics | Rarely |
-
-## Repository layout
-
-```
-esphome/
-├── config.yaml                       entry point: substitutions + package includes
-├── secrets.yaml                      credentials (git-ignored)
-├── components/mq_gas_sensors/        MQ sensor platform (see its README.md)
-├── components/mics_5524_gas_sensor/  MiCS-5524 platform (see its README.md)
-├── packages/                         mq8.yaml, mq8_tc.yaml, mics5524.yaml, board.yaml, wifi.yaml, ...
-├── script/                           vendored ESPHome CI linter + wrapper (see its README.md)
-├── tests/                            host tests + config validation fixtures
-└── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml pyproject.toml
-```
-
-## Packages - pick the right combination
+## Packages
 
 ```yaml
 packages:
@@ -69,6 +40,20 @@ Only **one** MQ-8 package may be included: both define `id: mq8`. `mics5524.yaml
 can be added on top of either and keeps the defaults of the MQ-8 package
 untouched.
 
+## User-editable files
+
+| File | Purpose | Usually edited? |
+|---|---|---|
+| `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
+| `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
+| `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) | Yes |
+| `packages/mq8_tc.yaml` | Same, plus the I2C T/RH sensor and the MQDataScience correction | Only with an SHT4x |
+| `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN (optional hardware) | Only with a MiCS-5524 |
+| `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
+| `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
+| `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |
+| `packages/switch.yaml`, `packages/sensors_others.yaml` | Restart switch, WiFi signal diagnostics | Rarely |
+
 ## Wiring in one screen
 
 ```
@@ -89,96 +74,55 @@ MQ-8 / MiCS-5524 at 5 V
   3.3 V recommended maximum - the packages therefore declare
   `adc_input_max: 3.33`, and the component **rejects** any configuration whose
   divider could exceed `adc_pin_max` (3.6 V) at compile time. Use 10k/10k
-  (`r1: 10.0, r2: 10.0`, 5 V -> 2.5 V) or an ADS1115 (0-5 V input,
-  `voltage_multiplier: 1.0`, `adc_input_max`/`adc_pin_max: 6.144`) instead.
+  (5 V -> 2.5 V) or an ADS1115 (0-5 V input, `voltage_multiplier: 1.0`,
+  `adc_input_max`/`adc_pin_max: 6.144`) instead.
 * Use an ADC1 pin (GPIO32-39); ADC2 is unusable while WiFi is active, and GPIO12
   must not be used.
 
-## First run
+Per-sensor wiring, the load-resistor measurement and the placement rules are in
+[`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) and
+[`../docs/mics5524_guide.md`](../docs/mics5524_guide.md).
 
-1. Copy `secrets.yaml.example`-style credentials into `secrets.yaml` (create the
-   file - it is git-ignored) and adjust the `substitutions:` in `config.yaml`
-   (`name`, `friendly_name`, `board_type`, `TZ`).
-2. Validate and flash:
+## Calibration
 
-   ```bash
-   esphome config config.yaml        # fast validation
-   esphome compile config.yaml       # full ESP-IDF build
-   esphome run config.yaml           # flash over USB or OTA
-   ```
+Both components calibrate in **clean air** on the first boot (after
+`calibration.delay`, never before `warmup_time` ends) and store the result in
+flash (`persist: true`), so a reboot does not repeat the calibration while
+hydrogen is present:
 
-   For the first **serial** flash: hold `BOOT` for 2-3 s while the connection
-   initialises. After an OTA update press `EN` once to run the new firmware.
-3. Let the sensor burn in (24 - 48 h for a new MQ-8; the packages use
-   `warmup_time: 0s`, set `24h` while it stabilises).
-4. Calibrate in **clean air**: `r0` for the MQ-8 (`calibration:` block in
-   `mq8.yaml`), the vendor "air reference" for the MiCS-5524. Both are stored in
-   flash and logged; they can be pinned in the YAML afterwards
-   (`r0:` / `air_reference:`). Re-calibrate after changing the wiring or the
-   divider, and every few months - the sensors drift.
+| | MQ-8 | MiCS-5524 |
+|---|---|---|
+| Calibrated value | `R0` (from `ratio_in_clean_air: 70`) | the vendor clean-air reference (`VCC - V_AO`) |
+| Delay / samples | 5 min / 50 | 3 min / 10 |
+| Pin it with | `r0: <value>` | `air_reference: <value>` |
 
-   ```yaml
-   esphome:
-     on_boot:
-       - delay: 5min
-       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
-   ```
+Force a re-calibration when the wiring, the divider or `rl:` changed:
 
-## Thresholds and alerting
+```yaml
+esphome:
+  on_boot:
+    - delay: 5min
+    - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
+```
 
-| H2 concentration | Meaning |
-|---|---|
-| 100 - 300 ppm | trace / early detection (MiCS-5524 band) |
-| 4 000 ppm | 10 % of the LEL - early warning (MQ-8) |
-| 10 000 ppm | 25 % of the LEL - pre-alarm, NFPA 855 design target (MQ-8 upper range) |
-| 20 000 ppm | 50 % of the LEL - immediate action |
+The log prints the result (`R0 = ... kOhm`, `air reference = ...`); pin it and
+drop the `calibration:` block for a deterministic setup. Re-calibrate every few
+months - metal-oxide sensors drift. Full workflow:
+[`../docs/getting_started.md`](../docs/getting_started.md).
 
-Details and the reasoning: [`../docs/h2_thresholds.md`](../docs/h2_thresholds.md).
-Alerting belongs in Home Assistant (or an `on_value` automation), not in the
-component - and keep the thresholds on the **absolute** ppm value
-(`correction_clamp: absolute`, the default).
-
-## Build, validate, test
+## Validate, flash, test
 
 ```bash
 cd esphome
-esphome config config.yaml                     # validate the project configuration
-esphome compile config.yaml                    # full ESP-IDF build
-esphome run config.yaml                        # flash (OTA or serial)
-
-# config-only fixtures (no hardware needed)
-esphome config tests/test_no_id.yaml           # MQ-8 without id:, pin: sugar, fixed r0
-esphome config tests/test_tc.yaml              # T/RH correction + curve: mqdatascience
-esphome config tests/test_mics.yaml            # MiCS: both conversion models, divider, ADS1115 case
-esphome config tests/test_mics_package.yaml    # the shipped MiCS package
-python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
-
-# host tests for the pure math of both components
-cd tests
-g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe
-g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe
+esphome config config.yaml            # validate the configuration
+esphome compile config.yaml           # full ESP-IDF build
+esphome run config.yaml               # flash (OTA or serial)
 ```
 
-## Linting (must be clean before a change is done)
-
-The full rule book is [`../.ai/instructions.md`](../.ai/instructions.md) section 3.
-
-```bash
-cd esphome
-python script/ci-custom.py                    # ESPHome's own CI checks -> 0 findings
-yamllint -c .yamllint .                       # YAML style
-flake8 --config .flake8 components tests script
-ruff check . && ruff format --check .         # settings in pyproject.toml
-
-# from the git root (the pin is clang-format v13.0.1 - newer versions format differently)
-pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files
-```
-
-`script/ci-custom.py` and `script/helpers.py` are vendored verbatim from
-`esphome/esphome` (MIT, see `script/README.md`) and must be run with `esphome/`
-as the working directory - the pre-commit hook does that through
-`script/run_ci_custom.py`. The host test binaries (`tests/*.exe`) and the
-`.esphome/` build cache are git-ignored; never commit them.
+The config fixtures (`esphome config tests/*.yaml`), the host tests of the
+measurement math and every lint command are collected in
+[`../docs/development.md`](../docs/development.md); the rule book is
+[`../.ai/instructions.md`](../.ai/instructions.md) section 3.
 
 ## Operations
 
@@ -191,52 +135,21 @@ as the working directory - the pre-commit hook does that through
   calibration is in flash and survives it.
 * **Watchdog / performance** - `packages/board.yaml` sets a 30 s task watchdog,
   240 MHz, `FREERTOS_HZ 1000` and TLS 1.3. `preferences.flash_write_interval:
-  60min` keeps flash writes (the calibration) gentle; `safe_mode:` and
+  60min` keeps the flash writes (the calibration) gentle; `safe_mode:` and
   `api: reboot_timeout: 30min` provide the usual recovery paths.
-* **Dropbox** - the project lives inside a Dropbox folder, and the ESP-IDF build
-  cache (`esphome/.esphome/`) gets locked while Dropbox indexes it, which makes
-  `esphome compile` fail with `PermissionError: ... being used by another
-  process` during ninja's cleanup. Exclude `.esphome/` from the Dropbox sync if
-  that happens (or copy the project outside Dropbox to build).
+* **OTA** - `esphome run config.yaml` over the network; press `EN` once after the
+  update so the new firmware starts.
 
-## Troubleshooting (quick pointers)
+Something wrong? [`../docs/troubleshooting.md`](../docs/troubleshooting.md).
 
-| Symptom | Where to look |
-|---|---|
-| state stays `unknown`, `R0 unknown` / `no air reference` | the calibration section above, then the component README |
-| `analog output reads 0.0000 V` warning | AO wiring, 5 V supply, EN polarity (MiCS) |
-| ppm far too low / flat, or pinned at `max_ppm` | `rl:` (MQ-8), `divider:`/`voltage_multiplier`, `ratio_mode`, curve dataset |
-| values jump around | ADC noise - raise `samples`, add 100 nF at the pin, or use an ADS1115 |
-| `... can damage the pin` at config time | the divider is too small for a 5 V output: see "Wiring in one screen" |
-| values drift over weeks | re-calibrate in clean air (MQ sensors drift) |
+## Documentation
 
-Per-sensor details: [`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md)
-and [`../docs/mics5524_guide.md`](../docs/mics5524_guide.md).
-
-## Documentation index
-
-| Document | Content |
-|---|---|
-| [`../docs/README.md`](../docs/README.md) | Project documentation index + verification status (what has been verified and how) |
-| [`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) | MQ-8 wiring, divider, RL, burn-in, R0 calibration, placement |
-| [`../docs/mq8_h2_curve.md`](../docs/mq8_h2_curve.md) | The V -> RS -> RS/R0 -> ppm chain, curve provenance, ratio -> ppm table |
-| [`../docs/mics5524_guide.md`](../docs/mics5524_guide.md) | MiCS-5524 hardware, EN pin, ADS1115 option, ADC limits, calibration |
-| [`../docs/mics5524_conversion.md`](../docs/mics5524_conversion.md) | Both MiCS conversion models, constants, the 2-point fit recipe |
-| [`../docs/h2_thresholds.md`](../docs/h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds |
-| [`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation (model, effect, settings) |
-| [`../docs/mqdatascience_comparison.md`](../docs/mqdatascience_comparison.md) | MQ-8 curve comparison and what was deliberately skipped |
-| [`../.ai/instructions.md`](../.ai/instructions.md) | Rule book: lint commands, C++/Python/YAML style, domain and safety rules |
-| [`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md) | MQ component reference (all options, calibration, behaviour) |
-| [`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md) | MiCS-5524 component reference |
-| [`script/README.md`](script/README.md) | Provenance of the vendored ESPHome CI linter |
-
-## Known leftovers
-
-* `config.yaml` still carries log-level lines for `canbus` and `toptronic` (from
-  the parent project) and references a commented `packages/debug.yaml` that is
-  not shipped. Add the package or delete the line.
-* `documentation/` (root, **git-ignored**) holds local notes, articles and a
-  reference PDF; it is not versioned, so nothing here should depend on it.
+* [`../README.md`](../README.md) - user entry point (what it is, quick start).
+* [`../docs/README.md`](../docs/README.md) - index of every document.
+* [`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md) - MQ component reference (all options, calibration, behaviour).
+* [`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md) - MiCS-5524 component reference.
+* [`script/README.md`](script/README.md) - provenance of the vendored ESPHome CI linter.
+* [`../.ai/instructions.md`](../.ai/instructions.md) - rule book: lint commands, C++/Python/YAML style, domain and safety rules.
 
 ## Credits
 

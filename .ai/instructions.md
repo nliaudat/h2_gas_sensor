@@ -52,15 +52,15 @@ A second component, `esphome/components/mics_5524_gas_sensor/`, covers the
 ```
 h2_gas_sensor/                      git root
 ├── .ai/                            this guide
+├── README.md                       entry point for users (what it is, quick start)
 ├── docs/                           versioned project documentation (EN)
-├── documentation/                  local scratch: notes, articles, PDFs - GIT-IGNORED
 ├── LICENSE                         dual-licence overview (Apache-2.0 OR MIT)
 ├── LICENSE-APACHE                  Apache License 2.0 (full text)
 ├── LICENSE-MIT                     MIT License (full text, real copyright line)
 ├── .gitattributes                  * text=auto eol=lf (keep LF everywhere)
 └── esphome/                        the ESPHome project
     ├── config.yaml                 entry point: substitutions + package includes
-    ├── readme.md                   ESPHome-side guide (packages, build, calibration, operations, linting)
+    ├── readme.md                   ESPHome-side firmware reference (packages, wiring, calibration, operations)
     ├── secrets.yaml                wifi credentials - GIT-IGNORED
     ├── pyproject.toml              ruff settings (ESPHome parity)
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
@@ -73,8 +73,10 @@ h2_gas_sensor/                      git root
 
 Rules that follow from the map:
 
-* `documentation/` is **not versioned** - never link to it from a tracked file and
-  never put information there that the docs need.
+* No tracked file may depend on a path that exists only on one machine.
+* `config.yaml` still carries the log-level lines of the parent project
+  (`canbus`, `toptronic`) and a commented `packages/debug.yaml` include that is
+  not shipped - harmless, but delete them when you touch that file.
 * The component directory name **is** the YAML platform name
   (`components/mq_gas_sensors` -> `platform: mq_gas_sensors`). Never rename one
   without the other, and never use uppercase in a component directory.
@@ -270,17 +272,17 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 
 ## 9. Documentation rules
 
-* `docs/` is the versioned, user-facing documentation; `docs/README.md` is the index
-  and carries the **Verification status** section listing what has been verified
-  (which commands, which tools) and what is unverifiable.
+* `docs/` is the versioned, user-facing documentation; `docs/README.md` is the index.
+  The user-facing set is `../README.md` (entry point), `getting_started.md` (setup),
+  `home_assistant_alerts.md` (usage), `troubleshooting.md` and `development.md`, plus
+  the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`).
 * Every number quoted in `docs/` must be asserted by `mq_math_test.cpp`; when a
   constant changes, update code, test and docs in the same change.
 * Markdown may use Unicode (arrows, multiplication signs, micro, degrees - the ASCII
   rule covers code and config files only), but keep it ASCII where it is easy.
-* Docs must never rely on `documentation/` (it is git-ignored and absent on a
-  fresh clone): mention it at most as the origin of a local note, never as the
-  only place where a number or explanation lives. No machine-specific absolute
-  paths in docs/.
+* Docs must never rely on a path that only exists on one machine (git-ignored
+  scratch folders, absolute paths): a fresh clone has to be enough, and every
+  number needs a public source.
 * Component API/options are documented in
   `esphome/components/mq_gas_sensors/README.md`; project-level topics (hardware,
   thresholds, curve provenance, comparisons) in `docs/`.

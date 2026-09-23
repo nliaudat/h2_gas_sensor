@@ -1,0 +1,109 @@
+# Home Assistant - entities, thresholds, alerts
+
+What the device publishes, how to read it and paste-ready alerting. The threshold
+reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves in
+[`mq8_sensor_guide.md`](mq8_sensor_guide.md) and
+[`mics5524_guide.md`](mics5524_guide.md).
+
+## Entities
+
+| Entity (suffix of `friendly_name`) | Unit | Kind | Package |
+|---|---|---|---|
+| `H2 (MQ-8)` | ppm | measurement | `packages/mq8.yaml`, `packages/mq8_tc.yaml` |
+| `MQ-8 AO voltage` | V | diagnostic | both MQ-8 packages |
+| `MQ-8 RS-R0 ratio` | - | diagnostic | both |
+| `MQ-8 RS` | kΩ | diagnostic | both |
+| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8_tc.yaml` |
+| `ambient temperature` | °C | measurement | `packages/mq8_tc.yaml` |
+| `ambient humidity` | % | measurement | `packages/mq8_tc.yaml` |
+| `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
+| `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
+| `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
+| `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
+| `restart` | - | switch | `packages/switch.yaml` |
+
+Diagnostic entities are categorised as such, so they stay out of the default
+dashboard. With `friendly_name: "H2 sensor board"` the alarm entity is
+`sensor.h2_sensor_board_h2_mq_8` - keep `name` / `friendly_name` stable once you
+have automations, otherwise every entity id changes.
+
+Each sensor updates every **30 s** (four averaged ADC samples). The
+temperature/humidity-corrected value is published on the same `H2 (MQ-8)`
+entity; the diagnostic `MQ-8 RS-R0 ratio` always stays uncorrected.
+
+## Thresholds
+
+| H₂ concentration | Meaning | Recommended action |
+|---|---|---|
+| 100 - 300 ppm | trace, normal end-of-charge gassing | log, watch the trend |
+| 4 000 ppm | 10 % of the LEL - early warning | notification, check ventilation |
+| 10 000 ppm | 25 % of the LEL - pre-alarm, end of the MQ-8 range | ventilate, stop charging |
+| 20 000 ppm | 50 % of the LEL | immediate intervention (forced ventilation, disconnect) |
+
+The MQ-8 stops at 25 % of the LEL (the firmware clamps at `max_ppm: 10000`): this
+is a leak detector with a pre-alarm, not an explosive-range instrument.
+
+## Alerts
+
+Two automations cover the interesting cases. Adjust the entity ids and the notify
+service to your setup; `for:` ignores a single spike.
+
+```yaml
+# Home Assistant (automations.yaml)
+- alias: "H2 pre-alarm (10 000 ppm)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.h2_sensor_board_h2_mq_8
+      above: 10000
+      for: "00:02:00"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "H2 pre-alarm"
+        message: ">= 10 000 ppm (25 % LEL) - ventilate and stop charging."
+
+- alias: "H2 trace warning (MiCS-5524, 300 ppm)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.h2_sensor_board_h2_trace_mics_5524
+      above: 300
+      for: "00:05:00"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "H2 trace warning"
+        message: "MiCS-5524 above 300 ppm - check the trend and the ventilation."
+```
+
+For the dashboard a history graph of `H2 (MQ-8)` plus `H2 trace (MiCS-5524)` is
+enough, with the thresholds in mind; add `WiFi Signal` and the diagnostics when
+something looks wrong.
+
+## Which sensor answers which question
+
+| Question | Sensor |
+|---|---|
+| "do I need to act?" | `H2 (MQ-8)` - the alarm reference (4 000 - 10 000 ppm) |
+| "is something happening before the MQ-8 reacts?" | `H2 trace (MiCS-5524)` - trend in the 100 - 1 000 ppm band |
+| "why is the reading what it is?" | the diagnostics: `MQ-8 AO voltage` (wiring/divider), `RS` and `RS-R0 ratio` (RL, ageing), `T/RH correction` (compensation) |
+
+The MiCS-5524 sees five gases on a single output and cannot tell them apart: use
+it for the trend, never as the only alarm source.
+
+## Operations
+
+* **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
+  06:00 (SNTP has to be synced first). The calibration is in flash and survives
+  it; useful against long-run drift.
+* **Watchdog and flash wear** - `packages/board.yaml` sets a 30 s task watchdog,
+  240 MHz, `FREERTOS_HZ 1000` and TLS 1.3; `preferences.flash_write_interval:
+  60min` keeps the calibration writes gentle.
+* **Recovery paths** - `safe_mode:` (boots without the custom components after
+  repeated crashes), `api: reboot_timeout: 30min`, OTA (`ota: platform: esphome`)
+  and the `restart` switch.
+* **Logs** - `logger:` runs at `DEBUG` with per-tag overrides;
+  `esphome logs config.yaml` (or the web log) prints the measurement chain - see
+  [`troubleshooting.md`](troubleshooting.md) for how to read it.
+* **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
+  so the new firmware starts.
