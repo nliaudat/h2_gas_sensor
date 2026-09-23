@@ -32,18 +32,24 @@ from esphome.const import (
 from esphome.types import ConfigType
 
 from . import (
+    ADC_LIMIT_MARGIN_V,
     CONF_A,
     CONF_ADC_ATTENUATION,
+    CONF_ADC_INPUT_MAX,
+    CONF_ADC_PIN_MAX,
     CONF_ADC_SAMPLES,
     CONF_AIR_REFERENCE,
     CONF_B,
     CONF_CONVERSION,
+    CONF_DIVIDER,
     CONF_ENABLE_PIN,
     CONF_GAS,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
     CONF_PERSIST,
     CONF_R0,
+    CONF_R1,
+    CONF_R2,
     CONF_RATIO_SENSOR,
     CONF_RL,
     CONF_RS_SENSOR,
@@ -54,6 +60,8 @@ from . import (
     CONF_VOLTAGE_SENSOR,
     CONF_WARMUP_TIME,
     CONVERSION_MODELS,
+    ESP32_ADC_INPUT_MAX_V,
+    ESP32_ADC_PIN_MAX_V,
     MiCS5524GasSensor,
 )
 from .coefficients import (
@@ -111,6 +119,29 @@ def _build_internal_adc(config: ConfigType) -> ConfigType:
         adc_config[CONF_ATTENUATION] = attenuation
 
     return adc_sensor.CONFIG_SCHEMA(adc_config)
+
+
+DIVIDER_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_R1): cv.positive_not_null_float,
+        cv.Required(CONF_R2): cv.positive_not_null_float,
+    }
+)
+
+
+def _voltage_multiplier(config: ConfigType) -> float:
+    """Inverse of the divider ratio, derived from the wiring if possible.
+
+    ``divider: {r1: 10.0, r2: 20.0}`` (kOhm, r1 in series with the sensor output,
+    r2 to ground) documents the hardware and yields ``(r1 + r2) / r2`` = 1.5 for the
+    recommended 10k/20k.  ``voltage_multiplier:`` stays available as the low-level
+    escape hatch; it also covers a directly connected sensor (1.0) or a sampler
+    with a wider input range, e.g. an ADS1115.
+    """
+    divider = config.get(CONF_DIVIDER)
+    if divider is not None:
+        return (divider[CONF_R1] + divider[CONF_R2]) / divider[CONF_R2]
+    return float(config.get(CONF_VOLTAGE_MULTIPLIER, 1.0))
 
 
 CALIBRATION_SCHEMA = cv.Schema(
@@ -184,6 +215,42 @@ def _validate_config(config: ConfigType) -> ConfigType:
         SELECTIVITY_NOTE,
     )
 
+    if CONF_DIVIDER in config and CONF_VOLTAGE_MULTIPLIER in config:
+        raise cv.Invalid(
+            "use either 'divider:' or 'voltage_multiplier:', not both - "
+            "'divider:' already derives the multiplier from r1/r2"
+        )
+
+    # ADC range guard: the module output can reach VCC and the divider maps that
+    # onto the ADC pin.  Only meaningful when this component owns the pin, or when
+    # the limits were declared for an external sampler (e.g. an ADS1115).
+    if CONF_PIN in config or CONF_ADC_INPUT_MAX in config or CONF_ADC_PIN_MAX in config:
+        multiplier = _voltage_multiplier(config)
+        input_max = float(config.get(CONF_ADC_INPUT_MAX, ESP32_ADC_INPUT_MAX_V))
+        pin_max = float(config.get(CONF_ADC_PIN_MAX, ESP32_ADC_PIN_MAX_V))
+        vcc = float(config[CONF_VCC])
+        expected_max = vcc / multiplier
+        if expected_max > pin_max + ADC_LIMIT_MARGIN_V:
+            raise cv.Invalid(
+                f"the module output can reach {vcc:.2f} V and the configured divider "
+                f"maps that to {expected_max:.2f} V on the ADC pin, above 'adc_pin_max' "
+                f"({pin_max:.2f} V) - that can damage the pin. Use "
+                f"'divider: {{r1: 10.0, r2: 20.0}}' (-> 1.5) or "
+                f"'{{r1: 10.0, r2: 10.0}}' (-> 2.0), or set 'adc_pin_max' to your "
+                f"sampler's limit (6.144 for an ADS1115)"
+            )
+        if expected_max > input_max + ADC_LIMIT_MARGIN_V:
+            _LOGGER.warning(
+                "%s: the module output can reach %.2f V and the configured divider maps "
+                "that to %.2f V at the ADC input, above 'adc_input_max' (%.2f V): the top "
+                "of the range clips or reads non-linearly. 10k/20k gives 3.33 V - raise "
+                "'adc_input_max' if that is intentional",
+                label,
+                vcc,
+                expected_max,
+                input_max,
+            )
+
     if CONF_PIN in config:
         config[_KEY_GENERATED_ADC] = _build_internal_adc(config)
 
@@ -210,9 +277,10 @@ CONFIG_SCHEMA = cv.All(
                 cv.only_on_esp32, cv.one_of(*ADC_ATTENUATIONS, lower=True)
             ),
             cv.Optional(CONF_ADC_SAMPLES, default=1): cv.int_range(min=1, max=255),
-            cv.Optional(
-                CONF_VOLTAGE_MULTIPLIER, default=1.0
-            ): cv.positive_not_null_float,
+            cv.Optional(CONF_VOLTAGE_MULTIPLIER): cv.positive_not_null_float,
+            cv.Optional(CONF_DIVIDER): DIVIDER_SCHEMA,
+            cv.Optional(CONF_ADC_INPUT_MAX): cv.positive_not_null_float,
+            cv.Optional(CONF_ADC_PIN_MAX): cv.positive_not_null_float,
             cv.Optional(CONF_VCC, default=5.0): cv.positive_not_null_float,
             cv.Optional(CONF_RL): cv.positive_not_null_float,
             cv.Optional(CONF_R0): cv.positive_not_null_float,
@@ -287,7 +355,7 @@ async def to_code(config: ConfigType) -> None:
     rl = float(config.get(CONF_RL, DEFAULT_RL_KOHM))
     cg.add(var.set_rl(rl))
     cg.add(var.set_vcc(config[CONF_VCC]))
-    cg.add(var.set_voltage_multiplier(config[CONF_VOLTAGE_MULTIPLIER]))
+    cg.add(var.set_voltage_multiplier(_voltage_multiplier(config)))
     cg.add(var.set_samples(config[CONF_SAMPLES]))
     cg.add(var.set_sample_interval(config[CONF_SAMPLE_INTERVAL]))
     cg.add(var.set_warmup_time(config[CONF_WARMUP_TIME]))

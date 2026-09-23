@@ -199,6 +199,12 @@ lines allowed.
   divider ratio. Never "fix" a wrong divider by editing `vcc` or `rl`.
 * `ratio_mode: rs_r0` is the default and matches the published `a`/`b`; only switch
   to `r0_rs` with coefficients fitted for it (`docs/mq8_h2_curve.md`).
+* Model the divider explicitly (`divider: {r1, r2}` in kOhm - r1 in series, r2 to
+  ground - or the low-level `voltage_multiplier`) and let the guard check it:
+  `vcc / voltage_multiplier` must stay below `adc_pin_max` (3.6 V on an ESP32; the
+  ADC pins are **not** 5 V tolerant) and is warned above `adc_input_max` (3.3 V).
+  **10k/20k (-> 1.5) is the project default**; the packages declare
+  `adc_input_max: 3.33` for it. Never wire a 5 V output straight to a GPIO.
 
 ### 7.2 Calibration
 

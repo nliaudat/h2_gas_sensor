@@ -40,6 +40,11 @@ MQGasSensor = mq_gas_sensors_ns.class_(
 CONF_SENSOR_TYPE = "sensor_type"
 CONF_GAS = "gas"
 CONF_VOLTAGE_MULTIPLIER = "voltage_multiplier"
+CONF_DIVIDER = "divider"
+CONF_R1 = "r1"
+CONF_R2 = "r2"
+CONF_ADC_INPUT_MAX = "adc_input_max"
+CONF_ADC_PIN_MAX = "adc_pin_max"
 CONF_ADC_ATTENUATION = "adc_attenuation"
 CONF_ADC_SAMPLES = "adc_samples"
 CONF_RL = "rl"
@@ -89,6 +94,18 @@ CORRECTION_CLAMPS = {
     # drops with the correction (not recommended for a safety limit).
     "scaled": 1,
 }
+
+# Default ADC input limits for the classic ESP32, used by the divider guard:
+# the recommended maximum input voltage (VDD) and the datasheet's absolute
+# maximum (VDD + 0.3 V).  Override them per sensor for other samplers, e.g.
+# `adc_input_max: 6.144` / `adc_pin_max: 6.144` for an ADS1115 at the widest gain.
+ESP32_ADC_INPUT_MAX_V = 3.3
+ESP32_ADC_PIN_MAX_V = 3.6
+
+#: Comparison margin of the divider guard (V): a declared limit is honoured even
+#: when the divider arithmetic lands a few millivolts above it, so that
+#: `adc_input_max: 3.33` accepts the 5 V * (20/30) = 3.3333 V of a 10k/20k divider.
+ADC_LIMIT_MARGIN_V = 0.01
 
 # MQUnifiedsensor uses R0/RS (see readSensorR0Rs(), "INVERTED for MQ-131"),
 # while the published datasheet coefficients are fitted against RS/R0.

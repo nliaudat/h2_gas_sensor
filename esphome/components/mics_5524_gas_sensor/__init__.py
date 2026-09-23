@@ -43,6 +43,11 @@ CONF_CONVERSION = "conversion"
 CONF_A = "a"
 CONF_B = "b"
 CONF_VOLTAGE_MULTIPLIER = "voltage_multiplier"
+CONF_DIVIDER = "divider"
+CONF_R1 = "r1"
+CONF_R2 = "r2"
+CONF_ADC_INPUT_MAX = "adc_input_max"
+CONF_ADC_PIN_MAX = "adc_pin_max"
 CONF_ADC_ATTENUATION = "adc_attenuation"
 CONF_ADC_SAMPLES = "adc_samples"
 CONF_VCC = "vcc"
@@ -65,3 +70,15 @@ CONVERSION_MODELS = {
     "dfrobot": 0,  # DFRobot_MICS vendor model (analog breakout)
     "datasheet": 1,  # RS/R0 power law fitted on the datasheet curve
 }
+
+# Default ADC input limits for the classic ESP32, used by the divider guard:
+# the recommended maximum input voltage (VDD) and the datasheet's absolute
+# maximum (VDD + 0.3 V).  Override them per sensor for other samplers, e.g.
+# `adc_input_max: 6.144` / `adc_pin_max: 6.144` for an ADS1115 at the widest gain.
+ESP32_ADC_INPUT_MAX_V = 3.3
+ESP32_ADC_PIN_MAX_V = 3.6
+
+#: Comparison margin of the divider guard (V): a declared limit is honoured even
+#: when the divider arithmetic lands a few millivolts above it, so that
+#: `adc_input_max: 3.33` accepts the 5 V * (20/30) = 3.3333 V of a 10k/20k divider.
+ADC_LIMIT_MARGIN_V = 0.01

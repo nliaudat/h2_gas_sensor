@@ -44,6 +44,9 @@ sensor:
     pin: GPIO35
     adc_attenuation: 12db
     voltage_multiplier: 1.5
+    # 10k/20k divider: 3.33 V at the ADC pin - declaring the limit silences the
+    # "top of the range may clip" warning (test_no_id.yaml keeps it visible)
+    adc_input_max: 3.33
     rl: 10.0
     r0: 0.29
     curve: mqdatascience

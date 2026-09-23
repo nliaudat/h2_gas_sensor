@@ -36,7 +36,9 @@ sensor:
     name: "H2 trace (MiCS-5524)"
     gas: H2
     pin: GPIO33                 # or: voltage: some_adc_or_ads1115_sensor
-    voltage_multiplier: 1.5     # divider compensation (1.0 for a direct/ADS1115 hookup)
+    divider:                    # 10k/20k, the recommended wiring
+      r1: 10.0                  # kOhm, in series with A0 (top)
+      r2: 20.0                  # kOhm, to GND (bottom)   -> voltage_multiplier 1.5
     vcc: 5.0
     warmup_time: 3min           # DFRobot's heater warm-up
     calibration:
@@ -61,7 +63,10 @@ the wiring notes).
 | `pin` | – | ADC pin owned by the component; a hidden internal `adc` sensor is generated with `adc_attenuation`/`adc_samples`. |
 | `adc_attenuation` | `12db` (ESP32) | Only for `pin:`. |
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
-| `voltage_multiplier` | `1.0` | Scales the sampled voltage (divider compensation). |
+| `voltage_multiplier` | `1.0` | Scales the sampled voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `divider:`. |
+| `divider` | – | `r1`/`r2` in kOhm (r1 in series with A0, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
+| `adc_input_max` | `3.3` | Largest voltage the ADC measures correctly (ESP32 VDD; `6.144` for an ADS1115) - a warning is logged above it. |
+| `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Module supply; the vendor model works on `VCC - V_AO`, the datasheet model needs it for `RS`. |
 | `rl` | `10.0` | Load resistor of the board in kOhm - **datasheet model only** (the vendor model rejects it). |
 | `a`, `b` | table | Datasheet coefficients - **datasheet model only**; required for every gas except CO. |

@@ -116,6 +116,21 @@ g++ -std=c++17 -O2 -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o m
   `yamllint` / `flake8` / `ruff check` / `ruff format --check` are clean for the
   new component.
 
+**Verified** (divider guard, 23.09.2026 - see
+[`../.ai/instructions.md`](../.ai/instructions.md) section 3):
+
+* `esphome config` **rejects** a 5 V module wired straight to an ADC pin
+  (`voltage_multiplier: 1.0` with `pin:`) in both components, naming the computed
+  voltage and suggesting `divider: {r1: 10.0, r2: 20.0}` or an `adc_pin_max` for a
+  wider sampler;
+* the recommended 10k/20k divider (`divider: {r1: 10.0, r2: 20.0}` -> 1.5, i.e.
+  3.33 V at the pin) is accepted - silently when `adc_input_max: 3.33` is declared
+  (all three packages do) and with the informational "top of the range may clip"
+  warning otherwise (`tests/test_no_id.yaml` keeps that path covered);
+* an ADS1115-style configuration (no divider, `voltage_multiplier: 1.0`,
+  `adc_input_max`/`adc_pin_max: 6.144`) is accepted;
+* both host tests pass and `esphome config` is valid for all five fixtures.
+
 **Unverified / unavailable:**
 
 * the article `zbotic.in/mq-8-hydrogen-sensor-detect-h2-gas-for-battery-monitoring/`

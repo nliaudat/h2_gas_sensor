@@ -27,10 +27,18 @@ module A0  -> divider -> ADC1 pin          (or directly into an ADS1115 input)
 module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clones)
 ```
 
-* The output swings up to 5 V while the ESP32 ADC stops at ≈ 3.1 V with
-  `attenuation: 12db`, so use a divider (e.g. 10 kOhm series / 20 kOhm to ground,
-  ratio 2/3) and set `voltage_multiplier: 1.5`. The vendor model only needs the
-  ratio to be *compensated*, not to be a specific value.
+* The output swings up to 5 V while the ESP32 ADC stops measuring correctly
+  around 3.1-3.3 V with `attenuation: 12db`, so use a divider - **10 kOhm in
+  series / 20 kOhm to ground** (`divider: {r1: 10.0, r2: 20.0}` -> multiplier
+  1.5) maps 5 V to 3.33 V. The vendor model only needs the ratio to be
+  *compensated*, not to be a specific value.
+* **The ESP32 ADC pins are not 5 V tolerant** (absolute maximum VDD + 0.3 V =
+  3.6 V): never wire `A0` straight to a GPIO, and do not treat the series
+  resistor as protection. 3.33 V is a hair above the ESP32's 3.3 V recommended
+  maximum, which is why the packages declare `adc_input_max: 3.33` (the very top
+  of the range may read non-linearly). Use 10k/10k (5 V -> 2.5 V) if you care
+  about the top of the range, or an ADS1115. The component rejects configurations
+  that could exceed `adc_pin_max` (3.6 V) at compile time.
 * Use an ADC1 pin (GPIO32-39); ADC2 is unavailable while Wi-Fi is active.
 * **ADS1115 alternative** (recommended if you want resolution): the 16-bit
   ADS1115 with gain `6.144 V` accepts the 0-5 V output directly (no divider) and

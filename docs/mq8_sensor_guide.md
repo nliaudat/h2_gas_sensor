@@ -21,20 +21,32 @@ Curve and formula details: [`mq8_h2_curve.md`](mq8_h2_curve.md).
 
 ## Analog output and the ADC
 
-The `AO` output swings between 0 V and `VCC` (5 V), while the ESP32 ADC
-saturates at ≈ 3.1 V with `attenuation: 12db`. Feed `AO` through a divider:
+The `AO` output swings between 0 V and `VCC` (5 V), while the ESP32 ADC stops
+measuring correctly around 3.1-3.3 V with `attenuation: 12db`. Feed `AO` through a
+divider - the recommended values are **10 kOhm / 20 kOhm**:
 
 ```
 AO ──[ 10k ]──┬──> GPIO34 (ADC1_CH6)
               │
             [ 20k ]
               │
-             GND          divider ratio = 20/(10+20) = 2/3  ->  voltage_multiplier: 1.5
+             GND          ratio = 20/(10+20) = 2/3  ->  divider: {r1: 10.0, r2: 20.0}
 ```
 
 * Use an **ADC1** pin (GPIO32…GPIO39). ADC2 is unusable while Wi-Fi is active.
-* `voltage_multiplier` is the **inverse** of the divider ratio (1.5 for a 2/3
-  divider, 1.0 when the AO is wired directly).
+* `divider: {r1, r2}` (kOhm) is the documented way and derives
+  `voltage_multiplier = (r1 + r2) / r2` = **1.5** for 10k/20k; the raw
+  `voltage_multiplier` key stays available (1.0 for an ADS1115 or a directly
+  connected 3.3 V sensor).
+* **The ESP32 ADC pins are not 5 V tolerant.** The absolute maximum is VDD + 0.3 V
+  (3.6 V), so never wire `AO` straight to a GPIO and never rely on the series
+  resistor alone. With 10k/20k a 5 V output reaches **3.33 V** - a hair above the
+  ESP32's 3.3 V recommended maximum, where the top of the range can read
+  non-linearly; that is why the packages declare `adc_input_max: 3.33`. Use
+  10k/10k (5 V -> 2.5 V) if the top of the AO range matters to you, or an ADS1115.
+* The component enforces this: the configuration is **rejected at compile time**
+  when `vcc / voltage_multiplier` exceeds `adc_pin_max` (3.6 V by default), and a
+  warning is logged when it exceeds `adc_input_max` (3.3 V).
 * GPIO34/35/36/39 are input-only, which is fine (and they are not strapping
   pins). Do not use GPIO12.
 

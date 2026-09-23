@@ -22,7 +22,8 @@
 
 substitutions:
   mq8_pin: GPIO34  # ADC1_CH6 (input only pin), change to match your wiring
-  mq8_multiplier: "1.5"  # 1.5 for a 2:1 divider (AO -> 2/3), 1.0 if wired directly
+  mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
+  mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
 
 sensor:
@@ -41,7 +42,13 @@ sensor:
     sensor_type: MQ-8
     gas: H2
     voltage: ${name}_mq8_adc
-    voltage_multiplier: ${mq8_multiplier}
+    divider:  # 5 V * (20/30) = 3.33 V at the ADC pin
+      r1: ${mq8_divider_r1}
+      r2: ${mq8_divider_r2}
+    # 10k/20k maps the 5 V AO maximum to 3.33 V, a hair above the ESP32 ADC's
+    # 3.3 V recommended maximum: accepted here, the very top of the range may clip
+    # (use 10k/10k -> 2.5 V if the top of the range matters to you).
+    adc_input_max: 3.33
     vcc: 5.0
     rl: ${mq8_rl}
     update_interval: 30s

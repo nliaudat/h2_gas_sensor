@@ -35,7 +35,8 @@
 
 substitutions:
   mics_pin: GPIO33  # ADC1_CH5, change to match your wiring
-  mics_multiplier: "1.5"  # 1.5 for a 2:1 divider (A0 -> 2/3), 1.0 for a direct/ADS1115 hookup
+  mics_divider_r1: "10.0"  # kOhm, in series with A0 (top)  -> 10k/20k divider
+  mics_divider_r2: "20.0"  # kOhm, A0 node to GND (bottom)  -> multiplier 1.5
   mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
   mics_max_ppm: "1000"  # upper end of the vendor range for H2 (and CO)
 
@@ -55,7 +56,14 @@ sensor:
     gas: H2
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    voltage_multiplier: ${mics_multiplier}
+    divider:  # 5 V * (20/30) = 3.33 V at the ADC pin
+      r1: ${mics_divider_r1}
+      r2: ${mics_divider_r2}
+    # 10k/20k maps the 5 V A0 maximum to 3.33 V, a hair above the ESP32 ADC's
+    # 3.3 V recommended maximum: accepted here, the very top of the range may clip.
+    # With an ADS1115 (no divider) remove `divider:`, set `voltage_multiplier: 1.0`
+    # and `adc_input_max: 6.144` / `adc_pin_max: 6.144` instead.
+    adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
     update_interval: 30s
     samples: 4

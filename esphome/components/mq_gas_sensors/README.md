@@ -70,7 +70,9 @@ sensor:
     sensor_type: MQ-8          # MQ-2, MQ-3, ... MQ-309A, CUSTOM
     gas: H2                    # default: the primary gas of the type
     voltage: mq8_adc           # or: pin: GPIO34
-    voltage_multiplier: 1.5    # inverse of the divider ratio (2/3 -> 1.5)
+    divider:                   # 10k/20k divider, the recommended wiring
+      r1: 10.0                 # kOhm, in series with AO (top)
+      r2: 20.0                 # kOhm, to GND (bottom)  ->  voltage_multiplier 1.5
     vcc: 5.0                   # sensor supply
     rl: 10.0                   # module load resistor (kOhm)
     update_interval: 30s
@@ -92,7 +94,10 @@ sensor:
 | `pin` | – | ADC pin owned by the component; a hidden internal `adc` sensor is generated with `adc_attenuation`/`adc_samples`. Exactly one of `voltage`/`pin`. |
 | `adc_attenuation` | `12db` (ESP32) | Only for `pin:` (e.g. `0db`, `2.5db`, `6db`, `11db`, `12db`, `auto`). |
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
-| `voltage_multiplier` | `1.0` | Scales the sampled AO voltage (external divider, e.g. `1.5` for 2/3). |
+| `voltage_multiplier` | `1.0` | Scales the sampled AO voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `divider:`. |
+| `divider` | – | `r1`/`r2` in kOhm (r1 in series with AO, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
+| `adc_input_max` | `3.3` | Largest voltage the ADC measures correctly (ESP32 VDD; `6.144` for an ADS1115) - a warning is logged above it. |
+| `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Sensor supply voltage in V (used for RS). |
 | `rl` | `10.0` | Load resistor of the module in kOhm. |
 | `r0` | – | Fixed R0 in kOhm. Disables the automatic calibration. |
@@ -211,8 +216,17 @@ A ready-made package (I2C `sht4x` + wiring) is `packages/mq8_tc.yaml`.
   two-phase heater - drive those with an external circuit or an ESPHome
   `output`, the component only warns about it during configuration).
 * The `AO` output can swing up to `VCC` (5 V) while the ESP32 ADC saturates
-  around **3.1 V** at 12 dB attenuation. Use a divider (e.g. 10k / 20k) and set
-  `voltage_multiplier` to the inverse of the divider ratio (`1.5` for 2/3).
+  around **3.1-3.3 V** at 12 dB attenuation. Use a divider (the recommended
+  wiring is **10k / 20k**: 5 V -> 3.33 V) and describe it with `divider: {r1, r2}`
+  or `voltage_multiplier: 1.5`.
+* **The ESP32 ADC pins are not 5 V tolerant** (absolute maximum VDD + 0.3 V =
+  3.6 V): never wire `AO` straight to a GPIO, and do not rely on the series
+  resistor as protection - keep the divider. With 10k/20k the top of the AO range
+  reaches 3.33 V, a hair above the ESP32's 3.3 V recommended maximum (the very top
+  may read non-linearly, hence `adc_input_max: 3.33` in the packages); use 10k/10k
+  (5 V -> 2.5 V) if that matters, or an ADS1115 (0-5 V input, `adc_input_max:
+  6.144`). Configurations that could exceed `adc_pin_max` (3.6 V by default) are
+  rejected at compile time.
 * Use an ADC1 pin (ESP32: GPIO32-39); ADC2 is unavailable while WiFi is active.
 * The load resistor `RL` of cheap breakouts is often **1 kOhm** instead of
   10 kOhm - measure it and set `rl:` accordingly, otherwise `RS` (and therefore

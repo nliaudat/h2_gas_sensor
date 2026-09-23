@@ -2,6 +2,9 @@
 #
 #   * MQ sensor without an explicit `id:` (name only)
 #   * `pin:` sugar with a lowercase `gas:` and a fixed `r0:` (no calibration)
+#   * deliberately no `adc_input_max`: with the 10k/20k divider (1.5) the guard
+#     logs the "3.33 V at the ADC input > 3.3 V, the top of the range may clip"
+#     warning, which keeps that path covered
 esphome:
   name: mq_no_id_test
 esp32:
