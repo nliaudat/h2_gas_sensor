@@ -179,6 +179,9 @@ lines allowed.
 
 * `esphome/config.yaml` holds only `substitutions`, `external_components`, logging,
   includes and one-line toggles; real content goes into `esphome/packages/*.yaml`.
+* `external_components` lists the component folders explicitly
+  (`components: [mq_gas_sensors, mics_5524_gas_sensor]`): a new folder under
+  `esphome/components/` must be added there, it is not loaded automatically.
 * `packages/mq8.yaml` (plain) and `packages/mq8_tc.yaml` (with the MQDataScience
   T/RH correction) are alternatives: **never include both**, both define
   `id: mq8`, and a shared option change must be applied to both.

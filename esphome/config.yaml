@@ -16,6 +16,7 @@ external_components:
   - source:
       type: local
       path: components
+    components: [mq_gas_sensors, mics_5524_gas_sensor]  # every component folder must be listed here
 
 # Enable logging
 logger:
@@ -24,7 +25,6 @@ logger:
   logs:
     text_sensor: ERROR
     homeassistant.sensor: ERROR
-    canbus: ERROR  # setting log level for canbus lower than INFO may crash  : esphome/issues#4051
     uptime: ERROR
     uptime.sensor: ERROR
     wifi_signal: ERROR
@@ -47,8 +47,7 @@ packages:
   # wired (adds the MQDataScience T/RH correction, do not enable both):
   # mq8: !include packages/mq8_tc.yaml
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
-  # mics5524: !include packages/mics5524.yaml
-  # debug: !include packages/debug.yaml
+  mics5524: !include packages/mics5524.yaml
 
 # web_server:
 #   port: 80
