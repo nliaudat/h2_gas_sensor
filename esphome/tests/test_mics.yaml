@@ -1,0 +1,89 @@
+# Validation-only regression config for the mics_5524_gas_sensor platform
+# (run: esphome config tests/test_mics.yaml)
+#
+#   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin and
+#     automatic calibration in clean air
+#   * datasheet model (`conversion: datasheet`) with explicit a/b, a fixed r0 and
+#     a shared external voltage source
+#   * diagnostics for both models
+esphome:
+  name: mics_test
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+sensor:
+  - platform: adc
+    id: mics_ao
+    name: "MiCS AO voltage"
+    pin: GPIO33
+    attenuation: 12db
+    update_interval: never
+
+  - platform: mics_5524_gas_sensor
+    id: mics_h2
+    name: "H2 (MiCS-5524)"
+    gas: h2
+    conversion: dfrobot
+    pin: GPIO32
+    adc_attenuation: 12db
+    voltage_multiplier: 1.5
+    vcc: 5.0
+    samples: 4
+    enable_pin:
+      number: GPIO4
+      inverted: true
+    warmup_time: 3min
+    calibration:
+      delay: 3min
+      samples: 10
+      persist: false
+    ratio_sensor: mics_ratio
+    voltage_sensor: mics_voltage
+
+  - platform: mics_5524_gas_sensor
+    id: mics_co
+    name: "CO (MiCS-5524, datasheet model)"
+    gas: CO
+    conversion: datasheet
+    voltage: mics_ao
+    voltage_multiplier: 1.5
+    vcc: 5.0
+    rl: 10.0
+    a: 6.3
+    b: -1.1
+    r0: 700
+    min_ppm: 0
+    max_ppm: 1000
+    rs_sensor: mics_rs
+
+  - platform: mics_5524_gas_sensor
+    id: mics_ch4
+    name: "CH4 (MiCS-5524, alias + pinned reference)"
+    gas: methane  # datasheet alias for CH4
+    conversion: dfrobot
+    voltage: mics_ao
+    voltage_multiplier: 1.5
+    vcc: 5.0
+    air_reference: 4.2  # pinned clean-air reference instead of a calibration
+
+  - platform: template
+    id: mics_ratio
+    name: "MiCS ratio"
+    accuracy_decimals: 4
+  - platform: template
+    id: mics_voltage
+    name: "MiCS AO (scaled)"
+    unit_of_measurement: V
+    accuracy_decimals: 3
+  - platform: template
+    id: mics_rs
+    name: "MiCS RS"
+    unit_of_measurement: kOhm
+    accuracy_decimals: 2

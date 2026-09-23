@@ -19,6 +19,8 @@ the article list and the reference PDF.
 | [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
 | [`temperature_humidity_correction.md`](temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation: model, constants, effect envelope, configuration, safety rules |
 | [`mqdatascience_comparison.md`](mqdatascience_comparison.md) | MQ-8 H2 curve comparison (standard vs MQDataScience), what was adopted and what was deliberately skipped |
+| [`mics5524_guide.md`](mics5524_guide.md) | MiCS-5524 hardware, wiring (divider / ADS1115 / EN pin), warm-up and calibration, ADC limits, role next to the MQ-8 |
+| [`mics5524_conversion.md`](mics5524_conversion.md) | The two MiCS-5524 conversion models (vendor vs datasheet), the constants table, the 2-point fit recipe, what is not implemented |
 
 ## Firmware layout
 
@@ -28,12 +30,15 @@ esphome/
 ├── packages/
 │   ├── mq8.yaml                    MQ-8 only (default, no compensation)
 │   ├── mq8_tc.yaml                 MQ-8 + I2C T/RH sensor + MQDataScience compensation
+│   ├── mics5524.yaml               MiCS-5524 trace sensor (optional hardware)
 │   ├── board.yaml, wifi.yaml, time.yaml, sensors_others.yaml, switch.yaml
-├── components/mq_gas_sensors/      the custom ESPHome component (see its README.md)
-└── tests/                          host test + config validation fixtures
+├── components/mq_gas_sensors/      MQ-2 ... MQ-309A component (see its README.md)
+├── components/mics_5524_gas_sensor/ MiCS-5524 component (see its README.md)
+└── tests/                          host tests + config validation fixtures
 ```
 
-Only one MQ-8 package may be included at a time — both define `id: mq8`.
+Only one MQ-8 package may be included at a time — both define `id: mq8`. The
+`mics5524` package is additive (it uses `id: mics`).
 
 Build, flash and test:
 
@@ -45,6 +50,7 @@ esphome run config.yaml               # flash (OTA or serial)
 
 cd tests
 g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test && ./mq_math_test
+g++ -std=c++17 -O2 -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test && ./mics_math_test
 ```
 
 ## Verification status
@@ -88,6 +94,27 @@ g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_t
 * the component lives in `esphome/components/mq_gas_sensors` (lower case) and the
   YAML platform is `platform: mq_gas_sensors`, as ESPHome's namespace check
   requires.
+
+**Verified** (MiCS-5524 support, 23.09.2026 - same rule book as above):
+
+* every constant and formula in [`mics5524_conversion.md`](mics5524_conversion.md)
+  is asserted by
+  [`../esphome/tests/mics_math_test.cpp`](../esphome/tests/mics_math_test.cpp):
+  the vendor thresholds/gains, the per-gas minimum clamps, the `x / x_air`
+  normalisation, the CO two-point fit (13.5 ppm at ratio 0.5, 998.5 ppm at 0.01)
+  and the NaN/overflow guards;
+* `esphome config` is valid for `tests/test_mics.yaml` (both models, shared
+  voltage source, diagnostics, pinned reference, alias `gas: methane`) and
+  `tests/test_mics_package.yaml` (the shipped package), while
+  `conversion: dfrobot` combined with `a:`/`b:` or `rl:`,
+  `conversion: datasheet` combined with `air_reference:`, and a datasheet gas
+  without coefficients are each rejected with an explanatory message;
+* `esphome compile config.yaml` succeeds with `packages/mq8.yaml` **and**
+  `packages/mics5524.yaml` included at the same time (`Successfully compiled
+  program.`, no compiler warnings, 46.4 % flash - +7 KB for the new component);
+* `python script/ci-custom.py` reports 0, clang-format **v13.0.1** is clean, and
+  `yamllint` / `flake8` / `ruff check` / `ruff format --check` are clean for the
+  new component.
 
 **Unverified / unavailable:**
 

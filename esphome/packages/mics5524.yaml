@@ -1,0 +1,103 @@
+# MiCS-5524 trace-gas sensor (analog module, 5 V / GND / A0 / EN).
+#
+# Role in this project: the *early warning* device for hydrogen. The MQ-8 package
+# covers the 4000 - 10000 ppm band (10 - 25 % of the LEL), this one covers
+# 100 - 1000 ppm (0.25 - 2.5 % of the LEL) - see docs/h2_thresholds.md.
+#
+# Conversion model
+#   `conversion: dfrobot` is the vendor model of the DFRobot_MICS library (MIT)
+#   that the Fermion module and its clones are sold for:
+#       x = VCC - V_AO,  ratio = x / x_air,  ppm = (threshold - ratio) / gain
+#   It needs a clean-air reference (captured below after the 3 minute warm-up) and
+#   does *not* care about the board's load resistor or its exact divider, which is
+#   why it is the default for unlabeled modules. `conversion: datasheet` (RS/R0
+#   power law) is available as well, see docs/mics5524_conversion.md.
+#
+# Wiring
+#   VCC -> 5 V, GND -> GND, A0 -> ADC pin through a voltage divider (the module
+#   output can reach 5 V, the ESP32 ADC stops at ~3.1 V), EN -> GPIO4.
+#   Most clones are *enabled* by pulling EN low, hence `inverted: true` below;
+#   delete `enable_pin` if your board has no EN pad or it is already pulled up.
+#
+# Accuracy (read this before trusting a value)
+#   The MiCS-5524 has a single output for several reducing gases (CO, H2, C2H5OH,
+#   NH3, CH4); the reading cannot say which one is present and individual sensors
+#   vary a lot. The community thread reports a practical floor of ~7 ppm CO with
+#   the ESP32 ADC (its lowest usable reading is ~75 mV). Treat the value as an
+#   estimate and keep the MQ-8 as the alarm reference.
+#
+# Calibration
+#   The first boot calibrates the clean-air reference after `calibration.delay`
+#   (max of delay and warm-up) and stores it in flash. To force a new calibration:
+#       esphome: on_boot: - lambda: id(mics).request_calibration();
+#   The calibrated value is logged ("air reference = ...") and can be pinned with
+#   `air_reference: <value>` instead of calibrating at boot.
+
+substitutions:
+  mics_pin: GPIO33  # ADC1_CH5, change to match your wiring
+  mics_multiplier: "1.5"  # 1.5 for a 2:1 divider (A0 -> 2/3), 1.0 for a direct/ADS1115 hookup
+  mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
+  mics_max_ppm: "1000"  # upper end of the vendor range for H2 (and CO)
+
+sensor:
+  - platform: adc
+    id: ${name}_mics_adc
+    name: "${friendly_name} MiCS-5524 AO voltage"
+    pin: ${mics_pin}
+    attenuation: 12db
+    update_interval: 30s
+    accuracy_decimals: 3
+    entity_category: diagnostic
+
+  - platform: mics_5524_gas_sensor
+    id: mics
+    name: "${friendly_name} H2 trace (MiCS-5524)"
+    gas: H2
+    conversion: dfrobot
+    voltage: ${name}_mics_adc
+    voltage_multiplier: ${mics_multiplier}
+    vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
+    min_ppm: 0
+    max_ppm: ${mics_max_ppm}
+    enable_pin:
+      number: ${mics_enable_pin}
+      inverted: true  # LOW enables the module
+    calibration:
+      delay: 3min  # after boot, in clean air
+      samples: 10  # DFRobot averages 10 samples for the reference
+      persist: true  # store the reference in flash and reuse it after a reboot
+    ratio_sensor: ${name}_mics_ratio
+    voltage_sensor: ${name}_mics_voltage
+
+  # Diagnostics (remove if not needed). The ratio is 1.0 in clean air and drops
+  # as soon as a reducing gas arrives, it is the vendor model's raw quantity.
+  - platform: template
+    id: ${name}_mics_ratio
+    name: "${friendly_name} MiCS-5524 ratio"
+    accuracy_decimals: 4
+    icon: mdi:chart-line
+    entity_category: diagnostic
+
+  - platform: template
+    id: ${name}_mics_voltage
+    name: "${friendly_name} MiCS-5524 AO (scaled)"
+    unit_of_measurement: V
+    accuracy_decimals: 3
+    icon: mdi:flash
+    entity_category: diagnostic
+
+# Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
+#   100 - 300 ppm  = 0.25 - 0.75 % LEL -> trace / early detection (this sensor)
+#   4 000 ppm      = 10 % LEL          -> early warning (MQ-8 package)
+#   10 000 ppm     = 25 % LEL          -> pre-alarm (MQ-8 package, NFPA 855)
+# Alerting is best done in Home Assistant, or with an on_value automation, e.g.:
+#     on_value:
+#       - if:
+#           condition:
+#             sensor.in_range: { above: 300 }
+#           then:
+#             - logger.log: "H2 trace warning"

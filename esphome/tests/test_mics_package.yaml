@@ -1,0 +1,24 @@
+# Validation-only fixture for packages/mics5524.yaml
+# (run: esphome config tests/test_mics_package.yaml)
+#
+# The package is not included by config.yaml on purpose (the sensor is optional
+# hardware), so this fixture keeps it compiled and validated.
+substitutions:
+  name: mics_pkg
+  friendly_name: "MiCS package test"
+
+esphome:
+  name: ${name}
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+packages:
+  mics5524: !include ../packages/mics5524.yaml

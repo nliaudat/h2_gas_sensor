@@ -34,6 +34,10 @@ see [`README.md`](README.md#sources) for the full source list.
   discussed for this project.
 * For the trace range (100 – 1 000 ppm) the MiCS-5524 is the more sensitive
   device; the MQ-8 covers the wide range up to the regulatory 25 % LEL ceiling.
+  Both are available as packages: `packages/mics5524.yaml` (trace) and
+  `packages/mq8.yaml` / `packages/mq8_tc.yaml` (pre-alarm) - see
+  [`mics5524_guide.md`](mics5524_guide.md) for the wiring and the accuracy
+  caveats of the MiCS.
 * A nickel-iron battery produces hydrogen as soon as it approaches full charge
   and keeps producing if charging continues — the gas release is part of normal
   operation, not only a fault. A slow upward trend is expected around the end of

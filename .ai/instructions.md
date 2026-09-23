@@ -31,11 +31,19 @@ PPM    = a * ratio^b                   (MQUnifiedsensor "exponential" regression
 
 Quality bar for any change:
 
-1. `esphome/tests/mq_math_test.cpp` passes (host, no hardware).
+1. Both host tests pass (`esphome/tests/mq_math_test.cpp`,
+   `esphome/tests/mics_math_test.cpp` - no hardware needed).
 2. `esphome config` and `esphome compile` pass for `packages/mq8.yaml` **and**
-   `packages/mq8_tc.yaml`.
+   `packages/mq8_tc.yaml` (and for `packages/mics5524.yaml` if the MiCS-5524
+   component was touched).
 3. Every linter in section 3 reports clean.
 4. `docs/` is updated in the same change (section 9).
+
+A second component, `esphome/components/mics_5524_gas_sensor/`, covers the
+100 - 1000 ppm trace band with its own two conversion models
+(`docs/mics5524_conversion.md`). It follows the same conventions as
+`mq_gas_sensors`: pure math in its own header, host tested, opt-in package, and
+"the numbers in `docs/` are asserted by the host test".
 
 ---
 
@@ -53,10 +61,11 @@ h2_gas_sensor/                      git root
     ├── secrets.yaml                wifi credentials - GIT-IGNORED
     ├── pyproject.toml              ruff settings (ESPHome parity)
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
-    ├── components/mq_gas_sensors/  the custom component (C++ + Python codegen)
-    ├── packages/                   mq8.yaml, mq8_tc.yaml, board.yaml, wifi.yaml, ...
+    ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
+    ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
+    ├── packages/                   mq8.yaml, mq8_tc.yaml, mics5524.yaml, board.yaml, wifi.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
-    └── tests/                      host test + config fixtures
+    └── tests/                      host tests + config fixtures
 ```
 
 Rules that follow from the map:
@@ -84,6 +93,7 @@ change is considered done.
 | Python (flake8) | `cd esphome && flake8 --config .flake8 components tests script` | no output |
 | Python (ruff) | `cd esphome && ruff check . && ruff format --check .` | "All checks passed!" / "already formatted" |
 | Host test | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe` | "All mq_math tests passed." and no compiler warning |
+| Host test (MiCS-5524) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe` | "All mics_math tests passed." and no compiler warning |
 | Config validation | `cd esphome && esphome config config.yaml` | "Configuration is valid!" |
 | Build | `cd esphome && esphome compile config.yaml` | "Successfully compiled program." |
 
@@ -234,9 +244,10 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 
 ## 8. Testing rules
 
-* **Host test first.** Any change to `mq_math.h`, the coefficients or the correction
-  constants needs assertions in `esphome/tests/mq_math_test.cpp`, with expected
-  values recomputed from first principles (never copied from the implementation).
+* **Host test first.** Any change to a math header, the coefficients or the
+  correction constants needs assertions in `esphome/tests/mq_math_test.cpp` (MQ)
+  or `esphome/tests/mics_math_test.cpp` (MiCS-5524), with expected values
+  recomputed from first principles (never copied from the implementation).
 * Keep the test building with `-Wall -Wextra` and zero warnings.
 * Config-only changes: run `esphome config` for `config.yaml`, `tests/test_no_id.yaml`
   and `tests/test_tc.yaml`; the negative cases (missing `temperature:`, `curve:`
