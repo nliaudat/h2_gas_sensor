@@ -1,8 +1,8 @@
 # MQ-8 hydrogen sensor (mq_gas_sensors component, H2 curve: a=976.97, b=-0.688).
 #
 # This is the plain variant (no temperature/humidity compensation). For the
-# MQDataScience compensation of the RS/R0 ratio include `packages/mq8_tc.yaml`
-# instead (it needs an I2C temperature/humidity sensor).
+# MQDataScience compensation of the RS/R0 ratio include `packages/mq8_sht4x.yaml`
+# (I2C SHT4x) or `packages/mq8_dht11.yaml` (1-wire DHT11) instead.
 # Documentation: ../../docs/mq8_sensor_guide.md, ../../docs/mq8_h2_curve.md,
 # ../../docs/temperature_humidity_correction.md, ../../docs/h2_thresholds.md
 #
@@ -67,20 +67,20 @@ sensor:
     rs_sensor: ${name}_mq8_rs
 
   # Diagnostics (remove if not needed)
-  - platform: template
-    id: ${name}_mq8_ratio
-    name: "${friendly_name} MQ-8 RS-R0 ratio"
-    accuracy_decimals: 3
-    icon: mdi:chart-line
-    entity_category: diagnostic
+  # - platform: template
+  #   id: ${name}_mq8_ratio
+  #   name: "${friendly_name} MQ-8 RS-R0 ratio"
+  #   accuracy_decimals: 3
+  #   icon: mdi:chart-line
+  #   entity_category: diagnostic
 
-  - platform: template
-    id: ${name}_mq8_rs
-    name: "${friendly_name} MQ-8 RS"
-    unit_of_measurement: kOhm
-    accuracy_decimals: 3
-    icon: mdi:omega
-    entity_category: diagnostic
+  # - platform: template
+  #   id: ${name}_mq8_rs
+  #   name: "${friendly_name} MQ-8 RS"
+  #   unit_of_measurement: kOhm
+  #   accuracy_decimals: 3
+  #   icon: mdi:omega
+  #   entity_category: diagnostic
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning

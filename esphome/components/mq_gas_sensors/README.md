@@ -208,7 +208,8 @@ interpolated between RH 33 % and RH 85 %, `T` clamped to -10 … 50 °C, applied
 ```
 
 Details, constants and the full effect table: `docs/temperature_humidity_correction.md`.
-A ready-made package (I2C `sht4x` + wiring) is `packages/mq8_tc.yaml`.
+Ready-made packages with the sensor and its wiring are `packages/mq8_sht4x.yaml`
+(I2C `sht4x`) and `packages/mq8_dht11.yaml` (1-wire `dht`, DHT11).
 
 ## Wiring
 

@@ -2,7 +2,7 @@
 
 **Repository:** the H2 battery-room monitoring node (ESPHome component `mq_gas_sensors`)
 **Primary goal:** measure hydrogen with an MQ-8 sensor and publish a trustworthy ppm value for Home Assistant
-**Hardware:** ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) + MQ-8 module (+ optional SHT4x)
+**Hardware:** ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) + MQ-8 module (+ optional SHT4x or DHT11)
 **Toolchain:** ESPHome 2026.9.0, ESP-IDF 5.5.5, C++17-compatible code, Python 3.12
 **License:** Apache-2.0 OR MIT (dual, at your option - this repo); component data/credits: MQUnifiedsensor (MIT), SolderedElectronics (data), MQDataScience (MIT)
 
@@ -33,9 +33,11 @@ Quality bar for any change:
 
 1. Both host tests pass (`esphome/tests/mq_math_test.cpp`,
    `esphome/tests/mics_math_test.cpp` - no hardware needed).
-2. `esphome config` and `esphome compile` pass for `packages/mq8.yaml` **and**
-   `packages/mq8_tc.yaml` (and for `packages/mics5524.yaml` if the MiCS-5524
-   component was touched).
+2. `esphome config` and `esphome compile` pass for `packages/mq8.yaml` **and** the
+   two compensated packages (`packages/mq8_sht4x.yaml`, `packages/mq8_dht11.yaml`) -
+   their fixtures are `tests/test_mq8_sht4x_package.yaml` /
+   `tests/test_mq8_dht11_package.yaml` (and for `packages/mics5524.yaml` if the
+   MiCS-5524 component was touched).
 3. Every linter in section 3 reports clean.
 4. `docs/` is updated in the same change (section 9).
 
@@ -66,7 +68,7 @@ h2_gas_sensor/                      git root
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
     ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
     ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
-    ├── packages/                   mq8.yaml, mq8_tc.yaml, mics5524.yaml, board.yaml, wifi.yaml, ...
+    ├── packages/                   mq8.yaml, mq8_sht4x.yaml, mq8_dht11.yaml, mics5524.yaml, board.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
     └── tests/                      host tests + config fixtures
 ```
@@ -80,8 +82,9 @@ Rules that follow from the map:
 * The component directory name **is** the YAML platform name
   (`components/mq_gas_sensors` -> `platform: mq_gas_sensors`). Never rename one
   without the other, and never use uppercase in a component directory.
-* One MQ-8 package may be included at a time: `mq8.yaml` and `mq8_tc.yaml` both
-  define `id: mq8` and must stay in sync when a shared option changes.
+* One MQ-8 package may be included at a time: `mq8.yaml`, `mq8_sht4x.yaml` and
+  `mq8_dht11.yaml` all define `id: mq8` and must stay in sync when a shared
+  option changes (only the ambient T/RH part differs).
 
 ---
 
@@ -182,11 +185,14 @@ lines allowed.
 * `external_components` lists the component folders explicitly
   (`components: [mq_gas_sensors, mics_5524_gas_sensor]`): a new folder under
   `esphome/components/` must be added there, it is not loaded automatically.
-* `packages/mq8.yaml` (plain) and `packages/mq8_tc.yaml` (with the MQDataScience
-  T/RH correction) are alternatives: **never include both**, both define
-  `id: mq8`, and a shared option change must be applied to both.
+* `packages/mq8.yaml` (plain), `packages/mq8_sht4x.yaml` (MQDataScience T/RH
+  correction with an I2C SHT4x) and `packages/mq8_dht11.yaml` (the same
+  correction with a 1-wire DHT11) are alternatives: **never include two of
+  them**, all three define `id: mq8`, and a shared option change must be applied
+  to all of them.
 * Use substitutions for anything board specific (`mq8_pin`, `mq8_multiplier`,
-  `mq8_rl`, `mq8_i2c_sda`, ...) and document them in the file header comment.
+  `mq8_rl`, `mq8_i2c_sda`, `mq8_dht11_pin`, ...) and document them in the file
+  header comment.
 * Keep the header comment of a package accurate: wiring, calibration workflow,
   threshold references and the link to the matching document under `docs/`.
 * `platform:` must match the component directory name (`mq_gas_sensors`).
@@ -266,8 +272,11 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 * Config-only changes: run `esphome config` for `config.yaml`, `tests/test_no_id.yaml`
   and `tests/test_tc.yaml`; the negative cases (missing `temperature:`, `curve:`
   plus `a:`/`b:`, unsupported correction type) must still be rejected at config time.
-* Runtime changes: additionally `esphome compile config.yaml` with `packages/mq8.yaml`
-  **and** with `packages/mq8_tc.yaml`.
+* Runtime changes: additionally `esphome compile` for `config.yaml` with
+  `packages/mq8.yaml` **and** with `packages/mq8_sht4x.yaml` +
+  `packages/mq8_dht11.yaml` (use the fixtures `tests/test_mq8_sht4x_package.yaml`
+  / `tests/test_mq8_dht11_package.yaml`, they compile both packages without
+  editing `config.yaml`).
 * Never commit the compiled host test binary.
 * Tests must not require hardware, network or secrets.
 

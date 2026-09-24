@@ -1,7 +1,7 @@
-# MQ-8 hydrogen sensor + ambient temperature/humidity correction.
+# MQ-8 hydrogen sensor + ambient temperature/humidity correction (DHT11, 1-wire).
 #
 # Use this package INSTEAD of packages/mq8.yaml (never together - both define
-# `id: mq8`). It is mq8.yaml plus an I2C temperature/humidity sensor and the
+# `id: mq8`). It is mq8.yaml plus a DHT11 temperature/humidity sensor and the
 # MQDataScience compensation of the RS/R0 ratio:
 #
 #     correction = a + c * exp(b * T)      a/b/c interpolated over RH 33..85 %
@@ -11,11 +11,25 @@
 # envelope (~+/-3 % indoors, up to -12 %/+11 % at the extremes) and why the
 # 10 000 ppm alarm ceiling is kept absolute by default.
 #
+# The I2C twin of this package is packages/mq8_sht4x.yaml. The DHT11 is the
+# cheap 1-wire alternative: it resolves 1 degC / 1 % RH (+/-2 degC / +/-5 % RH)
+# and only covers 0..50 degC / 20..90 % RH, so the compensation it drives stays
+# within its own error - use the SHT4x package when the ambient reading itself
+# matters. Below 0 degC the DHT11 reports 0 degC or a read error (an error
+# leaves the correction at 1.0000, the documented fail-open behaviour).
+#
 # Wiring
 #   MQ-8:  VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider
 #          (the AO output can reach 5 V, the ESP32 ADC stops at ~3.1 V).
-#   SHT4x: VDD -> 3.3 V, GND -> GND, SDA/SCL -> `mq8_i2c_sda`/`mq8_i2c_scl`
-#          (most breakouts already carry the I2C pull-ups).
+#   DHT11: VCC -> 3.3 V, GND -> GND, DATA -> `mq8_dht11_pin` with a 4.7k - 10k
+#          pull-up to 3.3 V (bare 3-pin sensors need it; ESPHome enables the
+#          internal pull-up as well). Power it from 3.3 V: a 5 V module whose
+#          pull-up sits on 5 V would drive the GPIO past its 3.6 V absolute
+#          maximum. `mq8_dht11_pin` must be a bidirectional GPIO - GPIO34-39 can
+#          only read and cannot drive the 1-wire start pulse.
+#   The DHT11 needs at least 1 s between reads (60 s here; the datasheet also
+#   warns that fast polling heats the sensor). One read blocks with interrupts
+#   disabled for about 23 ms.
 #
 # Calibration
 #   R0 is calibrated in clean air after `calibration.delay` and stored in flash.
@@ -28,32 +42,24 @@ substitutions:
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
-  # mq8_i2c_sda: GPIO21  # SDA of the ambient T/RH sensor
-  # mq8_i2c_scl: GPIO22  # SCL of the ambient T/RH sensor
-  # mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
-
-# i2c:
-#   id: ${name}_i2c
-#   sda: ${mq8_i2c_sda}
-#   scl: ${mq8_i2c_scl}
-#   frequency: 100kHz
-#   scan: true
+  mq8_dht11_pin: GPIO27  # DATA of the ambient T/RH sensor (bidirectional GPIO)
+  mq8_dht11_model: DHT11  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 (ESPHome `dht`)
 
 sensor:
-#   # Ambient conditions used for the correction (see the correction_mode key
-#   # below). The correction model clamps RH to 33..85 % and T to -10..50 degC.
-#   - platform: sht4x
-#     i2c_id: ${name}_i2c
-#     address: ${mq8_sht4x_address}
-#     update_interval: 60s
-#     temperature:
-#       id: ${name}_mq8_temperature
-#       name: "${friendly_name} ambient temperature"
-#       accuracy_decimals: 2
-#     humidity:
-#       id: ${name}_mq8_humidity
-#       name: "${friendly_name} ambient humidity"
-#       accuracy_decimals: 1
+  # Ambient conditions used for the correction (see the correction_mode key
+  # below). The correction model clamps RH to 33..85 % and T to -10..50 degC.
+  - platform: dht
+    pin: ${mq8_dht11_pin}
+    model: ${mq8_dht11_model}
+    update_interval: 60s
+    temperature:
+      id: ${name}_mq8_temperature
+      name: "${friendly_name} ambient temperature"
+      accuracy_decimals: 1  # the DHT11 resolves 1 degC
+    humidity:
+      id: ${name}_mq8_humidity
+      name: "${friendly_name} ambient humidity"
+      accuracy_decimals: 0  # the DHT11 resolves 1 % RH
 
   - platform: adc
     id: ${name}_mq8_adc
@@ -117,7 +123,7 @@ sensor:
     entity_category: diagnostic
 
   # The measured RS/R0 above stays uncorrected; this is the factor that was
-  # applied to it (1.0000 = uncorrected, e.g. when the SHT4x has no state yet).
+  # applied to it (1.0000 = uncorrected, e.g. when the DHT11 read failed).
   - platform: template
     id: ${name}_mq8_correction
     name: "${friendly_name} MQ-8 T/RH correction"

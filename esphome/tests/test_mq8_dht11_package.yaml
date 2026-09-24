@@ -1,0 +1,24 @@
+# Validation-only fixture for packages/mq8_dht11.yaml
+# (run: esphome config tests/test_mq8_dht11_package.yaml)
+#
+# The package is not included by config.yaml (it is an alternative to mq8.yaml
+# and to mq8_sht4x.yaml), so this fixture keeps it validated.
+substitutions:
+  name: mq8_dht11_pkg
+  friendly_name: "MQ-8 DHT11 package test"
+
+esphome:
+  name: ${name}
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+packages:
+  mq8_dht11: !include ../packages/mq8_dht11.yaml

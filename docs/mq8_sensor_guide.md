@@ -10,7 +10,7 @@ Curve and formula details: [`mq8_h2_curve.md`](mq8_h2_curve.md).
 | ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) | ESP-IDF framework, see `esphome/packages/board.yaml` |
 | MQ-8 module (breakout with LM393) | 5 V supply, analog output `AO` (and an unused digital `DO`) |
 | 2 resistors for the divider (e.g. 10 kΩ + 20 kΩ) | protects the ADC from the 5 V swing |
-| I²C temperature/humidity sensor (SHT4x / SHT3x) | only for the optional T/RH compensation, `packages/mq8_tc.yaml` |
+| Temperature/humidity sensor (SHT4x / SHT3x on I2C, or a 1-wire DHT11) | only for the optional T/RH compensation, `packages/mq8_sht4x.yaml` / `packages/mq8_dht11.yaml` |
 
 ## Power
 

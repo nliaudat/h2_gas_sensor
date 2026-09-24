@@ -11,7 +11,7 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 |---|---|---|
 | `esphome config` fails with "... can damage the pin" | the configuration allows more than `adc_pin_max` (3.6 V) at the ADC pin - e.g. a 5 V module with `voltage_multiplier: 1.0` and no divider | add `divider: {r1: 10.0, r2: 20.0}` (5 V -> 3.33 V), switch to 10k/10k (2.5 V), or declare `adc_pin_max` when the ADC really does see the full swing (ADS1115) |
 | warning "top of the range may clip" | the divider maps the sensor maximum slightly above `adc_input_max` (10k/20k -> 3.33 V vs 3.3 V recommended) | accept it - only the very top of the range reads non-linearly - or use 10k/10k |
-| `Duplicate id: mq8` | both `packages/mq8.yaml` and `packages/mq8_tc.yaml` are included | include exactly one of them |
+| `Duplicate id: mq8` | two of `packages/mq8.yaml` / `packages/mq8_sht4x.yaml` / `packages/mq8_dht11.yaml` are included | include exactly one of them |
 | the configuration validates but nothing arrives in Home Assistant | missing/typo in `secrets.yaml`, or the board is on another network | try the fallback AP `<name> Fallback` (password `fallback_hotspot_password`), then the captive portal |
 | upload fails: no serial device, or the port is busy | missing USB driver (CP2102/CH340), or another program holds the port | install the driver, close the serial monitor, try another cable (some are charge-only) |
 | upload fails with "Failed to connect" | the board is not in bootloader mode | hold `BOOT` for 2-3 s while the connection initialises |
@@ -28,7 +28,7 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | ppm pinned at `max_ppm` (10 000 for the MQ-8, 1 000 for the MiCS) | the gas is outside the range, the curve does not match the gas, or the divider is wrong | check `gas:` / `curve:`, then the divider |
 | readings jump around | ESP32 ADC noise | raise `samples:` (e.g. 16), add a 100 nF capacitor from the ADC pin to GND, or use an ADS1115 |
 | values drift over weeks | normal metal-oxide drift | re-calibrate in clean air - see [`getting_started.md`](getting_started.md) |
-| `MQ-8 T/RH correction` stuck at 1.0000 | the I2C sensor has no state yet, `correction_mode: none`, or a wrong I2C address | check the log warning, the I2C pins and `mq8_sht4x_address` |
+| `MQ-8 T/RH correction` stuck at 1.0000 | the T/RH sensor has no state yet, `correction_mode: none`, a wrong I2C address, or an unreadable DHT11 data line | check the log warning, the I2C pins and `mq8_sht4x_address`, or the pull-up / `mq8_dht11_pin` of the DHT11 |
 | the MiCS-5524 reacts to something that is not hydrogen | it has a single output for CO, H2, ethanol, ammonia and methane | treat it as a trend sensor; the MQ-8 is the reference for alarms |
 | the readings are plausible but the room smells of hydrogen | the sensor sits at the wrong height | hydrogen accumulates at the top: mount it at the highest point of the room or enclosure |
 

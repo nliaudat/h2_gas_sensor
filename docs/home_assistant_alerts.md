@@ -9,13 +9,13 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 
 | Entity (suffix of `friendly_name`) | Unit | Kind | Package |
 |---|---|---|---|
-| `H2 (MQ-8)` | ppm | measurement | `packages/mq8.yaml`, `packages/mq8_tc.yaml` |
-| `MQ-8 AO voltage` | V | diagnostic | both MQ-8 packages |
-| `MQ-8 RS-R0 ratio` | - | diagnostic | both |
-| `MQ-8 RS` | kΩ | diagnostic | both |
-| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8_tc.yaml` |
-| `ambient temperature` | °C | measurement | `packages/mq8_tc.yaml` |
-| `ambient humidity` | % | measurement | `packages/mq8_tc.yaml` |
+| `H2 (MQ-8)` | ppm | measurement | every MQ-8 package |
+| `MQ-8 AO voltage` | V | diagnostic | every MQ-8 package |
+| `MQ-8 RS-R0 ratio` | - | diagnostic | every MQ-8 package |
+| `MQ-8 RS` | kΩ | diagnostic | every MQ-8 package |
+| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8_sht4x.yaml`, `packages/mq8_dht11.yaml` |
+| `ambient temperature` | °C | measurement | same two packages |
+| `ambient humidity` | % | measurement | same two packages |
 | `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |

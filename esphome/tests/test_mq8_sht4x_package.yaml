@@ -1,0 +1,24 @@
+# Validation-only fixture for packages/mq8_sht4x.yaml
+# (run: esphome config tests/test_mq8_sht4x_package.yaml)
+#
+# The package is not included by config.yaml (it is an alternative to mq8.yaml
+# and needs the optional I2C sensor), so this fixture keeps it validated.
+substitutions:
+  name: mq8_sht4x_pkg
+  friendly_name: "MQ-8 SHT4x package test"
+
+esphome:
+  name: ${name}
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+packages:
+  mq8_sht4x: !include ../packages/mq8_sht4x.yaml
