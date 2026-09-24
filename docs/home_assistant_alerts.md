@@ -110,8 +110,9 @@ it for the trend, never as the only alarm source.
 * **Recovery paths** - `safe_mode:` (boots without the custom components after
   repeated crashes), `api: reboot_timeout: 30min`, OTA (`ota: platform: esphome`)
   and the `restart` switch.
-* **Logs** - `logger:` runs at `DEBUG` with per-tag overrides;
-  `esphome logs config.yaml` (or the web log) prints the measurement chain - see
-  [`troubleshooting.md`](troubleshooting.md) for how to read it.
+* **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
+  tags are pinned at `INFO`); `esphome logs config.yaml` (or the web log) prints
+  the measurement chain - see [`troubleshooting.md`](troubleshooting.md) for how
+  to read it.
 * **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
   so the new firmware starts.

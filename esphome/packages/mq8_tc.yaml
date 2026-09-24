@@ -24,36 +24,36 @@
 #       esphome: on_boot: - lambda: id(mq8).request_calibration();
 
 substitutions:
-  mq8_pin: GPIO34  # ADC1_CH6 (input only pin), change to match your wiring
+  mq8_pin: GPIO36  # (input only pin), change to match your wiring
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
-  mq8_i2c_sda: GPIO21  # SDA of the ambient T/RH sensor
-  mq8_i2c_scl: GPIO22  # SCL of the ambient T/RH sensor
-  mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
+  # mq8_i2c_sda: GPIO21  # SDA of the ambient T/RH sensor
+  # mq8_i2c_scl: GPIO22  # SCL of the ambient T/RH sensor
+  # mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
 
-i2c:
-  id: ${name}_i2c
-  sda: ${mq8_i2c_sda}
-  scl: ${mq8_i2c_scl}
-  frequency: 100kHz
-  scan: true
+# i2c:
+#   id: ${name}_i2c
+#   sda: ${mq8_i2c_sda}
+#   scl: ${mq8_i2c_scl}
+#   frequency: 100kHz
+#   scan: true
 
 sensor:
-  # Ambient conditions used for the correction (see the correction_mode key
-  # below). The correction model clamps RH to 33..85 % and T to -10..50 degC.
-  - platform: sht4x
-    i2c_id: ${name}_i2c
-    address: ${mq8_sht4x_address}
-    update_interval: 60s
-    temperature:
-      id: ${name}_mq8_temperature
-      name: "${friendly_name} ambient temperature"
-      accuracy_decimals: 2
-    humidity:
-      id: ${name}_mq8_humidity
-      name: "${friendly_name} ambient humidity"
-      accuracy_decimals: 1
+#   # Ambient conditions used for the correction (see the correction_mode key
+#   # below). The correction model clamps RH to 33..85 % and T to -10..50 degC.
+#   - platform: sht4x
+#     i2c_id: ${name}_i2c
+#     address: ${mq8_sht4x_address}
+#     update_interval: 60s
+#     temperature:
+#       id: ${name}_mq8_temperature
+#       name: "${friendly_name} ambient temperature"
+#       accuracy_decimals: 2
+#     humidity:
+#       id: ${name}_mq8_humidity
+#       name: "${friendly_name} ambient humidity"
+#       accuracy_decimals: 1
 
   - platform: adc
     id: ${name}_mq8_adc

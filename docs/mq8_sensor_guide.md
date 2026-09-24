@@ -111,4 +111,7 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | correction factor stuck at 1.0000 | the T/RH sensor has no state yet (see the logs) or `correction_mode` is `none` |
 
 `esphome logs config.yaml` (or the web log) prints every reading as
-`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level.
+`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the
+`mq_gas_sensors` tag is pinned at `INFO` in
+[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the 30 s line), put
+it back to `DEBUG` under `logger.logs` to read the chain again.

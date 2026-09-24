@@ -127,7 +127,9 @@ measurement math and every lint command are collected in
 ## Operations
 
 * **Logging** - `logger:` in `config.yaml` runs at `DEBUG` with per-tag
-  overrides; `esphome logs config.yaml` (or the web log) shows the raw values
+  overrides: the two gas-sensor tags (`mq_gas_sensors`, `mics_5524_gas_sensor`)
+  are pinned at `INFO`, so the per-update raw values are off by default - set
+  them back to `DEBUG` under `logger.logs` to read them
   (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
   calibration result).
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at

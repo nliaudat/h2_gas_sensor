@@ -35,10 +35,14 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 ## Reading the log
 
 `esphome logs config.yaml` (or the web log) prints one line per update at
-`DEBUG` level:
+`DEBUG` level, prefixed with `[D][tag]`. The two gas-sensor tags are pinned at
+`INFO` in [`../esphome/config.yaml`](../esphome/config.yaml) to keep the log
+readable; set `mq_gas_sensors` / `mics_5524_gas_sensor` back to `DEBUG` under
+`logger.logs` to read the chain (illustrative values):
 
 ```
-'sensor': 'H2 sensor board H2 (MQ-8)': V=1.234 V, RS=12.345 kOhm, ratio=42.100 (correction=0.9987) -> 812 ppm
+[D][mq_gas_sensors]: 'MQ-8 H2': V=1.234 V, RS=12.345 kOhm, ratio=42.100 (correction=0.9987) -> 74.5 ppm
+[D][mics_5524_gas_sensor]: 'H2': V_AO=1.234 V, x=0.5670, RS=8.800 kOhm, ratio=0.9980 (dfrobot) -> 0.0 ppm
 ```
 
 * `V` is the scaled voltage at the pin (after `voltage_multiplier`) - use it to

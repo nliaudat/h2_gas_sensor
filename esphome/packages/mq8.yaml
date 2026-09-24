@@ -21,7 +21,7 @@
 #   the YAML with `r0: <value>`.
 
 substitutions:
-  mq8_pin: GPIO34  # ADC1_CH6 (input only pin), change to match your wiring
+  mq8_pin: GPIO36  # (input only pin), change to match your wiring
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm

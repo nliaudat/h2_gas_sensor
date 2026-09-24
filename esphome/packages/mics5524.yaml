@@ -34,10 +34,10 @@
 #   `air_reference: <value>` instead of calibrating at boot.
 
 substitutions:
-  mics_pin: GPIO33  # ADC1_CH5, change to match your wiring
+  mics_pin: GPIO39  # change to match your wiring
   mics_divider_r1: "10.0"  # kOhm, in series with A0 (top)  -> 10k/20k divider
   mics_divider_r2: "20.0"  # kOhm, A0 node to GND (bottom)  -> multiplier 1.5
-  mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
+  # mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
   mics_max_ppm: "1000"  # upper end of the vendor range for H2 (and CO)
 
 sensor:
@@ -71,9 +71,9 @@ sensor:
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
     min_ppm: 0
     max_ppm: ${mics_max_ppm}
-    enable_pin:
-      number: ${mics_enable_pin}
-      inverted: true  # LOW enables the module
+    # enable_pin:
+    #   number: ${mics_enable_pin}
+    #   inverted: true  # LOW enables the module
     calibration:
       delay: 3min  # after boot, in clean air
       samples: 10  # DFRobot averages 10 samples for the reference

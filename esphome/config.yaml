@@ -35,6 +35,14 @@ logger:
     select: ERROR
     number: ERROR
     sensor: INFO
+    # Gas sensor components - these keys are the ESPHome log *tags*, not the
+    # entity ids: mq_gas_sensors = packages/mq8.yaml + mq8_tc.yaml,
+    # mics_5524_gas_sensor = packages/mics5524.yaml. Pinned at INFO: the 30 s
+    # DEBUG line with the raw values is dropped, the boot / calibration INFO
+    # messages, the warnings and the errors stay. Set a tag back to DEBUG (the
+    # global level - a per-tag level can only be quieter) to read it again.
+    mq_gas_sensors: INFO
+    mics_5524_gas_sensor: INFO
 
 packages:
   wifi: !include packages/wifi.yaml
