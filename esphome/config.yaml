@@ -36,8 +36,8 @@ logger:
     number: ERROR
     sensor: INFO
     # Gas sensor components - these keys are the ESPHome log *tags*, not the
-    # entity ids: mq_gas_sensors = every MQ-8 package (mq8.yaml, mq8_sht4x.yaml,
-    # mq8_dht11.yaml), mics_5524_gas_sensor = packages/mics5524.yaml. Pinned at
+    # entity ids: mq_gas_sensors = packages/mq8.yaml, mics_5524_gas_sensor =
+    # packages/mics5524.yaml. Pinned at
     # INFO: the 30 s
     # DEBUG line with the raw values is dropped, the boot / calibration INFO
     # messages, the warnings and the errors stay. Set a tag back to DEBUG (the
@@ -51,12 +51,11 @@ packages:
   time: !include packages/time.yaml
   sensors_others: !include packages/sensors_others.yaml
   switch: !include packages/switch.yaml
+  # The MQ-8 package holds the ADC, the gas sensor and - commented - both the
+  # ambient T/RH sensor examples and the MQDataScience compensation of the RS/R0
+  # ratio. Uncomment the matching blocks inside the package when a T/RH sensor is
+  # wired (see ../../docs/temperature_humidity_correction.md).
   mq8: !include packages/mq8.yaml
-  # Include ONE of these INSTEAD of `mq8` when an ambient temperature/humidity
-  # sensor is wired (they add the MQDataScience T/RH correction; never enable two
-  # of them - all three packages define `id: mq8`):
-  # mq8: !include packages/mq8_sht4x.yaml  # I2C SHT4x, the accurate choice
-  # mq8: !include packages/mq8_dht11.yaml  # 1-wire DHT11, cheap and simple
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
   mics5524: !include packages/mics5524.yaml
 

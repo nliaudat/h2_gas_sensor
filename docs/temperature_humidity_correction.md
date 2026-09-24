@@ -84,15 +84,15 @@ sensor:
     correction_sensor: mq8_correction  # optional diagnostic entity
 ```
 
-Ready-made versions (include one of them **instead of** `packages/mq8.yaml`):
-[`../esphome/packages/mq8_sht4x.yaml`](../esphome/packages/mq8_sht4x.yaml) for an
-I2C SHT4x, or
-[`../esphome/packages/mq8_dht11.yaml`](../esphome/packages/mq8_dht11.yaml) for a
-1-wire DHT11 (any `dht` model works the same way - the platform takes
-`temperature:` / `humidity:` sub-sensors just like `sht4x`). Both produce the same
-entities; the DHT11 resolves only 1 °C / 1 % RH over 0 - 50 °C / 20 - 90 % RH,
-which is about the ±3 % the compensation shifts indoors - prefer the SHT4x package
-when the ambient reading itself matters.
+The shipped package [`../esphome/packages/mq8.yaml`](../esphome/packages/mq8.yaml)
+carries the whole setup as commented blocks - the two links, the compensation keys
+and two ambient sensor examples (I2C `sht4x` and 1-wire `dht`, uncomment one of
+them). Both examples define the same ids, so the links never change; any other
+platform works as well (BME280, a sensor imported from Home Assistant, ...),
+because only the id is used, wherever it is defined. The DHT11 resolves only
+1 °C / 1 % RH over 0 - 50 °C / 20 - 90 % RH, which is about the ±3 % the
+compensation shifts indoors - prefer the SHT4x when the ambient reading itself
+matters.
 
 | Key | Default | Description |
 |---|---|---|

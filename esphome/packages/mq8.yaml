@@ -1,16 +1,28 @@
 # MQ-8 hydrogen sensor (mq_gas_sensors component, H2 curve: a=976.97, b=-0.688).
 #
-# This is the plain variant (no temperature/humidity compensation). For the
-# MQDataScience compensation of the RS/R0 ratio include `packages/mq8_sht4x.yaml`
-# (I2C SHT4x) or `packages/mq8_dht11.yaml` (1-wire DHT11) instead.
+# One package for the whole MQ-8 chain: the ADC, the gas sensor and - when a T/RH
+# sensor is wired - the optional ambient temperature/humidity compensation of the
+# RS/R0 ratio. The ambient sensors are only *linked* by id (`temperature:` /
+# `humidity:` in the mq_gas_sensors entry below), so any platform works: an I2C
+# SHT4x/SHT3x, a 1-wire DHT11/DHT22, a BME280, a sensor imported from Home
+# Assistant, ... There is deliberately no per-sensor variant of this package:
+# uncomment ONE of the two commented T/RH blocks at the end of the `sensor:` list
+# (or add your own sensor) plus the compensation block inside the MQ-8 entry.
+#
 # Documentation: ../../docs/mq8_sensor_guide.md, ../../docs/mq8_h2_curve.md,
 # ../../docs/temperature_humidity_correction.md, ../../docs/h2_thresholds.md
 #
 # Wiring
-#   VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider.
-#   The module's AO output can go up to VCC (5 V) while the ESP32 ADC is limited
-#   to about 3.1 V at 12 dB attenuation, so use a divider (10k / 20k = AO * 2/3)
-#   and set `voltage_multiplier` to the inverse of the divider ratio (1.5).
+#   MQ-8:  VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider.
+#          The module's AO output can go up to VCC (5 V) while the ESP32 ADC is
+#          limited to about 3.1 V at 12 dB attenuation, so use a divider
+#          (10k / 20k = AO * 2/3) and set `voltage_multiplier` to the inverse of
+#          the divider ratio (1.5).
+#   T/RH (optional): SHT4x - VDD -> 3.3 V, SDA/SCL -> `mq8_i2c_sda`/`mq8_i2c_scl`
+#          (most breakouts already carry the I2C pull-ups). DHT11/DHT22 - VCC ->
+#          3.3 V, DATA -> `mq8_dht_pin` through a 4.7k - 10k pull-up to 3.3 V:
+#          never on an input-only pin (GPIO34-39), the 1-wire protocol drives the
+#          line, and never from 5 V (the pull-up would drive the GPIO too high).
 #
 # Calibration
 #   The first boot calibrates R0 in clean air after `calibration.delay` and stores
@@ -25,6 +37,22 @@ substitutions:
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
+  # Wiring of the commented ambient T/RH sensor examples at the end of the
+  # `sensor:` list - only used when one of them (and the compensation block in
+  # the MQ-8 entry) is uncommented.
+  mq8_i2c_sda: GPIO21  # SDA of the SHT4x example
+  mq8_i2c_scl: GPIO22  # SCL of the SHT4x example
+  mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
+  mq8_dht_pin: GPIO27  # DATA of the DHT11/DHT22 example (bidirectional GPIO)
+  mq8_dht_model: DHT11  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 (ESPHome `dht`)
+
+# I2C bus of the SHT4x example - uncomment together with that sensor block:
+# i2c:
+#   id: ${name}_i2c
+#   sda: ${mq8_i2c_sda}
+#   scl: ${mq8_i2c_scl}
+#   frequency: 100kHz
+#   scan: true
 
 sensor:
   - platform: adc
@@ -58,29 +86,92 @@ sensor:
     # The MQ-8 saturates around 10 000 ppm = 25 % of the H2 LEL (LEL = 40 000 ppm)
     min_ppm: 0
     max_ppm: 10000
+    # `curve:` defaults to `standard`; `mqdatascience` switches to their MQ-8 H2
+    # fit (~11 % lower). See ../../docs/mqdatascience_comparison.md.
     calibration:
       ratio_in_clean_air: 70  # RS/R0 in clean air (MQ-8 datasheet)
       delay: 5min  # wait for the boot + heater stabilisation before calibrating
       samples: 50
       persist: true  # store R0 in flash and reuse it after a reboot
+    # --- ambient temperature/humidity compensation (MQDataScience, optional) ---
+    # Uncomment these keys together with ONE of the T/RH sensor blocks at the end
+    # of this `sensor:` list (or with your own temperature/humidity sensors - they
+    # are only referenced by id, wherever they are defined) and with the
+    # `${name}_mq8_correction` template entity below. Without them the H2 value is
+    # published uncompensated. The model, its effect (~+/-3 % indoors) and the
+    # fail-open behaviour are documented in
+    # ../../docs/temperature_humidity_correction.md
+    # temperature: ${name}_mq8_temperature
+    # humidity: ${name}_mq8_humidity
+    # correction_mode: mqdatascience
+    # correction_clamp: absolute  # keep the 10 000 ppm ceiling where it is
+    # correction_sensor: ${name}_mq8_correction
     ratio_sensor: ${name}_mq8_ratio
     rs_sensor: ${name}_mq8_rs
 
-  # Diagnostics (remove if not needed)
+  # --- optional ambient T/RH sensor: uncomment ONE of the two blocks ----------
+  # Only used by the compensation block of the MQ-8 entry above. The correction
+  # model clamps RH to 33..85 % and T to -10..50 degC, so no special sensor range
+  # is required. Both blocks define the same ids, so the links in the MQ-8 entry
+  # never change.
+  #
+  # I2C SHT4x - the accurate choice (also uncomment the `i2c:` block at the top):
+  # - platform: sht4x
+  #   i2c_id: ${name}_i2c
+  #   address: ${mq8_sht4x_address}
+  #   update_interval: 60s
+  #   temperature:
+  #     id: ${name}_mq8_temperature
+  #     name: "${friendly_name} ambient temperature"
+  #     accuracy_decimals: 2
+  #   humidity:
+  #     id: ${name}_mq8_humidity
+  #     name: "${friendly_name} ambient humidity"
+  #     accuracy_decimals: 1
+  #
+  # 1-wire DHT11/DHT22 - cheap and simple. A DHT11 resolves only 1 degC / 1 % RH
+  # over 0..50 degC / 20..90 % RH, about the +/-3 % the compensation shifts
+  # indoors - use the SHT4x when the ambient reading itself matters. Below 0 degC
+  # it reports 0 degC or a read error (an error leaves the correction at 1.0000).
+  # It needs >= 1 s between reads and cannot drive the start pulse on GPIO34-39:
+  # - platform: dht
+  #   pin: ${mq8_dht_pin}
+  #   model: ${mq8_dht_model}
+  #   update_interval: 60s
+  #   temperature:
+  #     id: ${name}_mq8_temperature
+  #     name: "${friendly_name} ambient temperature"
+  #     accuracy_decimals: 1
+  #   humidity:
+  #     id: ${name}_mq8_humidity
+  #     name: "${friendly_name} ambient humidity"
+  #     accuracy_decimals: 0
+
+  # The factor applied to the measured RS/R0 by the compensation above (1.0000 =
+  # uncorrected) - uncomment together with that block:
   # - platform: template
-  #   id: ${name}_mq8_ratio
-  #   name: "${friendly_name} MQ-8 RS-R0 ratio"
-  #   accuracy_decimals: 3
-  #   icon: mdi:chart-line
+  #   id: ${name}_mq8_correction
+  #   name: "${friendly_name} MQ-8 T/RH correction"
+  #   accuracy_decimals: 4
+  #   icon: mdi:thermometer-water
   #   entity_category: diagnostic
 
-  # - platform: template
-  #   id: ${name}_mq8_rs
-  #   name: "${friendly_name} MQ-8 RS"
-  #   unit_of_measurement: kOhm
-  #   accuracy_decimals: 3
-  #   icon: mdi:omega
-  #   entity_category: diagnostic
+  # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
+  # (remove all four keys/entities together if these entities are not wanted):
+  - platform: template
+    id: ${name}_mq8_ratio
+    name: "${friendly_name} MQ-8 RS-R0 ratio"
+    accuracy_decimals: 3
+    icon: mdi:chart-line
+    entity_category: diagnostic
+
+  - platform: template
+    id: ${name}_mq8_rs
+    name: "${friendly_name} MQ-8 RS"
+    unit_of_measurement: kOhm
+    accuracy_decimals: 3
+    icon: mdi:omega
+    entity_category: diagnostic
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning

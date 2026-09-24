@@ -53,10 +53,10 @@ Wiring, in the package you include:
 | `mics_divider_r1` / `mics_divider_r2` | `10.0` / `20.0` | same divider, for the MiCS module |
 | `mics_enable_pin` | `GPIO4` | the module's `EN` pad (LOW = enabled); remove the key if unused |
 | `mics_max_ppm` | `1000` | top of the vendor range for H2 |
-| `mq8_i2c_sda` / `mq8_i2c_scl` | `GPIO21` / `GPIO22` | I2C pins of the optional SHT4x (`mq8_sht4x.yaml`) |
-| `mq8_sht4x_address` | `0x44` | I2C address of the SHT4x |
-| `mq8_dht11_pin` | `GPIO27` | 1-wire `DATA` pin of the optional DHT11 (`mq8_dht11.yaml`), any bidirectional GPIO |
-| `mq8_dht11_model` | `DHT11` | `dht` model of that package (`DHT11` / `DHT22` / `AM2302` / ...) |
+| `mq8_i2c_sda` / `mq8_i2c_scl` | `GPIO21` / `GPIO22` | I2C pins of the optional SHT4x example in `packages/mq8.yaml` |
+| `mq8_sht4x_address` | `0x44` | I2C address of that SHT4x |
+| `mq8_dht_pin` | `GPIO27` | 1-wire `DATA` pin of the optional DHT11/DHT22 example, any bidirectional GPIO |
+| `mq8_dht_model` | `DHT11` | `dht` model of that example (`DHT11` / `DHT22` / `AM2302` / ...) |
 
 ## 4. Pick the packages
 
@@ -65,14 +65,13 @@ Wiring, in the package you include:
 
 | Package | Sensor | When to use |
 |---|---|---|
-| `packages/mq8.yaml` | MQ-8 only | the default, no compensation |
-| `packages/mq8_sht4x.yaml` | MQ-8 + SHT4x (I2C) | *instead of* `mq8.yaml`, adds the temperature/humidity correction |
-| `packages/mq8_dht11.yaml` | MQ-8 + DHT11 (1-wire) | the same correction with a cheaper sensor: 1 °C / 1 % RH resolution |
+| `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor and the compensation are commented out inside |
 | `packages/mics5524.yaml` | MiCS-5524 | additive, when the trace sensor is wired |
 
-Include **exactly one** of `mq8.yaml` / `mq8_sht4x.yaml` / `mq8_dht11.yaml`: all
-three define `id: mq8`, and two packages defining the same id are rejected.
-`mics5524.yaml` can be added on top of any of them (it uses `id: mics`).
+There is a single MQ-8 package: it defines `id: mq8` and links the ambient sensors
+by id (`temperature:` / `humidity:`), so the optional compensation is switched on
+by uncommenting the matching blocks inside the package instead of by including
+another package. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
 
 ## 5. Wire it
 
@@ -84,13 +83,14 @@ three define `id: mq8`, and two packages defining the same id are rejected.
   ADS1115 (`voltage_multiplier: 1.0`, `adc_input_max` / `adc_pin_max: 6.144`).
 * MiCS-5524: `EN` -> the configured GPIO; most modules are enabled by a LOW level
   (`inverted: true`).
-* Optional SHT4x: `VDD` 3.3 V, `GND`, `SDA` / `SCL` to the configured I2C pins
-  (most breakouts already carry the pull-ups).
-* Optional DHT11: `VCC` 3.3 V, `GND`, `DATA` -> `mq8_dht11_pin` plus a
-  4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare 3-pin sensors need it). Never route
-  `DATA` to an input-only pin (GPIO34-39) - the 1-wire protocol drives the line -
-  and do not power a module whose pull-up sits on 5 V from 5 V: the GPIO is not
-  5 V tolerant.
+* Optional SHT4x (the I2C example in `packages/mq8.yaml`): `VDD` 3.3 V, `GND`,
+  `SDA` / `SCL` to `mq8_i2c_sda` / `mq8_i2c_scl` (most breakouts already carry
+  the pull-ups); uncomment the `i2c:` block and that sensor.
+* Optional DHT11/DHT22 (the 1-wire example in `packages/mq8.yaml`): `VCC` 3.3 V,
+  `GND`, `DATA` -> `mq8_dht_pin` plus a 4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare
+  3-pin sensors need it). Never route `DATA` to an input-only pin (GPIO34-39) -
+  the 1-wire protocol drives the line - and do not power a module whose pull-up
+  sits on 5 V from 5 V: the GPIO is not 5 V tolerant.
 
 Details, caveats and placement: [`mq8_sensor_guide.md`](mq8_sensor_guide.md) and
 [`mics5524_guide.md`](mics5524_guide.md).

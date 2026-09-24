@@ -16,7 +16,7 @@ cycle.
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
-| Optional | SHT4x (I2C) or DHT11 (1-wire) for the temperature/humidity compensation |
+| Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the compensation of the MQ-8 ratio |
 | Firmware | [`esphome/`](esphome/) - entry point [`esphome/config.yaml`](esphome/config.yaml) |
 | Documentation | [`docs/README.md`](docs/README.md) - index of every document |
 | Licence | Apache-2.0 OR MIT - see [`LICENSE`](LICENSE) |
@@ -29,7 +29,7 @@ cycle.
 | MQ-8 module (5 V breakout) | 5 V heater (~150 mA), analog `AO` output. Cheap boards often carry a 1 kΩ load resistor instead of the 10 kΩ of the datasheet circuit - measure it, see [`docs/mq8_sensor_guide.md`](docs/mq8_sensor_guide.md) |
 | 2 resistors per sensor (e.g. 10 kΩ + 20 kΩ) | the voltage divider - **the ESP32 ADC pins are not 5 V tolerant** |
 | MiCS-5524 module (optional) | 5 V, `A0` + `EN` pad, trace band 100 - 1 000 ppm |
-| SHT4x / SHT3x or DHT11 (optional) | temperature/humidity sensor for the `mq8_sht4x` / `mq8_dht11` packages |
+| SHT4x / SHT3x or DHT11 (optional) | temperature/humidity sensor for the optional compensation inside `packages/mq8.yaml` |
 
 ## Wiring at a glance
 
@@ -60,7 +60,8 @@ MQ-8 / MiCS-5524 at 5 V
    [`docs/getting_started.md`](docs/getting_started.md).
 3. **Set your substitutions** in [`esphome/config.yaml`](esphome/config.yaml)
    (`name`, `friendly_name`, `board_type`, `TZ`) and include the packages you
-   need (`mq8` *or* `mq8_sht4x` / `mq8_dht11`, optionally `mics5524`).
+   need (`mq8`, optionally `mics5524`). An ambient T/RH sensor for the optional
+   temperature/humidity compensation is enabled inside `packages/mq8.yaml`.
 4. **Validate and flash**: `cd esphome && esphome run config.yaml`. Hold `BOOT`
    for 2-3 s for the first **serial** flash; after an OTA update press `EN` once
    to run the new firmware.
@@ -78,8 +79,9 @@ Step by step, with the wiring details and the calibration workflow:
 | `H2 trace (MiCS-5524)` | ppm | early trend, 100 - 1 000 ppm band (optional package) |
 
 Plus the diagnostics (`MQ-8 AO voltage`, `MQ-8 RS-R0 ratio`, `MQ-8 RS`,
-`MiCS-5524 ratio`, `MQ-8 T/RH correction`, `ambient temperature/humidity`,
-`WiFi Signal`) and a `restart` switch. Full entity list, thresholds and
+`MiCS-5524 ratio`, `WiFi Signal` and - when the optional compensation is enabled -
+`MQ-8 T/RH correction`, `ambient temperature`, `ambient humidity`) and a
+`restart` switch. Full entity list, thresholds and
 paste-ready automations: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
 
 ```yaml

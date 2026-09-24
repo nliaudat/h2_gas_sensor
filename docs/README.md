@@ -21,7 +21,7 @@ the docs and the firmware cannot drift apart silently.
 | [`mq8_sensor_guide.md`](mq8_sensor_guide.md) | MQ-8 wiring, 5 V supply, AO divider, real load resistor, burn-in, R0 calibration workflow, placement |
 | [`mq8_h2_curve.md`](mq8_h2_curve.md) | The measurement chain V → RS → RS/R0 → ppm, why `ratio_in_clean_air` is 70, provenance of `a`/`b`, ratio→ppm table |
 | [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
-| [`temperature_humidity_correction.md`](temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation (packages `mq8_sht4x.yaml` / `mq8_dht11.yaml`): model, constants, effect envelope, configuration, safety rules |
+| [`temperature_humidity_correction.md`](temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation of `packages/mq8.yaml`: model, constants, effect envelope, how to link your own T/RH sensor, safety rules |
 | [`mqdatascience_comparison.md`](mqdatascience_comparison.md) | MQ-8 H2 curve comparison (standard vs MQDataScience), what was adopted and what was deliberately skipped |
 | [`mics5524_guide.md`](mics5524_guide.md) | MiCS-5524 hardware, wiring (divider / ADS1115 / EN pin), warm-up and calibration, ADC limits, role next to the MQ-8 |
 | [`mics5524_conversion.md`](mics5524_conversion.md) | The two MiCS-5524 conversion models (vendor vs datasheet), the constants table, the 2-point fit recipe, what is not implemented |

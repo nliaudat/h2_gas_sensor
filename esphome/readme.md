@@ -8,7 +8,7 @@ value and publishes it to Home Assistant.
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
-| Optional | SHT4x (I2C) or DHT11 (1-wire) for the MQDataScience temperature/humidity compensation |
+| Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the MQDataScience compensation of the MQ-8 ratio |
 | Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A) and `components/mics_5524_gas_sensor/` (MiCS-5524) |
 
 This file is the **firmware reference**: which package does what, where every
@@ -26,22 +26,24 @@ packages:
   time: !include packages/time.yaml
   sensors_others: !include packages/sensors_others.yaml
   switch: !include packages/switch.yaml
-  mq8: !include packages/mq8.yaml          # or mq8_sht4x.yaml / mq8_dht11.yaml - never two
+  mq8: !include packages/mq8.yaml          # ADC + gas sensor; T/RH blocks commented inside
   # mics5524: !include packages/mics5524.yaml   # additive, optional hardware
 ```
 
 | Package | Sensor | Notes |
 |---|---|---|
-| `mq8.yaml` | MQ-8 | plain, no compensation (default) |
-| `mq8_sht4x.yaml` | MQ-8 + SHT4x (I2C) | adds the MQDataScience temperature/humidity correction |
-| `mq8_dht11.yaml` | MQ-8 + DHT11 (1-wire) | same correction, cheap sensor (1 °C / 1 % RH resolution) |
+| `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the compensation are commented out |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
-Only **one** MQ-8 package may be included: all three define `id: mq8`. Of the two
-compensated packages `mq8_sht4x.yaml` is the accurate one - a DHT11 resolves
-1 °C / 1 % RH, the same order as the ±3 % the correction shifts indoors.
-`mics5524.yaml` can be added on top of any of them and keeps the defaults of the
-MQ-8 package untouched.
+`mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
+(`temperature:`/`humidity:` in the `mq_gas_sensors` entry), so there is no
+per-sensor variant and nothing to keep in sync. Uncomment one of the two
+commented T/RH sensor blocks (SHT4x on I2C, DHT11/DHT22 on 1-wire), the matching
+wiring substitutions and the compensation block inside the package when such a
+sensor is wired - see
+[`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md).
+A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
+`mics5524.yaml` can be added on top and keeps the MQ-8 defaults untouched.
 
 ## User-editable files
 
@@ -49,9 +51,7 @@ MQ-8 package untouched.
 |---|---|---|
 | `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
 | `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
-| `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) | Yes |
-| `packages/mq8_sht4x.yaml` | Same, plus the I2C T/RH sensor and the MQDataScience correction | Only with an SHT4x |
-| `packages/mq8_dht11.yaml` | Same, plus a 1-wire DHT11 (`mq8_dht11_pin`, `mq8_dht11_model`) | Only with a DHT11 |
+| `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
 | `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN (optional hardware) | Only with a MiCS-5524 |
 | `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
