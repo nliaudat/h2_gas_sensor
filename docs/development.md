@@ -13,6 +13,10 @@ READMEs, `esphome/tests/` holds the host tests and the config fixtures, and
 `esphome/script/` holds the vendored ESPHome CI linter (see
 [`../esphome/script/README.md`](../esphome/script/README.md)).
 
+A new component must also be listed in `config.yaml`
+(`external_components: ... components: [...]`): folders under `esphome/components/`
+are not discovered automatically.
+
 ## Validate configurations (no hardware needed)
 
 ```bash

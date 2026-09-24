@@ -53,9 +53,10 @@ service to your setup; `for:` ignores a single spike.
 # Home Assistant (automations.yaml)
 - alias: "H2 pre-alarm (10 000 ppm)"
   trigger:
-    - platform: numeric_state
-      entity_id: sensor.h2_sensor_board_h2_mq_8
-      above: 10000
+    # The component clamps at max_ppm (10 000 ppm) and numeric_state's `above:`
+    # is exclusive, so `above: 10000` would never fire: `>=` needs a template.
+    - platform: template
+      value_template: "{{ states('sensor.h2_sensor_board_h2_mq_8') | float(0) >= 10000 }}"
       for: "00:02:00"
   action:
     - service: notify.mobile_app_your_phone
@@ -75,6 +76,13 @@ service to your setup; `for:` ignores a single spike.
         title: "H2 trace warning"
         message: "MiCS-5524 above 300 ppm - check the trend and the ventilation."
 ```
+
+The pre-alarm is a template trigger on purpose: the MQ-8 saturates at
+`max_ppm: 10000`, and the `numeric_state` trigger's `above:`/`below:` are
+exclusive (Home Assistant has no `above_or_equal:` key), so `above: 10000` would
+never fire. The MiCS-5524 trace automation can stay on `numeric_state`, since
+300 ppm is well inside its 1 000 ppm range. The ESPHome-side examples use
+`sensor.in_range: { above: ... }`, which *is* inclusive (`state >= min`).
 
 For the dashboard a history graph of `H2 (MQ-8)` plus `H2 trace (MiCS-5524)` is
 enough, with the thresholds in mind; add `WiFi Signal` and the diagnostics when
