@@ -111,7 +111,7 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | ppm far too low / nearly flat | `rl:` does not match the module, or `voltage_multiplier` is missing |
 | ppm pinned at `max_ppm` (10 000) | wrong `a`/`b` for the gas, or `ratio_mode` mismatch |
 | values drift over weeks | normal sensor drift — re-calibrate in clean air |
-| correction factor stuck at 1.0000 | the T/RH sensor has no state yet (see the logs) or the compensation block of `packages/mq8.yaml` is not enabled |
+| correction factor stuck at 1.0000 | no T/RH sensor is linked (`temperature:`/`humidity:` on the MQ-8 entry), the T/RH sensor has no state yet (see the logs), or `correction_mode: none` was written |
 
 `esphome logs config.yaml` (or the web log) prints every reading as
 `V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the

@@ -80,9 +80,11 @@ Step by step, with the wiring details and the calibration workflow:
 | `CO` / `NH3` / `C2H5OH` / `CH4` (MiCS-5524) | ppm | the same analog output read through the other vendor curves (optional package) |
 
 Plus the diagnostics (`MQ-8 AO voltage`, `MQ-8 RS-R0 ratio`, `MQ-8 RS`,
-`MiCS-5524 ratio`, `WiFi Signal` and - when the optional compensation is enabled -
-`MQ-8 T/RH correction`, `ambient temperature`, `ambient humidity`) and a
-`restart` switch. The four extra MiCS-5524 gas entities are the *same* analog
+`MQ-8 T/RH correction`, `MQ-8 logs`, `MiCS-5524 ratio`, `MiCS-5524 logs`,
+`WiFi Signal`), the `ambient temperature` / `ambient humidity` entities of
+[`esphome/packages/dht22.yaml`](esphome/packages/dht22.yaml) (which also select
+the MQ-8 compensation) and a `restart` switch. The four extra MiCS-5524 gas
+entities are the *same* analog
 output interpreted with the other vendor curves - not independent measurements;
 the alerting stays on `H2 trace` and `H2 (MQ-8)`. Full entity list, thresholds
 and paste-ready automations:

@@ -29,8 +29,10 @@ sensor:
 
   # Merges the two ambient links into the MQ-8 entry of `packages/mq8.yaml` (the
   # keys its commented compensation block documents).  Both links present =>
-  # `correction_mode` resolves to `mqdatascience`.
+  # `correction_mode` resolves to `mqdatascience`; the third key routes the
+  # applied factor to the `MQ-8 T/RH correction` diagnostic entity of the package.
   - platform: mq_gas_sensors
     id: !extend mq8
     temperature: dht_temperature
     humidity: dht_humidity
+    correction_sensor: ${name}_mq8_correction

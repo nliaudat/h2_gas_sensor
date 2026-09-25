@@ -117,16 +117,21 @@ sensor:
     id: !extend mq8                  # the entry of packages/mq8.yaml
     temperature: air_temperature
     humidity: air_humidity
+    correction_sensor: mq8_correction  # optional diagnostic (the factor applied)
 ```
 
 Both variants define the same two keys, so any platform works (SHT4x, DHT22,
 BME280, a sensor imported from Home Assistant, ...): only the ids are used,
-wherever they are defined. The package also carries commented `sht4x` and `dht`
-examples that define `${name}_mq8_temperature` / `${name}_mq8_humidity`, for the
-"uncomment and go" setup. The DHT11 resolves only 1 °C / 1 % RH over
-0 - 50 °C / 20 - 90 % RH, which is about the ±3 % the compensation shifts indoors
-- prefer the SHT4x (or a DHT22, ±0.5 °C / ±2 % RH) when the ambient reading itself
-matters.
+wherever they are defined. The shipped `packages/mq8.yaml` enables the
+`MQ-8 T/RH correction` entity (`${name}_mq8_correction`) and
+`packages/dht22.yaml` links it with `correction_sensor:`, so the applied factor
+is visible in Home Assistant (1.0000 = uncorrected, either because no T/RH sensor
+is linked or because `correction_mode: none` was written). The package also
+carries commented `sht4x` and `dht` examples that define
+`${name}_mq8_temperature` / `${name}_mq8_humidity`, for the "uncomment and go"
+setup. The DHT11 resolves only 1 °C / 1 % RH over 0 - 50 °C / 20 - 90 % RH, which
+is about the ±3 % the compensation shifts indoors - prefer the SHT4x (or a DHT22,
+±0.5 °C / ±2 % RH) when the ambient reading itself matters.
 
 | Key | Default | Description |
 |---|---|---|

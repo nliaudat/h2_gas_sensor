@@ -156,13 +156,15 @@ sensor:
   #     accuracy_decimals: 0
 
   # The factor applied to the measured RS/R0 by the compensation above (1.0000 =
-  # uncorrected) - uncomment together with that block:
-  # - platform: template
-  #   id: ${name}_mq8_correction
-  #   name: "${friendly_name} MQ-8 T/RH correction"
-  #   accuracy_decimals: 4
-  #   icon: mdi:thermometer-water
-  #   entity_category: diagnostic
+  # uncorrected).  Enabled: it is the entity the `correction_sensor:` link points
+  # at, which the T/RH extension does from the outside (`!extend mq8`, e.g. in
+  # `packages/dht22.yaml`).  Without a linked T/RH sensor it publishes 1.0000.
+  - platform: template
+    id: ${name}_mq8_correction
+    name: "${friendly_name} MQ-8 T/RH correction"
+    accuracy_decimals: 4
+    icon: mdi:thermometer-water
+    entity_category: diagnostic
 
   # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
   # (remove all four keys/entities together if these entities are not wanted; the

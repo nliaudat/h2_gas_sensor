@@ -34,7 +34,7 @@ packages:
 | Package | Sensor | Notes |
 |---|---|---|
 | `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
-| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:` into `id: mq8` with `!extend`, which selects the compensation |
+| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T/RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
