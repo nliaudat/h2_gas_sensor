@@ -59,8 +59,9 @@ littlefs, data, littlefs, , 0x80000,   # the history
 ```
 
 The 512 KB is split between the two OTA slots, so each of them shrinks from
-1.75 MB to 1.5 MB - the firmware (1 005 984 bytes with the history included) sits
-at 64 % of its slot, which still leaves 566 KB of headroom for future releases. A
+1.75 MB to 1.5 MB - the firmware (1 005 871 bytes with the history included) sits
+at 64 % of its slot, which still leaves 566 880 bytes (about 554 KB) of headroom
+for future releases. A
 partition table change cannot be delivered by OTA: **flash once over USB**
 (`esphome run config.yaml`) after enabling the package, then OTA works as before.
 
@@ -117,6 +118,49 @@ OTA slots. On this 4 MB flash, with the firmware the history package produces
 
 So `512KB`/`384KB` is the comfortable choice and `1MB`/`768KB` the practical
 maximum on this 4 MB flash.
+
+## Flash and RAM cost (measured baseline)
+
+Measured on 2026-09-25 with ESPHome 2026.9.0 / ESP-IDF 5.5.5: `esphome compile
+config.yaml` prints the summary, and `esp_idf_size --archives` / `--files` on
+`esphome/.esphome/build/h2_sensor/build/h2_sensor.map` breaks it down. Compare a
+future build against these numbers:
+
+| Memory | Used | Total | Free |
+|---|---|---|---|
+| Flash (image) | 1 005 871 B (64.0 %) | app slot 1 572 864 B | 566 880 B (36 %) |
+| IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
+| DRAM (static) | 53 676 B (29.7 %) | 180 736 B | 127 060 B |
+
+The history itself, object by object (`esp_idf_size --files`):
+
+| Object | Flash |
+|---|---|
+| LittleFS - `lfs.c` 17 322, `esp_littlefs.c` 6 466, `littlefs_esp_part.c` 213 | 24 001 B |
+| esp_tsdb - `tsdb_core` 5 375, `tsdb_query` 1 718, `tsdb_write` 1 507, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 354 B |
+| `tsdb.cpp` (this component) | 5 242 B |
+| VFS directory support (`require_vfs_dir()`, part of `vfs.c`) | ~500 B |
+| the entities and automations of `packages/tsdb.yaml` | ~1 000 B |
+| **total** | **~40 KB** |
+
+Static RAM grows by 2 080 B (`.bss` +1 952, `.data` +128); the component object
+itself is 700 B of `.bss`. IRAM does not move at all. While the database is
+mounted roughly **6 - 7 KB of heap** are in use (4 KB buffer pool, the LittleFS
+block caches, the esp_tsdb handle with its header copy and mutex);
+`buffer_pool_size` and `min_free_bytes` are the knobs.
+
+Reading the two size reports: before the history package the image was
+904 299 B, now 1 005 871 B (+101 572 B, ~40 KB of it the feature's own code). The
+remainder sits in objects of the base configuration that this change does not
+touch - the current image carries `esp_timer_impl_lac.c.obj` with 91 777 B of
+`.rodata` (the time/newlib data of the `time:`/SNTP support) and the Wi-Fi and
+TLS data of the IDF components. An exact attribution needs an A/B build (comment
+the `tsdb: !include` line, rebuild, diff `--archives`), because `esphome clean`
+deletes the older map file.
+
+Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 880 bytes
+of the app slot stay free (~1 - 2 KB per release of headroom), IRAM is untouched
+and the 16.7 days of history are worth the 40 KB.
 
 ## Durability: what a power cut costs
 

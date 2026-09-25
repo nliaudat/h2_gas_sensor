@@ -14,7 +14,7 @@
 # The partition (read this once)
 #   `partition_size: 512KB` adds a `littlefs` data partition to partitions.csv
 #   and takes the space out of the two OTA slots, so each of them shrinks from
-#   1.75MB to 1.5MB (the firmware, 1 005 984 bytes, is then at 64% of its slot).
+#   1.75MB to 1.5MB (the firmware, 1 005 871 bytes, is then at 64% of its slot).
 #   A partition table
 #   change only takes effect with a **full flash over USB** (`esphome run` with
 #   a cable): OTA cannot move partitions.  Everything else keeps working.

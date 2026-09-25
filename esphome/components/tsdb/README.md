@@ -142,7 +142,10 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 All of them are recorded in `partitions.csv` as one `data, littlefs` partition
 next to the existing `nvs` partition; nothing else moves but the two app slots.
 A partition table change can only be delivered by a **USB flash**, so the first
-run after adding the package needs a cable.
+run after adding the package needs a cable. The measured flash/RAM cost of the
+whole feature (per object, and the numbers to compare a future build against) is
+in [`docs/data_logging.md`](../../../docs/data_logging.md#flash-and-ram-cost-measured-baseline):
+~40 KB of flash, +2 KB of static RAM, no IRAM.
 
 ## Durability and flash wear
 

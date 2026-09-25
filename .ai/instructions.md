@@ -119,6 +119,7 @@ change is considered done.
 | Config validation | `cd esphome && esphome config config.yaml` | "Configuration is valid!" |
 | Config validation (history fixture) | `cd esphome && esphome config tests/test_tsdb.yaml` | "Configuration is valid!" (the history package on stand-in sensors; its negative cases are listed in the fixture header) |
 | Build | `cd esphome && esphome compile config.yaml` | "Successfully compiled program." |
+| Size report (after a shift in flash/RAM) | `esphome compile config.yaml` prints the summary; the breakdown is `esp_idf_size --archives` / `--files` on `.esphome/build/h2_sensor/build/h2_sensor.map` (see the ESPHome-installed IDF python) | the flash/RAM table in `docs/data_logging.md` matches the build (refresh it in the same change) |
 
 Notes and gotchas:
 
@@ -334,7 +335,12 @@ pinned by version in `components/tsdb/__init__.py` and credited in
   the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`,
   `offline_mode`, `local_alarm`, `data_logging`).
 * Every number quoted in `docs/` must be asserted by `mq_math_test.cpp`; when a
-  constant changes, update code, test and docs in the same change.
+  constant changes, update code, test and docs in the same change. The one
+  deliberate exception is the **measured build baseline** in
+  `docs/data_logging.md#flash-and-ram-cost-measured-baseline` (image size, DRAM,
+  IRAM, per-object flash): it is a snapshot of a real `esphome compile` and is
+  refreshed in the same change that shifts it noticeably, not asserted by a host
+  test (a host test cannot build the firmware).
 * Markdown may use Unicode (arrows, multiplication signs, micro, degrees - the ASCII
   rule covers code and config files only), but keep it ASCII where it is easy.
 * Docs must never rely on a path that only exists on one machine (git-ignored

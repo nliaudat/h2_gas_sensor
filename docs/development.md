@@ -47,6 +47,21 @@ esphome compile config.yaml     # full ESP-IDF build
 esphome run config.yaml         # flash over USB or OTA
 ```
 
+`esphome compile` ends with the RAM/flash summary; for the per-archive and
+per-object breakdown (what the history feature costs, which object grew after a
+change) run ESP-IDF's size tool from the ESPHome-installed IDF environment
+(`<ESPHome data dir>/Cache/idf/penvs/<idf version>/Scripts/python.exe` on
+Windows) on the map file of the last build:
+
+```bash
+python -m esp_idf_size --archives .esphome/build/h2_sensor/build/h2_sensor.map
+python -m esp_idf_size --files    .esphome/build/h2_sensor/build/h2_sensor.map
+```
+
+The reference values of the shipped configuration are in
+[`data_logging.md`](data_logging.md#flash-and-ram-cost-measured-baseline); refresh
+that table in the same change when a build shifts them noticeably.
+
 ## Host tests (the measurement math)
 
 The math of the three components lives in a header with no ESPHome/ESP-IDF
