@@ -178,13 +178,20 @@ measurement math and every lint command are collected in
   `MiCS-5524 logs` text sensors (`log_sensor:` in the packages), so they are also
   visible in Home Assistant without changing the logger level - the per-update
   line at most every 30 s, calibration messages and warnings immediately.
-* **Update rate** - the two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`)
-  refresh every **1 s**: the MOX heaters run continuously (`wifi.power_save_mode:
-  NONE` as well), so slow polling saves nothing.  Every diagnostic entity is
-  throttled to 30 s on the device and the DHT22 stays at 60 s (its protocol needs
-  ≥ 2 s between reads).  1 Hz data is cheap on the ESP32 (≈ 60 ms of ADC sampling
-  per second) but not in the Home Assistant database - see the `recorder:
-  exclude:` recipe in
+* **Update rate** - every interval is a substitution at the top of its package:
+  `mq8_update_interval` (the H2 entity), `mq8_adc_update_interval` (its raw AO
+  voltage entity), `mq8_diag_interval` (RS / ratio / T-RH throttle),
+  `mics_update_interval`, `mics_adc_update_interval`,
+  `mics_extra_gas_update_interval` (the CO / NH3 / C2H5OH / CH4 views),
+  `mics_diag_interval`, `dht22_update_interval`, `wifi_signal_update_interval`.
+  Shipped defaults: the two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`)
+  and the diagnostics at **1 s** - the MOX heaters run continuously
+  (`wifi.power_save_mode: NONE` as well), so slow polling saves nothing - and the
+  DHT22 / `WiFi Signal` at 60 s (the 1-wire protocol needs ≥ 2 s between reads).
+  Slow the diagnostics down in the `substitutions:` of
+  [`config.yaml`](config.yaml) (e.g. `mq8_diag_interval: 30s`) when the recorder
+  matters: 1 Hz data is cheap on the ESP32 (≈ 60 ms of ADC sampling per second) but
+  not in the Home Assistant database - see the `recorder: exclude:` recipe in
   [`../docs/home_assistant_alerts.md`](../docs/home_assistant_alerts.md).
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
   06:00 (SNTP must be synced first). Useful to recover from long-run drift; the

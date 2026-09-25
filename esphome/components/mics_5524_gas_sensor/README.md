@@ -79,7 +79,7 @@ the wiring notes).
 | `calibration` | – | `delay:` (default `60s`), `samples:` (default `10`), `persist:` (default `true`). |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional diagnostic entities (the ratio of the active model, RS in kOhm for the datasheet model, the scaled AO voltage). |
 | `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
-| `update_interval` | `30s` | Normal polling interval. |
+| `update_interval` | `30s` | Normal polling interval.  The shipped `packages/mics5524.yaml` overrides it with its `mics_update_interval` (`1s` by default). |
 
 ## Calibration
 

@@ -115,10 +115,14 @@ and an `alarm test` button: amber LEDs plus a beep every 5 s from 4 000 ppm
 
 The two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`) refresh every
 **second** - the metal-oxide heaters run continuously, so there is nothing to save
-by polling slowly - while every diagnostic entity is throttled to 30 s on the
-device and the DHT22 stays at 60 s. See
-[`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) for the Home
-Assistant `recorder: exclude:` recipe that keeps 1 Hz data out of the database.
+by polling slowly.  Every diagnostic and ambient entity has its own substitution
+too (`mq8_diag_interval`, `mics_extra_gas_update_interval`, `dht22_update_interval`,
+`wifi_signal_update_interval`, ... in the package headers): they are 1 s like the
+alarm entities, except the DHT22 and `WiFi Signal` at 60 s - slow the diagnostics
+down there instead of touching the alarm entities.  See
+[`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) for the update-rate
+table and the Home Assistant `recorder: exclude:` recipe that keeps 1 Hz data out
+of the database.
 
 ```yaml
 # Home Assistant (automations.yaml) - pre-alarm at the top of the MQ-8 range.

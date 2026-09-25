@@ -67,10 +67,10 @@ Ex-rated.
 | `alarm LEDs` | light (diagnostic) | one entity for the 2-LED strip; its *effect* is the current level (`ok`, `pre-alarm`, `danger`, `no-reading`), so Home Assistant shows the state too |
 | `alarm test` | button (config) | plays the pre-alarm melody so the buzzer can be checked without hydrogen |
 
-The device re-applies the LED state once a minute, so a stray command (or the
-light toggled from Home Assistant) cannot leave the LEDs lying for long. There is
-deliberately **no mute switch**: nothing in Home Assistant can silence the local
-pre-alarm without editing `packages/alarm.yaml`.
+The device re-applies the LED state every `alarm_led_refresh_interval` (60 s), so
+a stray command (or the light toggled from Home Assistant) cannot leave the LEDs
+lying for long. There is deliberately **no mute switch**: nothing in Home
+Assistant can silence the local pre-alarm without editing `packages/alarm.yaml`.
 
 The level changes and the invalid state are logged to the console
 (`H2 pre-alarm band 4000 - 9999 ppm ...`), so `esphome logs config.yaml` shows
@@ -135,6 +135,7 @@ Everything lives in `substitutions:` at the top of `packages/alarm.yaml`:
 | `alarm_early_ppm` | `4000` | first annunciated band (10 % of the LEL): amber LEDs, beeps |
 | `alarm_danger_ppm` | `10000` | from here on the buzzer is silent (see above) |
 | `alarm_beep_interval` | `5s` | how often the pre-alarm beep repeats |
+| `alarm_led_refresh_interval` | `60s` | how often the LED state is re-asserted (self-heal of a stray command) |
 | `alarm_rtttl` | `two_short:d=4,o=5,b=100:16e6,16e6` | the melody (any RTTTL string) |
 
 The colours and blink patterns of the four states are the `effects:` list of the
@@ -146,7 +147,8 @@ deliberately and update [`h2_thresholds.md`](h2_thresholds.md) with it.
 
 * Press `alarm test` in Home Assistant: the melody plays (the wiring and the
   volume can be verified without hydrogen). Select an effect on the `alarm LEDs`
-  light entity to see a colour; the 60 s self-heal restores the real state.
+  light entity to see a colour; the `alarm_led_refresh_interval` self-heal (60 s)
+  restores the real state.
 * `esphome logs config.yaml` (or the web log) prints a line on every band change,
   e.g. `H2 pre-alarm band 4000 - 9999 ppm (10 to 25 percent of the LEL)`.
 * The states can be provoked without gas: temporarily set `alarm_early_ppm` below

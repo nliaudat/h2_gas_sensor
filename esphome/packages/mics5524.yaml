@@ -47,6 +47,19 @@
 #   The calibrated value is logged ("air reference = ...") and mirrored to the
 #   "${friendly_name} MiCS-5524 logs" text sensor (`log_sensor:` below) - it can
 #   also be pinned with `air_reference: <value>` instead of calibrating at boot.
+#
+# Update intervals
+#   Declared once in `substitutions:` below, so the cadence of every entity of
+#   this package can be read (and changed) in one place:
+#   `mics_update_interval` paces the H2 trace entry - the alarm entity -,
+#   `mics_adc_update_interval` only the raw AO voltage entity (`never` switches
+#   that entity off, the ppm value is unaffected),
+#   `mics_extra_gas_update_interval` the four other gas views (the same analog
+#   signal through other curves) and `mics_diag_interval` the publish throttle of
+#   the ratio / scaled-voltage diagnostics.  1 Hz for the alarm entry is
+#   deliberate: the heater runs continuously, so slower polling saves nothing -
+#   slow down the rest instead when the Home Assistant recorder matters
+#   (../../docs/home_assistant_alerts.md).
 
 substitutions:
   mics_pin: GPIO36  # change to match your wiring
@@ -62,6 +75,12 @@ substitutions:
   mics_nh3_max_ppm: "500"  # NH3 vendor range 10 - 500 ppm
   mics_ethanol_max_ppm: "500"  # C2H5OH vendor range 10 - 500 ppm
   mics_ch4_max_ppm: "25000"  # CH4 vendor range 1000 - 25000 ppm
+  # Update intervals - the cadence of every entity of this package (see the header
+  # comment).  The component's own default is 30s.
+  mics_update_interval: 1s  # H2 trace (MiCS-5524) - the alarm entity
+  mics_adc_update_interval: 1s  # raw AO voltage entity; `never` = entity off, ppm unaffected
+  mics_extra_gas_update_interval: 1s  # CO / NH3 / C2H5OH / CH4 views (same signal)
+  mics_diag_interval: 1s  # publish throttle of the ratio / AO (scaled) diagnostics
 
 sensor:
   - platform: adc
@@ -71,8 +90,9 @@ sensor:
     attenuation: 12db
     # Diagnostic only: the gas entries below convert the ADC themselves on every
     # poll (`ADCSensor::sample()` takes a fresh reading), so this interval does not
-    # limit the ppm refresh rate - it only paces this entity.
-    update_interval: 1s
+    # limit the ppm refresh rate - it only paces this entity (`never` switches the
+    # entity off without touching the ppm value).
+    update_interval: ${mics_adc_update_interval}
     accuracy_decimals: 3
     entity_category: diagnostic
 
@@ -91,10 +111,11 @@ sensor:
     # and `adc_input_max: 6.144` / `adc_pin_max: 6.144` instead.
     adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
-    # 1 s: this trace/alarm entry is the fast one (~60 ms of ADC averaging per
-    # second - the heater runs continuously, so slow polling saves nothing). The
-    # four other gas views below stay at 30 s, they are the same signal.
-    update_interval: 1s
+    # The trace/alarm entry is the fast one (~60 ms of ADC averaging per second:
+    # four samples with 20 ms between them; the heater runs continuously, so slow
+    # polling saves nothing).  The four other gas views below are the same signal
+    # and carry their own cadence (`mics_extra_gas_update_interval`).
+    update_interval: ${mics_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
@@ -120,8 +141,8 @@ sensor:
   # the accuracy note at the top of this file). Keep the H2 entry as the alarm
   # reference and use these to see how the other gases would interpret the same
   # reading. `conversion: dfrobot` is required: only CO ships with datasheet
-  # coefficients (a = 6.3, b = -1.1).  They keep the slow 30 s interval - the H2
-  # entry above is the fast (1 s) alarm reference.
+  # coefficients (a = 6.3, b = -1.1).  They have a cadence of their own
+  # (`mics_extra_gas_update_interval`) - the H2 entry above is the alarm reference.
   - platform: mics_5524_gas_sensor
     id: mics_co
     name: "${friendly_name} CO (MiCS-5524)"
@@ -133,7 +154,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 1s
+    update_interval: ${mics_extra_gas_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -155,7 +176,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 1s
+    update_interval: ${mics_extra_gas_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -177,7 +198,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 1s
+    update_interval: ${mics_extra_gas_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -199,7 +220,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 1s
+    update_interval: ${mics_extra_gas_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -219,7 +240,7 @@ sensor:
     icon: mdi:chart-line
     entity_category: diagnostic
     filters:
-      - throttle: 1s  # the H2 entry polls at 1 Hz, this is a diagnostic
+      - throttle: ${mics_diag_interval}  # diagnostic: slow this one down, not the alarm entry
 
   - platform: template
     id: ${name}_mics_voltage
@@ -229,7 +250,7 @@ sensor:
     icon: mdi:flash
     entity_category: diagnostic
     filters:
-      - throttle: 1s  # the H2 entry polls at 1 Hz, this is a diagnostic
+      - throttle: ${mics_diag_interval}  # diagnostic: slow this one down, not the alarm entry
 
 # Mirror of the H2 log (the id given by `log_sensor:` on that entry): per-update
 # chain (`V_AO=... x=... ratio=... -> ... ppm`), calibration messages and

@@ -61,6 +61,22 @@ Wiring, in the package you include:
 | `alarm_led_count` / `alarm_led_chipset` / `alarm_led_channel_colors` | `2` / `SK6812` / `GRB` | strip geometry and colour order (`GRBW` for RGBW LEDs) |
 | `alarm_early_ppm` / `alarm_danger_ppm` | `4000` / `10000` | amber LEDs + beeps from 10 % of the LEL, buzzer silent from 25 % - see [`local_alarm.md`](local_alarm.md) |
 | `alarm_beep_interval` / `alarm_rtttl` | `5s` / `two_short:...` | repeat interval and RTTTL melody of the pre-alarm beep |
+| `alarm_led_refresh_interval` | `60s` | how often the LED state is re-asserted (self-heal of a stray command) |
+| `mq8_update_interval` / `mq8_adc_update_interval` / `mq8_diag_interval` | `1s` / `1s` / `1s` | poll interval of the `H2 (MQ-8)` entity, of its raw `AO voltage` entity and the publish throttle of its RS / ratio / T-RH diagnostics |
+| `mq8_trh_update_interval` | `60s` | poll interval of the two commented T/RH examples in `packages/mq8.yaml` |
+| `mics_update_interval` / `mics_adc_update_interval` / `mics_diag_interval` | `1s` / `1s` / `1s` | the same three keys for the MiCS-5524 chain |
+| `mics_extra_gas_update_interval` | `1s` | poll interval of the `CO` / `NH3` / `C2H5OH` / `CH4` views (the same analog signal) |
+| `dht22_update_interval` | `60s` | poll interval of the ambient T/RH sensor (≥ 2 s, the 1-wire protocol) |
+| `wifi_signal_update_interval` | `60s` | poll interval of the `WiFi Signal` diagnostic entity |
+
+Every update interval is a substitution at the top of its package, so a chain can
+be slowed down in one place (e.g. `mq8_diag_interval: 30s` in `config.yaml` when
+the Home Assistant recorder matters).  The shipped defaults keep the gas entities
+at 1 Hz - the MOX heaters run continuously - and only the ambient sensors at 60 s.
+`never` is valid only on the two `*_adc_update_interval` keys: it switches the raw
+voltage entity off, while the ppm value keeps being measured (the gas entry samples
+the ADC itself).  The per-entity refresh table is in
+[`home_assistant_alerts.md`](home_assistant_alerts.md).
 
 ## 4. Pick the packages
 

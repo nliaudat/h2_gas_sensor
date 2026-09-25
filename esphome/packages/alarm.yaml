@@ -71,6 +71,7 @@ substitutions:
   alarm_danger_ppm: "10000"  # 25 % LEL: MQ-8 ceiling - buzzer silent, LEDs red
   alarm_beep_interval: 5s  # repeat interval of the pre-alarm beep
   alarm_rtttl: "two_short:d=4,o=5,b=100:16e6,16e6"  # the pre-alarm melody
+  alarm_led_refresh_interval: 60s  # how often the LED state is re-asserted (self-heal)
 
 output:
   - platform: ledc
@@ -88,7 +89,7 @@ rtttl:
 light:
   # Two addressable LEDs that mirror one state each.  `restore_mode: ALWAYS_OFF`
   # keeps a boot from replaying the last alarm colour; the first sensor update
-  # (or the 60 s self-heal below) sets the real state within a second.
+  # (or the `alarm_led_refresh_interval` self-heal below) sets the real state within
   # Every state is a strobe effect with its own colours, so the automations only
   # ever call `light.turn_on: effect: <name>` - one call shape, and re-applying a
   # state cannot leave a half-applied colour behind.
@@ -154,8 +155,8 @@ light:
               duration: 100ms
 
 # One place that decides the LED state from the current MQ-8 value.  It is called
-# on band changes, while the value is invalid and by the 60 s self-heal below -
-# never once per second inside a *blinking* band, which keeps the strobe phase
+# on band changes, while the value is invalid and by the `alarm_led_refresh_interval`
+# self-heal below - never once per second inside a *blinking* band, which keeps the
 # intact.  The invalid case is checked first on purpose: a dead sensor must show
 # blue, never the green of clean air.
 script:
@@ -257,11 +258,11 @@ interval:
             - rtttl.play:
                 id: ${name}_rtttl
                 rtttl: "${alarm_rtttl}"
-  # Visual self-heal: re-assert the state once a minute, so a stray command (or
-  # the light entity toggled from Home Assistant) cannot leave the LEDs lying for
-  # long.  A once-a-minute restart of a strobe is invisible, which is why the fast
-  # path above uses band changes instead of a 1 s timer.
-  - interval: 60s
+  # Visual self-heal: re-assert the state every `alarm_led_refresh_interval`, so a
+  # stray command (or the light entity toggled from Home Assistant) cannot leave
+  # the LEDs lying for long.  A once-a-minute restart of a strobe is invisible,
+  # which is why the fast path above uses band changes instead of a 1 s timer.
+  - interval: ${alarm_led_refresh_interval}
     then:
       - script.execute: ${name}_alarm_state
 
