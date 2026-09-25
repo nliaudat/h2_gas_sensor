@@ -78,7 +78,7 @@ the wiring notes).
 | `enable_pin` | – | Pin that enables the module (DFRobot drives `EN` **low** to wake it - use `inverted: true`). |
 | `calibration` | – | `delay:` (default `60s`), `samples:` (default `10`), `persist:` (default `true`). |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional diagnostic entities (the ratio of the active model, RS in kOhm for the datasheet model, the scaled AO voltage). |
-| `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. |
+| `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `update_interval` | `30s` | Normal polling interval. |
 
 ## Calibration
@@ -127,7 +127,8 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
 * With `log_sensor:` the same messages the component logs (per-update chain,
   calibration results, warnings) are published to a `text_sensor`: the chain can
   be read from Home Assistant without changing the logger level.  The entity
-  state is the *last* message.
+  state is the *last* message; the per-update line is mirrored at most every
+  30 s, so a fast `update_interval` does not flood the recorder.
 
 ## Troubleshooting
 

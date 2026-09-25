@@ -27,9 +27,19 @@ static const char *regression_method_name(uint8_t method) {
   }
 }
 
-void MQGasSensor::publish_log_(const char *message) {
-  if (this->log_sensor_ != nullptr)
-    this->log_sensor_->publish_state(message);
+void MQGasSensor::publish_log_(LogLevel level, const char *message) {
+  if (this->log_sensor_ == nullptr)
+    return;
+  if (level == LOG_DEBUG) {
+    // The per-update line: at a 1 s update interval a text state per second would
+    // flood the Home Assistant recorder, so it is mirrored at most every
+    // LOG_SENSOR_DEBUG_INTERVAL_MS (the console log keeps every line).
+    const uint32_t now = millis();
+    if (this->last_log_sensor_debug_ != 0 && now - this->last_log_sensor_debug_ < LOG_SENSOR_DEBUG_INTERVAL_MS)
+      return;
+    this->last_log_sensor_debug_ = now;
+  }
+  this->log_sensor_->publish_state(message);
 }
 
 void MQGasSensor::log_message_(LogLevel level, const char *format, ...) {
@@ -58,7 +68,7 @@ void MQGasSensor::log_message_(LogLevel level, const char *format, ...) {
       break;
   }
 
-  this->publish_log_(message);
+  this->publish_log_(level, message);
 }
 
 void MQGasSensor::setup() {

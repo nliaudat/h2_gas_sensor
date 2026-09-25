@@ -123,7 +123,7 @@ sensor:
 Both variants define the same two keys, so any platform works (SHT4x, DHT22,
 BME280, a sensor imported from Home Assistant, ...): only the ids are used,
 wherever they are defined. The shipped `packages/mq8.yaml` enables the
-`MQ-8 T/RH correction` entity (`${name}_mq8_correction`) and
+`MQ-8 T-RH correction` entity (`${name}_mq8_correction`) and
 `packages/dht22.yaml` links it with `correction_sensor:`, so the applied factor
 is visible in Home Assistant (1.0000 = uncorrected, either because no T/RH sensor
 is linked or because `correction_mode: none` was written). The package also

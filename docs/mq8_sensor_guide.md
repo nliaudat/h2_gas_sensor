@@ -116,8 +116,8 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 `esphome logs config.yaml` (or the web log) prints every reading as
 `V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the
 `mq_gas_sensors` tag is pinned at `INFO` in
-[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the 30 s line), put
-it back to `DEBUG` under `logger.logs` to read the chain again. The same lines -
-plus the calibration messages and warnings - are mirrored to the `MQ-8 logs` text
-sensor (`log_sensor:` in `packages/mq8.yaml`), so the chain is also readable from
-Home Assistant.
+[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the per-second line),
+put it back to `DEBUG` under `logger.logs` to read the chain again. The same lines
+- plus the calibration messages and warnings - are mirrored to the `MQ-8 logs` text
+sensor (`log_sensor:` in `packages/mq8.yaml`, the per-update line at most every
+30 s), so the chain is also readable from Home Assistant.

@@ -69,6 +69,9 @@ sensor:
     name: "${friendly_name} MiCS-5524 AO voltage"
     pin: ${mics_pin}
     attenuation: 12db
+    # Diagnostic only: the gas entries below convert the ADC themselves on every
+    # poll (`ADCSensor::sample()` takes a fresh reading), so this interval does not
+    # limit the ppm refresh rate - it only paces this entity.
     update_interval: 30s
     accuracy_decimals: 3
     entity_category: diagnostic
@@ -88,7 +91,10 @@ sensor:
     # and `adc_input_max: 6.144` / `adc_pin_max: 6.144` instead.
     adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
-    update_interval: 30s
+    # 1 s: this trace/alarm entry is the fast one (~60 ms of ADC averaging per
+    # second - the heater runs continuously, so slow polling saves nothing). The
+    # four other gas views below stay at 30 s, they are the same signal.
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
@@ -114,7 +120,8 @@ sensor:
   # the accuracy note at the top of this file). Keep the H2 entry as the alarm
   # reference and use these to see how the other gases would interpret the same
   # reading. `conversion: dfrobot` is required: only CO ships with datasheet
-  # coefficients (a = 6.3, b = -1.1).
+  # coefficients (a = 6.3, b = -1.1).  They keep the slow 30 s interval - the H2
+  # entry above is the fast (1 s) alarm reference.
   - platform: mics_5524_gas_sensor
     id: mics_co
     name: "${friendly_name} CO (MiCS-5524)"
@@ -211,6 +218,8 @@ sensor:
     accuracy_decimals: 4
     icon: mdi:chart-line
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
 
   - platform: template
     id: ${name}_mics_voltage
@@ -219,12 +228,15 @@ sensor:
     accuracy_decimals: 3
     icon: mdi:flash
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
 
 # Mirror of the H2 log (the id given by `log_sensor:` on that entry): per-update
 # chain (`V_AO=... x=... ratio=... -> ... ppm`), calibration messages and
-# warnings - the same text the serial console shows.  The state is the last
-# message; drop the entity (and the `log_sensor:` key) if the recorded history is
-# not wanted.
+# warnings - the same text the serial console shows.  The per-update line is
+# mirrored at most every 30 s (the console log keeps every line), calibration
+# messages and warnings immediately; the state is the last message.  Drop the
+# entity (and the `log_sensor:` key) if the recorded history is not wanted.
 text_sensor:
   - platform: template
     id: ${name}_mics_logs

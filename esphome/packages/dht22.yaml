@@ -9,8 +9,9 @@
 # Wiring: VCC -> 3.3 V, GND -> GND, DATA -> `dht22_pin` with a 4.7k - 10k pull-up
 # to 3.3 V (bare 3-pin sensors need it).  The pin must be a bidirectional GPIO
 # (never 34-39) and must not collide with `mq8_pin` (GPIO36) or `mics_pin`
-# (GPIO39).  The DHT needs >= 1 s between reads (60 s here) and must not be
-# powered from 5 V.
+# (GPIO39).  The DHT needs >= 2 s between reads, so it stays at the slow interval
+# (the T/RH compensation changes slowly - the fast sensors are the gas ones).
+# Never power the module from 5 V.
 substitutions:
   dht22_pin: GPIO32  # DATA of the DHT22
   dht22_model: AUTO_DETECT  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 / AUTO_DETECT
@@ -30,7 +31,7 @@ sensor:
   # Merges the two ambient links into the MQ-8 entry of `packages/mq8.yaml` (the
   # keys its commented compensation block documents).  Both links present =>
   # `correction_mode` resolves to `mqdatascience`; the third key routes the
-  # applied factor to the `MQ-8 T/RH correction` diagnostic entity of the package.
+  # applied factor to the `MQ-8 T-RH correction` diagnostic entity of the package.
   - platform: mq_gas_sensors
     id: !extend mq8
     temperature: dht_temperature

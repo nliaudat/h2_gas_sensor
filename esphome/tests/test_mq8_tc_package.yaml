@@ -41,7 +41,7 @@ sensor:
     update_interval: 60s
 
   # NOTE: no stand-in for `${name}_mq8_correction` here - the package itself
-  # enables that entity (the `MQ-8 T/RH correction` diagnostic), so the fragment
+  # enables that entity (the `MQ-8 T-RH correction` diagnostic), so the fragment
   # below can link to it directly.
   # `!extend` merges this fragment into the `id: mq8` sensor of the package (the
   # keys the commented compensation block in the package documents).  No

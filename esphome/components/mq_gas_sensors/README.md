@@ -63,7 +63,7 @@ sensor:
     name: "MQ-8 AO voltage"
     pin: GPIO34
     attenuation: 12db          # ~0-3.1 V input range
-    update_interval: 30s
+    update_interval: 30s       # diagnostic only: the gas entry samples the ADC itself
     entity_category: diagnostic
 
   - platform: mq_gas_sensors
@@ -119,7 +119,7 @@ sensor:
 | `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
-| `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. |
+| `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `update_interval` | `60s` | Normal sensor polling interval. |
 
 With `pin:`, the generated `adc` entry is validated by the ADC platform's own
@@ -324,7 +324,9 @@ your own coefficients fitted to the port's convention.
 * With `log_sensor:` the same messages the component logs are published to a
   `text_sensor` (`V=... RS=... ratio=... -> ... ppm`, calibration results,
   warnings), so the chain can be read from Home Assistant without changing the
-  logger level.  The entity state is the *last* message.
+  logger level.  The entity state is the *last* message; the per-update line is
+  mirrored at most every 30 s, so a fast `update_interval` does not flood the
+  recorder.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
   broken sensor cannot look like clean air.

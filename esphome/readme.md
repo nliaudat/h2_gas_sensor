@@ -34,7 +34,7 @@ packages:
 | Package | Sensor | Notes |
 |---|---|---|
 | `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
-| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T/RH correction` entity |
+| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
@@ -155,7 +155,16 @@ measurement math and every lint command are collected in
   (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
   calibration result).  The same messages are mirrored to the `MQ-8 logs` /
   `MiCS-5524 logs` text sensors (`log_sensor:` in the packages), so they are also
-  visible in Home Assistant without changing the logger level.
+  visible in Home Assistant without changing the logger level - the per-update
+  line at most every 30 s, calibration messages and warnings immediately.
+* **Update rate** - the two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`)
+  refresh every **1 s**: the MOX heaters run continuously (`wifi.power_save_mode:
+  NONE` as well), so slow polling saves nothing.  Every diagnostic entity is
+  throttled to 30 s on the device and the DHT22 stays at 60 s (its protocol needs
+  ≥ 2 s between reads).  1 Hz data is cheap on the ESP32 (≈ 60 ms of ADC sampling
+  per second) but not in the Home Assistant database - see the `recorder:
+  exclude:` recipe in
+  [`../docs/home_assistant_alerts.md`](../docs/home_assistant_alerts.md).
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
   06:00 (SNTP must be synced first). Useful to recover from long-run drift; the
   calibration is in flash and survives it.

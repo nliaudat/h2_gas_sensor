@@ -64,6 +64,9 @@ sensor:
     name: "${friendly_name} MQ-8 AO voltage"
     pin: ${mq8_pin}
     attenuation: 12db
+    # Diagnostic only: the gas entry below converts the ADC itself on every poll
+    # (`ADCSensor::sample()` takes a fresh reading), so this interval does not limit
+    # the ppm refresh rate - it only paces this entity.
     update_interval: 30s
     accuracy_decimals: 3
     entity_category: diagnostic
@@ -83,7 +86,10 @@ sensor:
     adc_input_max: 3.33
     vcc: 5.0
     rl: ${mq8_rl}
-    update_interval: 30s
+    # 1 s: the alarm entity is the fast one (~60 ms of ADC averaging per second -
+    # the MOX heater runs continuously, so there is nothing to save by polling
+    # slowly). The diagnostics below are throttled to the old 30 s cadence.
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 0s  # set to 24h for the burn-in of a brand new sensor
@@ -161,10 +167,12 @@ sensor:
   # `packages/dht22.yaml`).  Without a linked T/RH sensor it publishes 1.0000.
   - platform: template
     id: ${name}_mq8_correction
-    name: "${friendly_name} MQ-8 T/RH correction"
+    name: "${friendly_name} MQ-8 T-RH correction"
     accuracy_decimals: 4
     icon: mdi:thermometer-water
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
   # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
   # (remove all four keys/entities together if these entities are not wanted; the
@@ -176,6 +184,8 @@ sensor:
     accuracy_decimals: 3
     icon: mdi:chart-line
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
   - platform: template
     id: ${name}_mq8_rs
@@ -184,13 +194,17 @@ sensor:
     accuracy_decimals: 3
     icon: mdi:omega
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
 # Mirror of the MQ-8 log (the id given by `log_sensor:` above): per-update chain
 # (`V=... RS=... ratio=... -> ... ppm`), calibration messages and warnings - the
 # same text the serial console shows, so the chain can be read from Home
-# Assistant without setting the `mq_gas_sensors` tag back to DEBUG.  The state is
-# the last message; drop the entity (and the `log_sensor:` key) if the recorded
-# history is not wanted.
+# Assistant without setting the `mq_gas_sensors` tag back to DEBUG.  The
+# per-update line is mirrored at most every 30 s (the console log keeps every
+# line), calibration messages and warnings immediately; the state is the last
+# message.  Drop the entity (and the `log_sensor:` key) if the recorded history
+# is not wanted.
 text_sensor:
   - platform: template
     id: ${name}_mq8_logs

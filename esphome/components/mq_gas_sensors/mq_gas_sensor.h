@@ -81,6 +81,12 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   /// Size of the message buffer of `log_message_()` (also the text sensor limit).
   static constexpr size_t LOG_BUFFER_SIZE = 160;
 
+  /// Minimum interval between two *per-update* (`LOG_DEBUG`) messages mirrored to
+  /// `log_sensor_`.  The sensor may poll at 1 Hz, and a text state per second would
+  /// flood the Home Assistant recorder - calibration messages, warnings and errors
+  /// are always mirrored immediately (the console log is never throttled).
+  static constexpr uint32_t LOG_SENSOR_DEBUG_INTERVAL_MS = 30000;
+
   // ----------------------------------------------------------------- runtime
   /// (Re)start an R0 calibration in clean air (deferred until `warmup_time` ended).
   void request_calibration();
@@ -112,8 +118,9 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void save_r0_();
   bool load_r0_();
   void log_config_();
-  /// Publish a message to `log_sensor_` (no-op when it is not configured).
-  void publish_log_(const char *message);
+  /// Publish a message to `log_sensor_` (no-op when it is not configured);
+  /// `LOG_DEBUG` messages are rate limited to `LOG_SENSOR_DEBUG_INTERVAL_MS`.
+  void publish_log_(LogLevel level, const char *message);
   /// Log a message on the console and mirror it to `log_sensor_`; it is prefixed
   /// with the sensor type and the gas (`'MQ-8 H2': ...`) so several sensors stay
   /// readable.
@@ -177,6 +184,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *correction_sensor_{nullptr};
   text_sensor::TextSensor *log_sensor_{nullptr};
+  uint32_t last_log_sensor_debug_{0};  ///< `millis()` of the last mirrored DEBUG message
 
   ESPPreferenceObject r0_pref_{};
 };

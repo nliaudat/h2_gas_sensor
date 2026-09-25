@@ -74,6 +74,12 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   /// Size of the message buffer of `log_message_()` (also the text sensor limit).
   static constexpr size_t LOG_BUFFER_SIZE = 160;
 
+  /// Minimum interval between two *per-update* (`LOG_DEBUG`) messages mirrored to
+  /// `log_sensor_`.  The sensor may poll at 1 Hz, and a text state per second would
+  /// flood the Home Assistant recorder - calibration messages, warnings and errors
+  /// are always mirrored immediately (the console log is never throttled).
+  static constexpr uint32_t LOG_SENSOR_DEBUG_INTERVAL_MS = 30000;
+
   // ----------------------------------------------------------------- runtime
   /// (Re)start the clean-air calibration (deferred until `warmup_time` ended).
   void request_calibration();
@@ -106,8 +112,9 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   void save_reference_();
   bool load_reference_();
   void log_config_();
-  /// Publish a message to `log_sensor_` (no-op when it is not configured).
-  void publish_log_(const char *message);
+  /// Publish a message to `log_sensor_` (no-op when it is not configured);
+  /// `LOG_DEBUG` messages are rate limited to `LOG_SENSOR_DEBUG_INTERVAL_MS`.
+  void publish_log_(LogLevel level, const char *message);
   /// Log a message on the console and mirror it to `log_sensor_`; it is prefixed
   /// with the gas (`'H2': ...`) so several channels stay readable.
   void log_message_(LogLevel level, const char *format, ...);
@@ -164,6 +171,7 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   sensor::Sensor *rs_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
   text_sensor::TextSensor *log_sensor_{nullptr};
+  uint32_t last_log_sensor_debug_{0};  ///< `millis()` of the last mirrored DEBUG message
 
   ESPPreferenceObject reference_pref_{};
 };
