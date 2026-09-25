@@ -1,10 +1,13 @@
 # Validation-only regression config for the MQDataScience extras
 # (run: esphome config tests/test_tc.yaml)
 #
-#   * temperature/humidity correction enabled (`correction_mode: mqdatascience`)
-#     driven by two template sensors (no I2C hardware needed for validation)
-#   * alternative MQ-8 H2 coefficient dataset (`curve: mqdatascience`)
-#   * correction diagnostic + `correction_clamp: scaled` (their own behaviour)
+#   * temperature/humidity correction selected **automatically** as soon as both
+#     ambient measurements are linked (`mq8_tc_auto`, no `correction_mode`)
+#   * the same correction written explicitly, with the alternative MQ-8 H2
+#     coefficient dataset (`curve: mqdatascience`) and `correction_clamp: scaled`
+#     (MQDataScience's own behaviour) - `mq8_tc`
+#   * explicit opt-out: both links present, `correction_mode: none` - `mq8_tc_none`
+#   * all three driven by template sensors (no I2C hardware needed for validation)
 esphome:
   name: mq_tc_test
 esp32:
@@ -36,6 +39,11 @@ sensor:
     name: "Test correction factor"
     accuracy_decimals: 4
 
+  - platform: template
+    id: test_correction_auto
+    name: "Test correction factor (auto)"
+    accuracy_decimals: 4
+
   - platform: mq_gas_sensors
     id: mq8_tc
     name: "H2 with T-RH correction"
@@ -57,3 +65,57 @@ sensor:
     correction_sensor: test_correction
     min_ppm: 0
     max_ppm: 10000
+
+  # No `correction_mode:` on purpose: linking both ambient measurements selects
+  # the mqdatascience compensation (the clamp stays at the safe `absolute`).
+  - platform: mq_gas_sensors
+    id: mq8_tc_auto
+    name: "H2 with automatic T-RH correction"
+    sensor_type: MQ-8
+    gas: H2
+    pin: GPIO34
+    adc_attenuation: 12db
+    voltage_multiplier: 1.5
+    adc_input_max: 3.33
+    rl: 10.0
+    r0: 0.29
+    temperature: test_temperature
+    humidity: test_humidity
+    correction_sensor: test_correction_auto
+    min_ppm: 0
+    max_ppm: 10000
+
+  # Both links present but the compensation explicitly switched off: valid, and
+  # the value is published uncorrected.
+  - platform: mq_gas_sensors
+    id: mq8_tc_none
+    name: "H2 with the T-RH correction opted out"
+    sensor_type: MQ-8
+    gas: H2
+    pin: GPIO33
+    adc_attenuation: 12db
+    voltage_multiplier: 1.5
+    adc_input_max: 3.33
+    rl: 10.0
+    r0: 0.29
+    temperature: test_temperature
+    humidity: test_humidity
+    correction_mode: none
+    min_ppm: 0
+    max_ppm: 10000
+
+  # Linked ambient measurements on a type without a correction model (MQ-9 uses a
+  # two-segment model upstream): still valid, the links are ignored with a warning.
+  - platform: mq_gas_sensors
+    id: mq9_no_tc
+    name: "MQ-9 with links but no correction model"
+    sensor_type: MQ-9
+    gas: CO
+    pin: GPIO32
+    adc_attenuation: 12db
+    voltage_multiplier: 1.5
+    adc_input_max: 3.33
+    rl: 10.0
+    r0: 0.29
+    temperature: test_temperature
+    humidity: test_humidity

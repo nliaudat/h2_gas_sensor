@@ -48,7 +48,9 @@ averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
   automatic **clean-air calibration** after a configurable delay.
 * Warm-up/burn-in suppression, PPM range clamps, `correction_factor`, ratio
   direction switch for bit-exact `MQUnifiedsensor::readSensorR0Rs()` parity.
-* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage.
+* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage, and a `log_sensor:`
+  `text_sensor` that mirrors the component log (chain, calibration, warnings)
+  into Home Assistant.
 * Host-testable math (`tests/mq_math_test.cpp`, no ESPHome needed).
 
 ## Minimal configuration
@@ -61,7 +63,7 @@ sensor:
     name: "MQ-8 AO voltage"
     pin: GPIO34
     attenuation: 12db          # ~0-3.1 V input range
-    update_interval: 30s
+    update_interval: 30s       # diagnostic only: the gas entry samples the ADC itself
     entity_category: diagnostic
 
   - platform: mq_gas_sensors
@@ -110,13 +112,14 @@ sensor:
 | `warmup_time` | `0s` | Burn-in/warm-up: nothing is published (state `unknown`) before it elapses. Use `24h`+ for a new sensor. |
 | `min_ppm`, `max_ppm` | table/datasheet | Clamp of the published value (`MQ-8`: 0 … 10 000 ppm). |
 | `correction_factor` | `0.0` | Added to the ratio (and to R0) as in `MQUnifiedsensor` (`readSensor(correctionFactor)`). |
-| `correction_mode` | `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Needs `temperature:`/`humidity:` and a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
+| `correction_mode` | `mqdatascience` when both links are set, otherwise `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Selected automatically by `temperature:`/`humidity:`; needs a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm` (the alarm ceiling does not move); `scaled` clips to `max_ppm * correction` (MQDataScience's own behaviour). |
 | `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `a:`/`b:`. |
-| `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors used by `correction_mode`. |
+| `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors. **Linking both selects `correction_mode: mqdatascience`**; a half-wired pair (only one of the two) is rejected at config time. |
 | `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
+| `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `update_interval` | `60s` | Normal sensor polling interval. |
 
 With `pin:`, the generated `adc` entry is validated by the ADC platform's own
@@ -154,7 +157,7 @@ provide it, in order of precedence:
    `persist: false`). Once a valid `R0` is stored it is restored at boot and the
    calibration is skipped - important for a battery room, where the air is *not*
    clean when hydrogen is present.
-3. **On demand** - force a new calibration from an automation:
+3. **On demand** - force a new calibration from an automation or a button:
    ```yaml
    esphome:
      on_boot:
@@ -163,6 +166,12 @@ provide it, in order of precedence:
    ```
    The calibrated value is logged (`R0 = ... kOhm`), so it can be pinned with
    `r0:` afterwards if you prefer a static configuration.
+
+   A request is **deferred until `warmup_time` has elapsed** (the calibration
+   needs a settled sensor) and the state stays `unknown` while the calibration is
+   pending or running - a calibration *changes* `R0`, so the previous value must
+   not stay visible. A request while one is already pending/running is ignored
+   with a warning. `packages/mq8.yaml` wires the *MQ-8 recalibrate* button to it.
 
 Other calibration facts:
 
@@ -310,19 +319,29 @@ your own coefficients fitted to the port's convention.
   are averaged (with `sample_interval` between them, like the library's
   `retries`/`retry_interval`), then `RS`, the ratio and the PPM are computed.
 * Nothing is published (state stays `unknown`) during the warm-up window, while
-  a calibration is pending/running, or while `R0` is unknown.
+  a calibration is pending/running (the previous value was computed with the old
+  `R0`), or while `R0` is unknown.
+* With `log_sensor:` the same messages the component logs are published to a
+  `text_sensor` (`V=... RS=... ratio=... -> ... ppm`, calibration results,
+  warnings), so the chain can be read from Home Assistant without changing the
+  logger level.  The entity state is the *last* message; the per-update line is
+  mirrored at most every 30 s, so a fast `update_interval` does not flood the
+  recorder.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
   broken sensor cannot look like clean air.
 * Out-of-range results (overflow, `FLT_MAX`) are clamped to `max_ppm`; with
   `correction_clamp: scaled` the ceiling follows the correction factor.
-* With `correction_mode: mqdatascience` the ratio is divided by the T/RH
-  correction before the regression; `ratio_sensor` still publishes the measured
-  RS/R0, `correction_sensor` the applied factor, and the debug log shows
+* With `correction_mode: mqdatascience` (selected as soon as `temperature:` and
+  `humidity:` are both linked) the ratio is divided by the T/RH correction before
+  the regression; `ratio_sensor` still publishes the measured RS/R0,
+  `correction_sensor` the applied factor, and the debug log shows
   `V=… RS=… ratio=… (correction=…) -> … ppm`.
 * Configuration problems (unknown `sensor_type`, gas without a curve, missing
-  `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`) are reported at
-  compile time; missing calibration and heater notes are logged as warnings.
+  `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`, a correction mode
+  without both ambient links, a half-wired `temperature:`/`humidity:` pair) are
+  reported at compile time; missing calibration and heater notes are logged as
+  warnings.
 
 ## Troubleshooting
 

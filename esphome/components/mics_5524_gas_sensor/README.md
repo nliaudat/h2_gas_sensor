@@ -78,6 +78,7 @@ the wiring notes).
 | `enable_pin` | – | Pin that enables the module (DFRobot drives `EN` **low** to wake it - use `inverted: true`). |
 | `calibration` | – | `delay:` (default `60s`), `samples:` (default `10`), `persist:` (default `true`). |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional diagnostic entities (the ratio of the active model, RS in kOhm for the datasheet model, the scaled AO voltage). |
+| `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `update_interval` | `30s` | Normal polling interval. |
 
 ## Calibration
@@ -96,6 +97,11 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
   `air_reference:` / `r0:` to skip the calibration at boot.
 * Re-calibrate after changing the wiring, the divider (`voltage_multiplier`) or
   the module: the stored reference is only valid for the same hardware.
+* A request (`request_calibration()`, e.g. from the *MiCS-5524 recalibrate*
+  button of `packages/mics5524.yaml`) is **deferred until `warmup_time` has
+  elapsed**: the state stays `unknown` while the calibration is pending or
+  running, so a button press can never capture an unstable reading.  A press
+  while a calibration is already pending/running is ignored with a warning.
 * Do not calibrate while hydrogen may be present, and do not touch the sensor
   during the warm-up (the DFRobot example says exactly that).
 
@@ -118,6 +124,11 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
   They see the same gas mixture through different curves, each with its own
   clean-air calibration - the sensor has no selectivity, so they are *views* of
   one signal, not independent measurements.
+* With `log_sensor:` the same messages the component logs (per-update chain,
+  calibration results, warnings) are published to a `text_sensor`: the chain can
+  be read from Home Assistant without changing the logger level.  The entity
+  state is the *last* message; the per-update line is mirrored at most every
+  30 s, so a fast `update_interval` does not flood the recorder.
 
 ## Troubleshooting
 
@@ -126,6 +137,7 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
 | state stays `unknown`, `no air reference` warning | no `calibration:` block and no `air_reference:`/`r0:` |
 | `analog output reads 0.0000 V` warning | AO not wired, module not powered from 5 V, EN not enabled (or the wrong polarity) |
 | ratio stuck near 1.0 | sensor still warming up, or a gas-free environment (that is the baseline) |
+| ratio sits at 0.8 - 0.9 in clean air, or drifts away from 1.0 after a calibration | the stored reference is stale: it was captured while the module was still warming up / burning in, or the sensor drifted. Re-calibrate once the reading is stable (24 - 48 h of burn-in for a new module) - the vendor model over-reports while the reference is too high (the ratio is normalised against it) |
 | values jump around | ESP32 ADC noise - raise `samples`, add an RC filter, or use an `ads1115` (16 bit, gain 6.144 V covers the 0-5 V output without a divider) |
 | ppm far too high | wrong `conversion` for the hardware (the vendor model expects the module's analog front-end), or a reference captured while gas was present |
 | ppm always 0 | the vendor thresholds sit close to the clean-air ratio; re-calibrate in really clean air and check the ratio diagnostic |

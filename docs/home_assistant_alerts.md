@@ -13,9 +13,9 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MQ-8 AO voltage` | V | diagnostic | `packages/mq8.yaml` |
 | `MQ-8 RS-R0 ratio` | - | diagnostic | `packages/mq8.yaml` |
 | `MQ-8 RS` | kΩ | diagnostic | `packages/mq8.yaml` |
-| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8.yaml`, compensation enabled |
-| `ambient temperature` | °C | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
-| `ambient humidity` | % | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
+| `MQ-8 T-RH correction` | - | diagnostic | `packages/mq8.yaml`, linked by `packages/dht22.yaml` |
+| `ambient temperature` | °C | measurement | `packages/dht22.yaml` (or the mq8 example, T/RH sensor enabled) |
+| `ambient humidity` | % | measurement | `packages/dht22.yaml` (or the mq8 example, T/RH sensor enabled) |
 | `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `CO (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `NH3 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
@@ -24,6 +24,10 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
+| `MQ-8 logs` | text | diagnostic | `packages/mq8.yaml` |
+| `MQ-8 recalibrate` | - | button (config) | `packages/mq8.yaml` |
+| `MiCS-5524 logs` | text | diagnostic | `packages/mics5524.yaml` |
+| `MiCS-5524 recalibrate` | - | button (config) | `packages/mics5524.yaml` |
 | `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
 | `restart` | - | switch | `packages/switch.yaml` |
 
@@ -32,9 +36,61 @@ dashboard. With `friendly_name: "H2 sensor board"` the alarm entity is
 `sensor.h2_sensor_board_h2_mq_8` - keep `name` / `friendly_name` stable once you
 have automations, otherwise every entity id changes.
 
-Each sensor updates every **30 s** (four averaged ADC samples). The
+The two `logs` text sensors mirror the component log (the per-update chain, the
+calibration messages and the warnings) - the same text `esphome logs` prints, so
+the measurement chain can be read from Home Assistant without touching
+`logger.logs`.  The per-update line is mirrored at most every 30 s (the console
+keeps every line), calibration messages and warnings immediately; each state
+replaces the previous one.
+
+The two `recalibrate` buttons start a clean-air calibration (`request_calibration()`).
+**Only press them in clean air**: the measured reference is written to flash and
+used from then on.  A request is deferred until `warmup_time` has elapsed and the
+value stays `unknown` while the calibration is pending or running.
+
+## Update rate, latency and the recorder
+
+| Entity | Refresh |
+|---|---|
+| `H2 (MQ-8)`, `H2 trace (MiCS-5524)` | **1 s** (four ADC conversions averaged per second ≈ 60 ms of sampling) |
+| `MQ-8 AO voltage`, `MQ-8 RS`, `MQ-8 RS-R0 ratio`, `MQ-8 T-RH correction` | 30 s (throttled on the device) |
+| `MiCS-5524 AO voltage`, `MiCS-5524 AO (scaled)`, `MiCS-5524 ratio`, the four extra gas views, the two `logs` sensors | 30 s |
+| `ambient temperature` / `ambient humidity` | 60 s (the DHT needs ≥ 2 s between reads) |
+| `WiFi Signal` | 60 s |
+
+The two alarm entities are the fast ones (the MOX heaters run continuously, so
+slow polling saves nothing): an alarm state reaches Home Assistant within about a
+second, then your automation's `for:` delay applies.  The
 temperature/humidity-corrected value is published on the same `H2 (MQ-8)`
 entity; the diagnostic `MQ-8 RS-R0 ratio` always stays uncorrected.
+
+Recording 1 Hz data costs one state row per *changed* value, so a busy MQ-8 can
+add tens of thousands of rows per hour.  Keep the alarm entities and exclude the
+fast diagnostics / logs from the recorder:
+
+```yaml
+# Home Assistant configuration.yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.h2_sensor_board_mq_8_ao_voltage
+      - sensor.h2_sensor_board_mq_8_rs
+      - sensor.h2_sensor_board_mq_8_rs_r0_ratio
+      - sensor.h2_sensor_board_mq_8_t_rh_correction
+      - sensor.h2_sensor_board_mq_8_logs
+      - sensor.h2_sensor_board_mics_5524_ao_voltage
+      - sensor.h2_sensor_board_mics_5524_ao_scaled
+      - sensor.h2_sensor_board_mics_5524_ratio
+      - sensor.h2_sensor_board_mics_5524_logs
+      # optional: the four extra MiCS-5524 gas views (30 s, not used for alerting)
+      - sensor.h2_sensor_board_co_mics_5524
+      - sensor.h2_sensor_board_nh3_mics_5524
+      - sensor.h2_sensor_board_c2h5oh_mics_5524
+      - sensor.h2_sensor_board_ch4_mics_5524
+```
+
+The entity ids follow `friendly_name`; a different `name:`/`friendly_name:`
+changes them (the table above uses the shipped `H2 sensor board`).
 
 ## Thresholds
 
@@ -98,7 +154,7 @@ something looks wrong.
 |---|---|
 | "do I need to act?" | `H2 (MQ-8)` - the alarm reference (4 000 - 10 000 ppm) |
 | "is something happening before the MQ-8 reacts?" | `H2 trace (MiCS-5524)` - trend in the 100 - 1 000 ppm band |
-| "why is the reading what it is?" | the diagnostics: `MQ-8 AO voltage` (wiring/divider), `RS` and `RS-R0 ratio` (RL, ageing), `T/RH correction` (compensation) |
+| "why is the reading what it is?" | the diagnostics: `MQ-8 AO voltage` (wiring/divider), `RS` and `RS-R0 ratio` (RL, ageing), `T-RH correction` (compensation) |
 
 The MiCS-5524 sees five gases on a single output and cannot tell them apart: use
 it for the trend, never as the only alarm source. `packages/mics5524.yaml`
@@ -121,6 +177,12 @@ on the MQ-8).
 * **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
   tags are pinned at `INFO`); `esphome logs config.yaml` (or the web log) prints
   the measurement chain - see [`troubleshooting.md`](troubleshooting.md) for how
-  to read it.
+  to read it. The same messages are mirrored into Home Assistant by the
+  `MQ-8 logs` / `MiCS-5524 logs` text sensors, so the chain is readable without
+  changing the logger level.
+* **Re-calibration** - the `MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons
+  start a clean-air calibration from Home Assistant (press them *only* in clean
+  air; the value is stored in flash). The MiCS button refreshes all five gas
+  entries because they share one physical sensor.
 * **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
   so the new firmware starts.

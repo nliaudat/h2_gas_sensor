@@ -65,13 +65,16 @@ Wiring, in the package you include:
 
 | Package | Sensor | When to use |
 |---|---|---|
-| `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor and the compensation are commented out inside |
+| `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor examples and the comment-only compensation keys are inside |
+| `packages/dht22.yaml` | DHT22 (ambient T/RH) | when a DHT22 is wired: it links `temperature:`/`humidity:` into `id: mq8`, which selects the compensation |
 | `packages/mics5524.yaml` | MiCS-5524 | additive, when the trace sensor is wired |
 
 There is a single MQ-8 package: it defines `id: mq8` and links the ambient sensors
-by id (`temperature:` / `humidity:`), so the optional compensation is switched on
-by uncommenting the matching blocks inside the package instead of by including
-another package. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
+by id (`temperature:` / `humidity:`), so there is no per-sensor variant. **Linking
+both ids selects the MQDataScience compensation** - either from
+`packages/dht22.yaml` (the shipped `id: !extend mq8` fragment) or by uncommenting
+the matching block inside `packages/mq8.yaml`; `correction_mode: none` is the
+explicit opt-out. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
 
 ## 5. Wire it
 
@@ -86,8 +89,9 @@ another package. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
 * Optional SHT4x (the I2C example in `packages/mq8.yaml`): `VDD` 3.3 V, `GND`,
   `SDA` / `SCL` to `mq8_i2c_sda` / `mq8_i2c_scl` (most breakouts already carry
   the pull-ups); uncomment the `i2c:` block and that sensor.
-* Optional DHT11/DHT22 (the 1-wire example in `packages/mq8.yaml`): `VCC` 3.3 V,
-  `GND`, `DATA` -> `mq8_dht_pin` plus a 4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare
+* Optional DHT11/DHT22 - the 1-wire example inside `packages/mq8.yaml`
+  (`mq8_dht_pin`) or the shipped `packages/dht22.yaml` (`dht22_pin`): `VCC` 3.3 V,
+  `GND`, `DATA` -> that pin plus a 4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare
   3-pin sensors need it). Never route `DATA` to an input-only pin (GPIO34-39) -
   the 1-wire protocol drives the line - and do not power a module whose pull-up
   sits on 5 V from 5 V: the GPIO is not 5 V tolerant.
@@ -121,20 +125,26 @@ esphome run config.yaml           # flash over USB, later over OTA
    stored in flash (`persist: true`) and reused after every reboot:
    * MQ-8: `ratio_in_clean_air: 70` (RS/R0 in clean air), 50 samples;
    * MiCS-5524: the vendor clean-air reference (`x_air = VCC - V_AO`), 10 samples.
-4. **Force a re-calibration** with an `on_boot` action in your own YAML:
+4. **Force a re-calibration** with the `MQ-8 recalibrate` /
+   `MiCS-5524 recalibrate` button in Home Assistant, or with an `on_boot` action
+   in your own YAML:
 
    ```yaml
    esphome:
      on_boot:
        - delay: 5min
-       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration();
+       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
    ```
+
+   A request is deferred until `warmup_time` has elapsed and the value stays
+   `unknown` while the calibration is pending or running - do not press the
+   button while hydrogen (or alcohol) may be present.
 
 5. **Pin the result** once you trust it: `r0: 0.2899` for the MQ-8 or
    `air_reference: <value>` for the MiCS, using the value printed in the log
-   (`R0 = ... kOhm`, `air reference = ...`). A pinned value with no
-   `calibration:` block is the deterministic setup for a room that is not always
-   clean.
+   (`R0 = ... kOhm`, `air reference = ...`) and mirrored to the `MQ-8 logs` /
+   `MiCS-5524 logs` text sensor. A pinned value with no `calibration:` block is
+   the deterministic setup for a room that is not always clean.
 6. **Re-calibrate** after changing the wiring, the divider or `rl:`, and every
    few months - metal-oxide sensors drift.
 

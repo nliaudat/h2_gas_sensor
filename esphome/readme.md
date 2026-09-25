@@ -8,7 +8,7 @@ value and publishes it to Home Assistant.
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
-| Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the MQDataScience compensation of the MQ-8 ratio |
+| Optional | Ambient temperature/humidity: `packages/dht22.yaml` (1-wire DHT22, shipped) or any other sensor (SHT4x on I2C, ...) linked by id - it selects the MQDataScience compensation of the MQ-8 ratio |
 | Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A) and `components/mics_5524_gas_sensor/` (MiCS-5524) |
 
 This file is the **firmware reference**: which package does what, where every
@@ -27,22 +27,32 @@ packages:
   sensors_others: !include packages/sensors_others.yaml
   switch: !include packages/switch.yaml
   mq8: !include packages/mq8.yaml          # ADC + gas sensor; T/RH blocks commented inside
+  dht22: !include packages/dht22.yaml      # ambient T/RH + the links that switch the compensation on
   # mics5524: !include packages/mics5524.yaml   # additive, optional hardware
 ```
 
 | Package | Sensor | Notes |
 |---|---|---|
-| `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the compensation are commented out |
+| `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
+| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
 (`temperature:`/`humidity:` in the `mq_gas_sensors` entry), so there is no
-per-sensor variant and nothing to keep in sync. Uncomment one of the two
-commented T/RH sensor blocks (SHT4x on I2C, DHT11/DHT22 on 1-wire), the matching
-wiring substitutions and the compensation block inside the package when such a
-sensor is wired - see
-[`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md).
-A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
+per-sensor variant and nothing to keep in sync. Linking **both** ids selects the
+MQDataScience compensation automatically; `correction_mode: none` in the linking
+fragment is the explicit opt-out and a half-wired pair fails at config time. Two
+ways to link, both documented in
+[`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md):
+
+* `packages/dht22.yaml` - the shipped 1-wire example, which extends the MQ-8 entry
+  from the outside (`id: !extend mq8`), so `mq8.yaml` stays untouched;
+* uncomment the SHT4x/DHT block inside `packages/mq8.yaml` together with the two
+  `temperature:`/`humidity:` keys (the ids `${name}_mq8_temperature` /
+  `${name}_mq8_humidity` are defined by those examples).
+
+A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error, a
+DHT22 (±0.5 °C / ±2 % RH) is better, an SHT4x better still.
 `mics5524.yaml` can be added on top and keeps the MQ-8 defaults untouched.
 
 ## User-editable files
@@ -52,6 +62,7 @@ A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
 | `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
 | `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
 | `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
+| `packages/dht22.yaml` | DHT22 pin/model (`dht22_pin`, `dht22_model`) + the `!extend mq8` fragment that links `temperature:`/`humidity:` (drop the package include when no T/RH sensor is wired) | Only with a DHT22 |
 | `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN plus one gas entity per vendor curve (H2, CO, NH3, C2H5OH, CH4 - optional hardware) | Only with a MiCS-5524 |
 | `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
@@ -100,7 +111,8 @@ hydrogen is present:
 | Delay / samples | 5 min / 50 | 3 min / 10 |
 | Pin it with | `r0: <value>` | `air_reference: <value>` |
 
-Force a re-calibration when the wiring, the divider or `rl:` changed:
+Force a re-calibration when the wiring, the divider or `rl:` changed - the
+`MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons in Home Assistant, or:
 
 ```yaml
 esphome:
@@ -109,9 +121,15 @@ esphome:
     - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
 ```
 
-The log prints the result (`R0 = ... kOhm`, `air reference = ...`); pin it and
-drop the `calibration:` block for a deterministic setup. Re-calibrate every few
-months - metal-oxide sensors drift. Full workflow:
+A request is deferred until `warmup_time` has elapsed (a cold sensor would
+capture a wrong reference) and the value stays `unknown` while the calibration is
+pending or running - a calibration changes the reference, so the previous value
+must not stay visible.
+
+The log prints the result (`R0 = ... kOhm`, `air reference = ...`) and mirrors it
+to the `MQ-8 logs` / `MiCS-5524 logs` text sensor; pin it and drop the
+`calibration:` block for a deterministic setup. Re-calibrate every few months -
+metal-oxide sensors drift. Full workflow:
 [`../docs/getting_started.md`](../docs/getting_started.md).
 
 ## Validate, flash, test
@@ -135,7 +153,18 @@ measurement math and every lint command are collected in
   are pinned at `INFO`, so the per-update raw values are off by default - set
   them back to `DEBUG` under `logger.logs` to read them
   (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
-  calibration result).
+  calibration result).  The same messages are mirrored to the `MQ-8 logs` /
+  `MiCS-5524 logs` text sensors (`log_sensor:` in the packages), so they are also
+  visible in Home Assistant without changing the logger level - the per-update
+  line at most every 30 s, calibration messages and warnings immediately.
+* **Update rate** - the two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`)
+  refresh every **1 s**: the MOX heaters run continuously (`wifi.power_save_mode:
+  NONE` as well), so slow polling saves nothing.  Every diagnostic entity is
+  throttled to 30 s on the device and the DHT22 stays at 60 s (its protocol needs
+  ≥ 2 s between reads).  1 Hz data is cheap on the ESP32 (≈ 60 ms of ADC sampling
+  per second) but not in the Home Assistant database - see the `recorder:
+  exclude:` recipe in
+  [`../docs/home_assistant_alerts.md`](../docs/home_assistant_alerts.md).
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
   06:00 (SNTP must be synced first). Useful to recover from long-run drift; the
   calibration is in flash and survives it.

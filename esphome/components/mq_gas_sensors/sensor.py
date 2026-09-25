@@ -9,7 +9,7 @@ creates a hidden internal ``adc`` sensor with the requested attenuation).
 import logging
 
 import esphome.codegen as cg
-from esphome.components import sensor, voltage_sampler
+from esphome.components import sensor, text_sensor, voltage_sampler
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ATTENUATION,
@@ -44,6 +44,7 @@ from . import (
     CONF_DIVIDER,
     CONF_GAS,
     CONF_HUMIDITY,
+    CONF_LOG_SENSOR,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
     CONF_PERSIST,
@@ -177,7 +178,13 @@ CALIBRATION_SCHEMA = cv.Schema(
 
 
 def _validate_config(config: ConfigType) -> ConfigType:
-    """Cross-check the type/gas/coefficient combination at compile time."""
+    """Cross-check the coefficients and resolve the compensation mode.
+
+    Also enforces the type/gas/coefficient combination at compile time and
+    resolves ``correction_mode``: the temperature/humidity compensation is
+    selected as soon as both ambient measurements are linked, ``none`` is the
+    explicit opt-out and a *partial* link fails here.
+    """
     type_key = config[CONF_SENSOR_TYPE]
     label = label_for(type_key)
 
@@ -204,10 +211,52 @@ def _validate_config(config: ConfigType) -> ConfigType:
             f"min_ppm ({resolved.min_ppm})"
         )
 
-    correction_mode = config[CONF_CORRECTION_MODE]
+    # Temperature/humidity compensation: `temperature:`/`humidity:` are the
+    # switch, `correction_mode` only makes the choice explicit.  A partial link
+    # is always a mistake (`cv.Invalid`), so `missing_sources` below is either
+    # empty (both linked) or holds both keys.
+    source_keys = (CONF_TEMPERATURE, CONF_HUMIDITY)
+    linked = [config.get(key) is not None for key in source_keys]
+    if any(linked) and not all(linked):
+        missing = [key for key, ok in zip(source_keys, linked, strict=True) if not ok]
+        raise cv.Invalid(
+            f"'temperature:' and 'humidity:' must be linked together, "
+            f"missing: {', '.join(missing)}"
+        )
     missing_sources = [
-        key for key in (CONF_TEMPERATURE, CONF_HUMIDITY) if config.get(key) is None
+        key for key, ok in zip(source_keys, linked, strict=True) if not ok
     ]
+
+    correction_mode = config.get(CONF_CORRECTION_MODE)
+    # `None` = the key was not written, i.e. the mode is derived from the links.
+    explicit_mode = correction_mode
+    if correction_mode is None:
+        if missing_sources:
+            correction_mode = "none"
+            config[CONF_CORRECTION_MODE] = correction_mode
+        elif resolved.tc is None:
+            # The linked measurements cannot be used for this type: stay valid
+            # and say so instead of failing a previously working configuration.
+            correction_mode = "none"
+            config[CONF_CORRECTION_MODE] = correction_mode
+            _LOGGER.warning(
+                "%s has no temperature/humidity correction model (supported types: "
+                "%s) - the linked 'temperature:'/'humidity:' are ignored and the PPM "
+                "value is published uncorrected",
+                label,
+                ", ".join(corrected_types()),
+            )
+        else:
+            correction_mode = "mqdatascience"
+            config[CONF_CORRECTION_MODE] = correction_mode
+            _LOGGER.info(
+                "%s: 'temperature:'/'humidity:' are linked - enabling the '%s' "
+                "compensation (write 'correction_mode: none' to publish "
+                "uncorrected values)",
+                label,
+                correction_mode,
+            )
+
     if correction_mode != "none":
         if missing_sources:
             raise cv.Invalid(
@@ -219,11 +268,10 @@ def _validate_config(config: ConfigType) -> ConfigType:
                 f"{label} has no temperature/humidity correction model, "
                 f"supported types: {', '.join(corrected_types())}"
             )
-    elif not missing_sources:
-        _LOGGER.warning(
-            "%s: 'temperature:'/'humidity:' are configured but 'correction_mode' is "
-            "'none' - the PPM value is published without temperature/humidity "
-            "compensation",
+    elif not missing_sources and explicit_mode is not None:
+        _LOGGER.info(
+            "%s: temperature/humidity compensation disabled on request "
+            "('correction_mode: none') - the PPM value is published uncorrected",
             label,
         )
 
@@ -349,9 +397,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_MIN_PPM): cv.float_,
             cv.Optional(CONF_MAX_PPM): cv.positive_not_null_float,
             cv.Optional(CONF_CORRECTION_FACTOR, default=0.0): cv.float_,
-            cv.Optional(CONF_CORRECTION_MODE, default="none"): cv.one_of(
-                *CORRECTION_MODES, lower=True
-            ),
+            cv.Optional(CONF_CORRECTION_MODE): cv.one_of(*CORRECTION_MODES, lower=True),
             cv.Optional(CONF_CORRECTION_CLAMP, default="absolute"): cv.one_of(
                 *CORRECTION_CLAMPS, lower=True
             ),
@@ -365,6 +411,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RS_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_CORRECTION_SENSOR): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_LOG_SENSOR): cv.use_id(text_sensor.TextSensor),
         }
     )
     .extend(cv.polling_component_schema("60s")),
@@ -474,6 +521,7 @@ async def to_code(config: ConfigType) -> None:
         (CONF_RS_SENSOR, var.set_rs_sensor),
         (CONF_VOLTAGE_SENSOR, var.set_voltage_sensor),
         (CONF_CORRECTION_SENSOR, var.set_correction_sensor),
+        (CONF_LOG_SENSOR, var.set_log_sensor),
     ):
         if (target := config.get(key)) is not None:
             cg.add(setter(await cg.get_variable(target)))

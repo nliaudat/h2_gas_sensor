@@ -82,8 +82,11 @@ RS = (VCC × RL) / V_AO − RL
 3. Optionally pin the value (`r0: 0.2899`) and drop the `calibration:` block.
    That is the more deterministic setup for a battery room, where the air is
    *not* clean when hydrogen is present.
-4. Re-calibrate every few months (MQ sensors drift): call
-   `id(mq8).request_calibration()` in clean air, or flash a new `r0:`.
+4. Re-calibrate every few months (MQ sensors drift): press the *MQ-8 recalibrate*
+   button in Home Assistant, call `id(mq8).request_calibration()` in clean air,
+   or flash a new `r0:`. A request is deferred until `warmup_time` has elapsed
+   and the state stays `unknown` while the calibration is pending or running, so
+   a press cannot capture an unstable RS.
 
 Sanity check of the calibration: in clean air the component must report
 RS/R0 ≈ 70 (the value of `ratio_in_clean_air`) and ≈ 50 ppm. If RS/R0 in clean
@@ -108,10 +111,13 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | ppm far too low / nearly flat | `rl:` does not match the module, or `voltage_multiplier` is missing |
 | ppm pinned at `max_ppm` (10 000) | wrong `a`/`b` for the gas, or `ratio_mode` mismatch |
 | values drift over weeks | normal sensor drift — re-calibrate in clean air |
-| correction factor stuck at 1.0000 | the T/RH sensor has no state yet (see the logs) or the compensation block of `packages/mq8.yaml` is not enabled |
+| correction factor stuck at 1.0000 | no T/RH sensor is linked (`temperature:`/`humidity:` on the MQ-8 entry), the T/RH sensor has no state yet (see the logs), or `correction_mode: none` was written |
 
 `esphome logs config.yaml` (or the web log) prints every reading as
 `V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the
 `mq_gas_sensors` tag is pinned at `INFO` in
-[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the 30 s line), put
-it back to `DEBUG` under `logger.logs` to read the chain again.
+[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the per-second line),
+put it back to `DEBUG` under `logger.logs` to read the chain again. The same lines
+- plus the calibration messages and warnings - are mirrored to the `MQ-8 logs` text
+sensor (`log_sensor:` in `packages/mq8.yaml`, the per-update line at most every
+30 s), so the chain is also readable from Home Assistant.

@@ -65,8 +65,23 @@ module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clo
    after `max(delay, warmup_time)`, averages `samples` readings (the vendor library
    averages 10) and is kept in flash. Pin it later with `air_reference:`/`r0:` to
    skip the calibration at boot.
-4. Re-calibrate after changing the wiring or `voltage_multiplier`, and every few
-   months: these sensors drift.
+4. **A reference is only valid if it was captured with a settled sensor.** The
+   vendor model normalises against `x_air`, so its ratio is 1.0 *at the moment of
+   the calibration* and nowhere else. A calibration that ran while the module was
+   still warming up - or during the burn-in of a new sensor - stores a reference
+   that is too high: the ratio then sits below 1.0 in clean air, and the vendor
+   curve **over-reports** (it starts firing earlier and shows too many ppm).
+   Worked example: a reference captured at `V_AO = 0.21 V` gives
+   `x_air = 5.0 - 0.21 = 4.79 V`, so a module that settles at `V_AO = 1.10 V`
+   (`x = 3.90 V`) reports `ratio = 3.90 / 4.79 = 0.81` instead of 1.0 - and at
+   `V_AO = 4.0 V` the H2 curve returns `(0.279 - 1.0 / 4.79) / 0.00026 = 270 ppm`
+   where a reference captured at 1.10 V returns 86 ppm. Check the ratio right
+   after a calibration (≈ 1.0) and re-calibrate if it drifts away.
+5. Re-calibrate after changing the wiring or `voltage_multiplier`, and every few
+   months: these sensors drift. The *MiCS-5524 recalibrate* button in Home
+   Assistant (or `id(mics).request_calibration()`) does it; a request is deferred
+   until `warmup_time` has elapsed and the state stays `unknown` while the
+   calibration is pending or running.
 
 ## ESP32 ADC limitations
 
@@ -77,6 +92,10 @@ module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clo
 * ESP32 ADC readings are noisy: `samples: 4` (default) averages four conversions
   per update, `samples: 16` is worth trying if your values jitter. A 100 nF
   capacitor from the ADC pin to ground also helps.
+* The shipped package polls the H2 trace entry every second (the alarm band) and
+  its diagnostics every 30 s - the 1 s entity therefore jitters more than the
+  throttled `ratio` / `AO (scaled)` views. Raise `samples:` if the raw value
+  matters more than the response time.
 
 ## Role in this project (H2 battery room)
 

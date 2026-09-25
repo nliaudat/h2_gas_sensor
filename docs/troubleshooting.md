@@ -23,12 +23,14 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | state stays `unknown`, log says `R0 unknown` / `no air reference` | no `calibration:` block and no pinned reference, or the calibration has not run yet (delay / warm-up window) | wait for the delay or the burn-in, or pin `r0:` / `air_reference:` |
+| the value stays `unknown` after pressing *recalibrate* | this is intentional: a request is deferred until `warmup_time` ends, and nothing is published while the calibration is pending or running (the reference is about to change) | watch the `MQ-8 logs` / `MiCS-5524 logs` text sensor - it reports the remaining warm-up time and the calibration result |
+| the MiCS ratio sits at 0.8 - 0.9 in clean air / drifts away from 1.0 | stale clean-air reference - captured during the warm-up or before the burn-in finished, or the sensor drifted | re-calibrate once the reading is stable (24 - 48 h burn-in for a new module); the vendor model over-reports while the reference is too high |
 | warning `analog output reads 0.0000 V` | `AO` not connected, module not powered from 5 V, wrong divider node, MiCS `EN` polarity | re-check the wiring and `inverted:` |
 | ppm far too low, or nearly flat | `rl:` does not match the module (measure the resistor between `AO` and GND), or the divider ratio changed without updating `r1`/`r2` | set `rl:` / `divider:` to the measured values |
 | ppm pinned at `max_ppm` (10 000 for the MQ-8, 1 000 for the MiCS) | the gas is outside the range, the curve does not match the gas, or the divider is wrong | check `gas:` / `curve:`, then the divider |
-| readings jump around | ESP32 ADC noise | raise `samples:` (e.g. 16), add a 100 nF capacitor from the ADC pin to GND, or use an ADS1115 |
+| readings jump around | ESP32 ADC noise - the 1 s alarm entity jitters more than the 30 s diagnostics | raise `samples:` (e.g. 16), add a 100 nF capacitor from the ADC pin to GND, or use an ADS1115 |
 | values drift over weeks | normal metal-oxide drift | re-calibrate in clean air - see [`getting_started.md`](getting_started.md) |
-| `MQ-8 T/RH correction` stuck at 1.0000 | the T/RH sensor has no state yet, the `temperature:`/`humidity:` links are commented or the compensation block is not uncommented in `packages/mq8.yaml`, a wrong I2C address, or an unreadable DHT11 data line | check the log warning, the links and pins in `packages/mq8.yaml` (`mq8_i2c_sda`/`mq8_i2c_scl`, `mq8_sht4x_address`, `mq8_dht_pin`), or the pull-up of the DHT11 |
+| `MQ-8 T-RH correction` stuck at 1.0000 | the T/RH sensor has no state yet, the `temperature:`/`humidity:` links are commented or the compensation block is not uncommented in `packages/mq8.yaml`, a wrong I2C address, or an unreadable DHT11 data line | check the log warning, the links and pins in `packages/mq8.yaml` (`mq8_i2c_sda`/`mq8_i2c_scl`, `mq8_sht4x_address`, `mq8_dht_pin`), or the pull-up of the DHT11 |
 | the MiCS-5524 reacts to something that is not hydrogen | it has a single output for CO, H2, ethanol, ammonia and methane | treat it as a trend sensor; the MQ-8 is the reference for alarms |
 | the readings are plausible but the room smells of hydrogen | the sensor sits at the wrong height | hydrogen accumulates at the top: mount it at the highest point of the room or enclosure |
 
@@ -42,12 +44,21 @@ readable; set `mq_gas_sensors` / `mics_5524_gas_sensor` back to `DEBUG` under
 
 ```
 [D][mq_gas_sensors]: 'MQ-8 H2': V=1.234 V, RS=12.345 kOhm, ratio=42.100 (correction=0.9987) -> 74.5 ppm
-[D][mics_5524_gas_sensor]: 'H2': V_AO=1.234 V, x=0.5670, RS=8.800 kOhm, ratio=0.9980 (dfrobot) -> 0.0 ppm
+[D][mics_5524_gas_sensor]: 'H2': V_AO=1.234 V, x=3.7660, ratio=0.9980 (dfrobot) -> 0.0 ppm
+[D][mics_5524_gas_sensor]: 'CO': V_AO=1.234 V, RS=30.519 kOhm, ratio=0.8720 (datasheet) -> 7.3 ppm
 ```
 
-* `V` is the scaled voltage at the pin (after `voltage_multiplier`) - use it to
-  verify the divider ratio;
-* `ratio` is RS/R0 for the MQ-8, or the vendor ratio for the MiCS (≈ 1.0 in
-  clean air, dropping when a reducing gas arrives);
+* `V` (MQ) / `V_AO` (MiCS) is the scaled voltage at the pin (after
+  `voltage_multiplier`) - use it to verify the divider ratio;
+* the MiCS prints `x = VCC - V_AO` for the vendor model and `RS` for the
+  datasheet model - each line shows the quantity its model uses;
+* `ratio` is RS/R0 for the MQ-8 and for the MiCS datasheet model, or the vendor
+  ratio for `conversion: dfrobot` (≈ 1.0 in clean air, dropping when a reducing
+  gas arrives);
 * `correction` is the T/RH factor (1.0000 = none);
 * the ppm value at the end is what the sensor entity publishes.
+
+Both packages also mirror these lines - and the calibration messages and
+warnings - into the `MQ-8 logs` / `MiCS-5524 logs` text sensors
+(`log_sensor:`), so the same chain can be read from Home Assistant without
+changing `logger.logs`.

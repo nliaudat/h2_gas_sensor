@@ -33,15 +33,20 @@
 #   not five independent measurements, and only `conversion: dfrobot` works for
 #   the four extra gases (only CO ships with datasheet coefficients). Every entry
 #   keeps its own clean-air reference (persisted in flash, captured on the first
-#   boot); the ratio / scaled-voltage diagnostics are linked to the H2 entry only,
-#   since the ratio is identical for all five.
+#   boot); the ratio / scaled-voltage / log diagnostics are linked to the H2 entry
+#   only, since the ratio is identical for all five.
 #
 # Calibration
 #   The first boot calibrates the clean-air reference after `calibration.delay`
-#   (max of delay and warm-up) and stores it in flash. To force a new calibration:
+#   (max of delay and warm-up) and stores it in flash. To force a new
+#   calibration, press the "MiCS-5524 recalibrate" button in Home Assistant (it
+#   refreshes all five gas entries) or use:
 #       esphome: on_boot: - lambda: id(mics).request_calibration();
-#   The calibrated value is logged ("air reference = ...") and can be pinned with
-#   `air_reference: <value>` instead of calibrating at boot.
+#   A request is deferred until `warmup_time` has elapsed and the value stays
+#   `unknown` while the calibration is pending or running.
+#   The calibrated value is logged ("air reference = ...") and mirrored to the
+#   "${friendly_name} MiCS-5524 logs" text sensor (`log_sensor:` below) - it can
+#   also be pinned with `air_reference: <value>` instead of calibrating at boot.
 
 substitutions:
   mics_pin: GPIO39  # change to match your wiring
@@ -64,6 +69,9 @@ sensor:
     name: "${friendly_name} MiCS-5524 AO voltage"
     pin: ${mics_pin}
     attenuation: 12db
+    # Diagnostic only: the gas entries below convert the ADC themselves on every
+    # poll (`ADCSensor::sample()` takes a fresh reading), so this interval does not
+    # limit the ppm refresh rate - it only paces this entity.
     update_interval: 30s
     accuracy_decimals: 3
     entity_category: diagnostic
@@ -83,7 +91,10 @@ sensor:
     # and `adc_input_max: 6.144` / `adc_pin_max: 6.144` instead.
     adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
-    update_interval: 30s
+    # 1 s: this trace/alarm entry is the fast one (~60 ms of ADC averaging per
+    # second - the heater runs continuously, so slow polling saves nothing). The
+    # four other gas views below stay at 30 s, they are the same signal.
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
@@ -98,6 +109,10 @@ sensor:
       persist: true  # store the reference in flash and reuse it after a reboot
     ratio_sensor: ${name}_mics_ratio
     voltage_sensor: ${name}_mics_voltage
+    # Log mirror (see the `text_sensor` / `button` blocks at the end of this
+    # file).  Only the H2 entry carries the diagnostics: the ratio, the scaled
+    # voltage and the log line are identical for all five gas entries.
+    log_sensor: ${name}_mics_logs
 
   # The remaining gases of the vendor table. They read the SAME analog output
   # through their own curve, so they are four *views* of one mixture, not four
@@ -105,7 +120,8 @@ sensor:
   # the accuracy note at the top of this file). Keep the H2 entry as the alarm
   # reference and use these to see how the other gases would interpret the same
   # reading. `conversion: dfrobot` is required: only CO ships with datasheet
-  # coefficients (a = 6.3, b = -1.1).
+  # coefficients (a = 6.3, b = -1.1).  They keep the slow 30 s interval - the H2
+  # entry above is the fast (1 s) alarm reference.
   - platform: mics_5524_gas_sensor
     id: mics_co
     name: "${friendly_name} CO (MiCS-5524)"
@@ -202,6 +218,8 @@ sensor:
     accuracy_decimals: 4
     icon: mdi:chart-line
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
 
   - platform: template
     id: ${name}_mics_voltage
@@ -210,6 +228,41 @@ sensor:
     accuracy_decimals: 3
     icon: mdi:flash
     entity_category: diagnostic
+    filters:
+      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
+
+# Mirror of the H2 log (the id given by `log_sensor:` on that entry): per-update
+# chain (`V_AO=... x=... ratio=... -> ... ppm`), calibration messages and
+# warnings - the same text the serial console shows.  The per-update line is
+# mirrored at most every 30 s (the console log keeps every line), calibration
+# messages and warnings immediately; the state is the last message.  Drop the
+# entity (and the `log_sensor:` key) if the recorded history is not wanted.
+text_sensor:
+  - platform: template
+    id: ${name}_mics_logs
+    name: "${friendly_name} MiCS-5524 logs"
+    icon: mdi:text-box-multiple-outline
+    entity_category: diagnostic
+
+# Force a new clean-air reference.  ONLY press it with the sensor in clean air
+# (the value is stored in flash and used from then on).  Every gas entry keeps
+# its own reference, so the button recalibrates all five - recalibrating only
+# the H2 entry would leave the other four on a stale reference.
+# The component defers the request until the warm-up window (`warmup_time`) has
+# ended and publishes `unknown` while the calibration is pending or running.
+button:
+  - platform: template
+    id: ${name}_mics_recalibrate
+    name: "${friendly_name} MiCS-5524 recalibrate"
+    icon: mdi:refresh
+    entity_category: config
+    on_press:
+      - lambda: |-
+          id(mics).request_calibration();
+          id(mics_co).request_calibration();
+          id(mics_nh3).request_calibration();
+          id(mics_ethanol).request_calibration();
+          id(mics_ch4).request_calibration();
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   100 - 300 ppm  = 0.25 - 0.75 % LEL -> trace / early detection (this sensor)

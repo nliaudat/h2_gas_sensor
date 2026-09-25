@@ -1,0 +1,39 @@
+# 1-wire DHT22 ambient temperature/humidity sensor.
+#
+# The MQ-8 links its T/RH compensation to whatever sensor ids are given, so the
+# two links are added from here with `id: !extend mq8` - that keeps
+# `packages/mq8.yaml` untouched, and because both links are present the
+# mqdatascience compensation is selected automatically (no `correction_mode:`
+# needed; add `correction_mode: none` to that fragment to opt out again).
+#
+# Wiring: VCC -> 3.3 V, GND -> GND, DATA -> `dht22_pin` with a 4.7k - 10k pull-up
+# to 3.3 V (bare 3-pin sensors need it).  The pin must be a bidirectional GPIO
+# (never 34-39) and must not collide with `mq8_pin` (GPIO36) or `mics_pin`
+# (GPIO39).  The DHT needs >= 2 s between reads, so it stays at the slow interval
+# (the T/RH compensation changes slowly - the fast sensors are the gas ones).
+# Never power the module from 5 V.
+substitutions:
+  dht22_pin: GPIO32  # DATA of the DHT22
+  dht22_model: AUTO_DETECT  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 / AUTO_DETECT
+
+sensor:
+  - platform: dht
+    model: ${dht22_model}
+    pin: ${dht22_pin}
+    temperature:
+      name: "${friendly_name} ambient temperature"
+      id: dht_temperature
+    humidity:
+      name: "${friendly_name} ambient humidity"
+      id: dht_humidity
+    update_interval: 60s
+
+  # Merges the two ambient links into the MQ-8 entry of `packages/mq8.yaml` (the
+  # keys its commented compensation block documents).  Both links present =>
+  # `correction_mode` resolves to `mqdatascience`; the third key routes the
+  # applied factor to the `MQ-8 T-RH correction` diagnostic entity of the package.
+  - platform: mq_gas_sensors
+    id: !extend mq8
+    temperature: dht_temperature
+    humidity: dht_humidity
+    correction_sensor: ${name}_mq8_correction
