@@ -28,6 +28,7 @@ packages:
   switch: !include packages/switch.yaml
   mq8: !include packages/mq8.yaml          # ADC + gas sensor; T/RH blocks commented inside
   dht22: !include packages/dht22.yaml      # ambient T/RH + the links that switch the compensation on
+  alarm: !include packages/alarm.yaml      # local pre-alarm: buzzer + 2 x SK6812 (optional hardware)
   # mics5524: !include packages/mics5524.yaml   # additive, optional hardware
 ```
 
@@ -36,6 +37,7 @@ packages:
 | `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
 | `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
+| `alarm.yaml` | Buzzer + 2 x SK6812 | local pre-alarm (buzzer + status LEDs); merges its bands into `id: mq8` with `!extend`, so it must stay after `mq8.yaml` |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
 (`temperature:`/`humidity:` in the `mq_gas_sensors` entry), so there is no
@@ -64,6 +66,7 @@ DHT22 (±0.5 °C / ±2 % RH) is better, an SHT4x better still.
 | `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
 | `packages/dht22.yaml` | DHT22 pin/model (`dht22_pin`, `dht22_model`) + the `!extend mq8` fragment that links `temperature:`/`humidity:` (drop the package include when no T/RH sensor is wired) | Only with a DHT22 |
 | `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN plus one gas entity per vendor curve (H2, CO, NH3, C2H5OH, CH4 - optional hardware) | Only with a MiCS-5524 |
+| `packages/alarm.yaml` | Buzzer/LED pins, chipset and channel order (`alarm_buzzer_pin`, `alarm_led_*`), the two thresholds (`alarm_early_ppm`, `alarm_danger_ppm`), the beep interval and the melody | Only with a buzzer / LED strip |
 | `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
 | `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |
@@ -93,6 +96,12 @@ MQ-8 / MiCS-5524 at 5 V
   `adc_input_max`/`adc_pin_max: 6.144`) instead.
 * Use an ADC1 pin (GPIO32-39); ADC2 is unusable while WiFi is active, and GPIO12
   must not be used.
+
+* The local pre-alarm of `packages/alarm.yaml` uses two pins of its own - a
+  passive piezo on `alarm_buzzer_pin` (GPIO33) and the data line of 2 x SK6812 on
+  `alarm_led_pin` (GPIO19, 5 V feed) - never the input-only pins 34 - 39. Wiring
+  (level shifter, series resistor, bulk capacitor) and the state table:
+  [`../docs/local_alarm.md`](../docs/local_alarm.md).
 
 Per-sensor wiring, the load-resistor measurement and the placement rules are in
 [`../docs/mq8_sensor_guide.md`](../docs/mq8_sensor_guide.md) and
@@ -148,6 +157,13 @@ measurement math and every lint command are collected in
 
 ## Operations
 
+* **Local pre-alarm** - `packages/alarm.yaml` drives the buzzer and the two
+  status LEDs from the MQ-8 value: green below 4 000 ppm, amber + a beep every
+  5 s in the 4 000 - 9 999 ppm band, red and *silent* from 10 000 ppm (the MQ-8
+  ceiling - a clamped reading may already be past 50 % of the LEL), blue while
+  there is no valid reading.  The state is re-applied every 60 s and the
+  `alarm test` button plays the melody - see
+  [`../docs/local_alarm.md`](../docs/local_alarm.md).
 * **Logging** - `logger:` in `config.yaml` runs at `DEBUG` with per-tag
   overrides: the two gas-sensor tags (`mq_gas_sensors`, `mics_5524_gas_sensor`)
   are pinned at `INFO`, so the per-update raw values are off by default - set

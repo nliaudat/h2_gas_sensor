@@ -30,6 +30,8 @@ cycle.
 | 2 resistors per sensor (e.g. 10 kΩ + 20 kΩ) | the voltage divider - **the ESP32 ADC pins are not 5 V tolerant** |
 | MiCS-5524 module (optional) | 5 V, `A0` + `EN` pad, trace band 100 - 1 000 ppm |
 | SHT4x / SHT3x or DHT11 (optional) | temperature/humidity sensor for the optional compensation inside `packages/mq8.yaml` |
+| Passive piezo buzzer (optional) | the local pre-alarm (`packages/alarm.yaml`): a bare disc **without** an internal oscillator - an active buzzer only clicks, and a magnetic one needs a transistor |
+| 2 x SK6812 LEDs (optional) | the status LEDs of the local pre-alarm: 5 V feed, 3.3 V data (add a level shifter or a diode), series resistor, 10 kΩ pull-down, bulk capacitor - see [`docs/local_alarm.md`](docs/local_alarm.md) |
 
 ## Wiring at a glance
 
@@ -50,6 +52,9 @@ MQ-8 / MiCS-5524 at 5 V
   range can clip. Use 10k/10k (2.5 V) or an ADS1115 if that matters to you.
 * Use an **ADC1** pin (GPIO32-39): ADC2 is unusable while Wi-Fi is active, and
   GPIO12 must not be used.
+* The optional local pre-alarm (`packages/alarm.yaml`) uses its own two pins: a
+  **passive** piezo on GPIO33 and 2 x SK6812 on GPIO19 (5 V feed) - see
+  [`docs/local_alarm.md`](docs/local_alarm.md).
 
 ## Quick start
 
@@ -89,6 +94,13 @@ output interpreted with the other vendor curves - not independent measurements;
 the alerting stays on `H2 trace` and `H2 (MQ-8)`. Full entity list, thresholds
 and paste-ready automations:
 [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
+
+The optional local pre-alarm (`packages/alarm.yaml`) adds an `alarm LEDs` light
+and an `alarm test` button: amber LEDs plus a beep every 5 s from 4 000 ppm
+(10 % of the LEL, the early-warning band) and red **without** the buzzer from
+10 000 ppm, where the MQ-8 sits at its ceiling and the reading may already be past
+50 % of the LEL.  It is a local indicator, not a certified detector - see
+[`docs/local_alarm.md`](docs/local_alarm.md).
 
 The two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`) refresh every
 **second** - the metal-oxide heaters run continuously, so there is nothing to save

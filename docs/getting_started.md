@@ -46,10 +46,10 @@ Wiring, in the package you include:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `mq8_pin` | `GPIO34` | ADC1 pin fed by the divider |
+| `mq8_pin` | `GPIO36` | ADC1 pin fed by the divider |
 | `mq8_divider_r1` / `mq8_divider_r2` | `10.0` / `20.0` | divider resistors in kΩ (series / to ground) |
 | `mq8_rl` | `10.0` | load resistor of the MQ-8 module in kΩ - measure it |
-| `mics_pin` | `GPIO33` | MiCS-5524 analog input (through the divider) |
+| `mics_pin` | `GPIO39` | MiCS-5524 analog input (through the divider) |
 | `mics_divider_r1` / `mics_divider_r2` | `10.0` / `20.0` | same divider, for the MiCS module |
 | `mics_enable_pin` | `GPIO4` | the module's `EN` pad (LOW = enabled); remove the key if unused |
 | `mics_max_ppm` | `1000` | top of the vendor range for H2 |
@@ -57,6 +57,10 @@ Wiring, in the package you include:
 | `mq8_sht4x_address` | `0x44` | I2C address of that SHT4x |
 | `mq8_dht_pin` | `GPIO27` | 1-wire `DATA` pin of the optional DHT11/DHT22 example, any bidirectional GPIO |
 | `mq8_dht_model` | `DHT11` | `dht` model of that example (`DHT11` / `DHT22` / `AM2302` / ...) |
+| `alarm_buzzer_pin` / `alarm_led_pin` | `GPIO33` / `GPIO19` | local pre-alarm (`packages/alarm.yaml`): piezo output and SK6812 data line |
+| `alarm_led_count` / `alarm_led_chipset` / `alarm_led_channel_colors` | `2` / `SK6812` / `GRB` | strip geometry and colour order (`GRBW` for RGBW LEDs) |
+| `alarm_early_ppm` / `alarm_danger_ppm` | `4000` / `10000` | amber LEDs + beeps from 10 % of the LEL, buzzer silent from 25 % - see [`local_alarm.md`](local_alarm.md) |
+| `alarm_beep_interval` / `alarm_rtttl` | `5s` / `two_short:...` | repeat interval and RTTTL melody of the pre-alarm beep |
 
 ## 4. Pick the packages
 
@@ -67,6 +71,7 @@ Wiring, in the package you include:
 |---|---|---|
 | `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor examples and the comment-only compensation keys are inside |
 | `packages/dht22.yaml` | DHT22 (ambient T/RH) | when a DHT22 is wired: it links `temperature:`/`humidity:` into `id: mq8`, which selects the compensation |
+| `packages/alarm.yaml` | Buzzer + 2 x SK6812 | when the local pre-alarm is wired: it merges into `id: mq8`, so it must stay *after* `mq8`; remove the include when there is no buzzer/LED strip |
 | `packages/mics5524.yaml` | MiCS-5524 | additive, when the trace sensor is wired |
 
 There is a single MQ-8 package: it defines `id: mq8` and links the ambient sensors
@@ -95,6 +100,13 @@ explicit opt-out. `mics5524.yaml` can be added on top of it (it uses `id: mics`)
   3-pin sensors need it). Never route `DATA` to an input-only pin (GPIO34-39) -
   the 1-wire protocol drives the line - and do not power a module whose pull-up
   sits on 5 V from 5 V: the GPIO is not 5 V tolerant.
+
+* Optional local pre-alarm (`packages/alarm.yaml`) - a **passive** piezo from
+  `alarm_buzzer_pin` (GPIO33) to GND, plus 2 x SK6812 fed from 5 V with their
+  data line on `alarm_led_pin` (GPIO19), a 100 - 500 Ω series resistor, a 10 kΩ
+  pull-down and a bulk capacitor.  The wiring caveats (passive vs active buzzer,
+  3.3 V data into a 5 V SK6812) and the state table are in
+  [`local_alarm.md`](local_alarm.md).
 
 Details, caveats and placement: [`mq8_sensor_guide.md`](mq8_sensor_guide.md) and
 [`mics5524_guide.md`](mics5524_guide.md).
@@ -158,4 +170,3 @@ is wrong.
   automations and operations.
 * [`troubleshooting.md`](troubleshooting.md) - when a number does not add up.
 * [`development.md`](development.md) - validate, test and lint commands.
-

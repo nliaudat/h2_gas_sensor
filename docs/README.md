@@ -21,6 +21,7 @@ the docs and the firmware cannot drift apart silently.
 | [`mq8_sensor_guide.md`](mq8_sensor_guide.md) | MQ-8 wiring, 5 V supply, AO divider, real load resistor, burn-in, R0 calibration workflow, placement |
 | [`mq8_h2_curve.md`](mq8_h2_curve.md) | The measurement chain V → RS → RS/R0 → ppm, why `ratio_in_clean_air` is 70, provenance of `a`/`b`, ratio→ppm table |
 | [`h2_thresholds.md`](h2_thresholds.md) | LEL/ppm conversion, the 4 000 / 10 000 / 20 000 ppm thresholds, where to alert |
+| [`local_alarm.md`](local_alarm.md) | The local pre-alarm (`packages/alarm.yaml`): buzzer + 2 x SK6812 status LEDs, states, wiring, why the buzzer is silent from 10 000 ppm |
 | [`temperature_humidity_correction.md`](temperature_humidity_correction.md) | The optional MQDataScience T/RH compensation of `packages/mq8.yaml`: model, constants, effect envelope, how to link your own T/RH sensor, safety rules |
 | [`mqdatascience_comparison.md`](mqdatascience_comparison.md) | MQ-8 H2 curve comparison (standard vs MQDataScience), what was adopted and what was deliberately skipped |
 | [`mics5524_guide.md`](mics5524_guide.md) | MiCS-5524 hardware, wiring (divider / ADS1115 / EN pin), warm-up and calibration, ADC limits, role next to the MQ-8 |
@@ -34,7 +35,7 @@ the docs and the firmware cannot drift apart silently.
 | [miguel5612/MQSensorsLib](https://github.com/miguel5612/MQSensorsLib) | original MQUnifiedsensor PPM model (`mq_math.h`) |
 | [RapportTecnologia esp-iot-solution MQSensorLIB](https://github.com/RapportTecnologia/esp-iot-solution/tree/MQSensorLib/components/sensors/gas/MQSensorLIB) | ESP-IDF port + ratio discussion |
 | [abcdaaaaaaaaa/MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience) (MIT, v6.0.0 "MQSpaceData") | T/RH correction model, alternative MQ-8 H2 curve, reference tables |
-| NFPA 855 (stationary energy storage installation) and the physical LEL of hydrogen (4 % vol = 40 000 ppm) | the threshold tables in [`h2_thresholds.md`](h2_thresholds.md) |
+| NFPA 855 (stationary energy storage installation) and the physical LEL of hydrogen (4 % vol = 40 000 ppm) | the threshold tables in [`h2_thresholds.md`](h2_thresholds.md) and the bands of [`local_alarm.md`](local_alarm.md) |
 
 The MQ-8 datasheet and the MQUnifiedsensor/MQDataScience fits describe the
 **same** log-log curve; the differences between the datasets are documented in

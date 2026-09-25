@@ -17,6 +17,8 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | upload fails with "Failed to connect" | the board is not in bootloader mode | hold `BOOT` for 2-3 s while the connection initialises |
 | build fails with a locked or corrupted build cache | a sync client or a second `esphome` process is indexing `esphome/.esphome/` | close the other process, delete `esphome/.esphome/` and rebuild |
 | GPIO12 or an ADC2 pin in the config | GPIO12 is a strapping pin, ADC2 is unusable while Wi-Fi is active | move to an ADC1 pin (GPIO32-39) |
+| `Duplicate id: mq8` with `packages/alarm.yaml` | the alarm package is included *before* `mq8:` in `config.yaml`, so its `!extend mq8` fragment cannot merge | keep `alarm: !include packages/alarm.yaml` after the `mq8:` line |
+| `Couldn't find ID 'mq8'` at config time | `packages/alarm.yaml` is included without `packages/mq8.yaml` (it reads `id: mq8`) | include `mq8` or drop the `alarm` include |
 
 ## Runtime
 
@@ -33,6 +35,10 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | `MQ-8 T-RH correction` stuck at 1.0000 | the T/RH sensor has no state yet, the `temperature:`/`humidity:` links are commented or the compensation block is not uncommented in `packages/mq8.yaml`, a wrong I2C address, or an unreadable DHT11 data line | check the log warning, the links and pins in `packages/mq8.yaml` (`mq8_i2c_sda`/`mq8_i2c_scl`, `mq8_sht4x_address`, `mq8_dht_pin`), or the pull-up of the DHT11 |
 | the MiCS-5524 reacts to something that is not hydrogen | it has a single output for CO, H2, ethanol, ammonia and methane | treat it as a trend sensor; the MQ-8 is the reference for alarms |
 | the readings are plausible but the room smells of hydrogen | the sensor sits at the wrong height | hydrogen accumulates at the top: mount it at the highest point of the room or enclosure |
+| the buzzer stays quiet although the ppm is high | by design above the danger threshold: from 10 000 ppm (25 % of the LEL, the MQ-8 ceiling) the local annunciator goes visual-only and silences the buzzer | look at the red LEDs and the Home Assistant automations; move `alarm_danger_ppm` only deliberately (see [`local_alarm.md`](local_alarm.md)) |
+| no sound at all from the buzzer, while the LEDs work | an "active" buzzer (with its own oscillator) instead of a passive piezo, a piezo behind a transistor that is not driven, or `gain:` at 0 % | use a **passive** piezo on `alarm_buzzer_pin` and press `alarm test` |
+| the `alarm LEDs` show blue for minutes after a reboot | the MQ-8 publishes `unknown` until its first clean-air calibration finished (`calibration.delay` + `samples`), and the annunciator shows that as "no reading" | wait for the delay; if it stays blue, the calibration failed - read the `MQ-8 logs` text sensor |
+| the alarm LEDs flicker or show a random colour once | 3.3 V data into a 5 V SK6812 (marginal, needs ~3.5 V), or no pull-down on the data line | add a 74AHCT125 / a series diode in the strip's 5 V feed, plus the 10 kΩ pull-down - see [`local_alarm.md`](local_alarm.md) |
 
 ## Reading the log
 

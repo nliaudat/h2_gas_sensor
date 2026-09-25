@@ -30,6 +30,8 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MiCS-5524 recalibrate` | - | button (config) | `packages/mics5524.yaml` |
 | `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
 | `restart` | - | switch | `packages/switch.yaml` |
+| `alarm LEDs` | - | light (diagnostic) | `packages/alarm.yaml` |
+| `alarm test` | - | button (config) | `packages/alarm.yaml` |
 
 Diagnostic entities are categorised as such, so they stay out of the default
 dashboard. With `friendly_name: "H2 sensor board"` the alarm entity is
@@ -47,6 +49,14 @@ The two `recalibrate` buttons start a clean-air calibration (`request_calibratio
 **Only press them in clean air**: the measured reference is written to flash and
 used from then on.  A request is deferred until `warmup_time` has elapsed and the
 value stays `unknown` while the calibration is pending or running.
+
+The local pre-alarm (`packages/alarm.yaml`, optional hardware) adds a `light`
+entity for the 2-LED status strip and an `alarm test` button that plays the
+buzzer melody.  It works without Home Assistant on purpose - it *is* the local
+warning - and it changes none of the automations below: amber + a beep every 5 s
+from 4 000 ppm, red and **silent** from 10 000 ppm (the MQ-8 ceiling, so possibly
+already past 50 % of the LEL), blue while the reading is invalid.  Details:
+[`local_alarm.md`](local_alarm.md).
 
 ## Update rate, latency and the recorder
 

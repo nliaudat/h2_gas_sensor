@@ -56,6 +56,11 @@ packages:
   # ratio. Uncomment the matching blocks inside the package when a T/RH sensor is
   # wired (see ../../docs/temperature_humidity_correction.md).
   mq8: !include packages/mq8.yaml
+  # Local pre-alarm: RTTTL buzzer on GPIO33 + 2 x SK6812 status LEDs on GPIO19.
+  # The package merges its band logic into `id: mq8` with `!extend`, so this
+  # include must stay *after* `mq8:`.  Optional hardware - remove the line if
+  # there is no buzzer/LED strip (see ../../docs/local_alarm.md).
+  alarm: !include packages/alarm.yaml
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
   mics5524: !include packages/mics5524.yaml
   dht22: !include packages/dht22.yaml
