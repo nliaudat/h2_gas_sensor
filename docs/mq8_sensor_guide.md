@@ -10,7 +10,7 @@ Curve and formula details: [`mq8_h2_curve.md`](mq8_h2_curve.md).
 | ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) | ESP-IDF framework, see `esphome/packages/board.yaml` |
 | MQ-8 module (breakout with LM393) | 5 V supply, analog output `AO` (and an unused digital `DO`) |
 | 2 resistors for the divider (e.g. 10 kΩ + 20 kΩ) | protects the ADC from the 5 V swing |
-| I²C temperature/humidity sensor (SHT4x / SHT3x) | only for the optional T/RH compensation, `packages/mq8_tc.yaml` |
+| Temperature/humidity sensor (SHT4x / SHT3x on I2C, or a 1-wire DHT11) | only for the optional T/RH compensation: uncomment the matching example in `packages/mq8.yaml` |
 
 ## Power
 
@@ -108,7 +108,10 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | ppm far too low / nearly flat | `rl:` does not match the module, or `voltage_multiplier` is missing |
 | ppm pinned at `max_ppm` (10 000) | wrong `a`/`b` for the gas, or `ratio_mode` mismatch |
 | values drift over weeks | normal sensor drift — re-calibrate in clean air |
-| correction factor stuck at 1.0000 | the T/RH sensor has no state yet (see the logs) or `correction_mode` is `none` |
+| correction factor stuck at 1.0000 | the T/RH sensor has no state yet (see the logs) or the compensation block of `packages/mq8.yaml` is not enabled |
 
 `esphome logs config.yaml` (or the web log) prints every reading as
-`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level.
+`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the
+`mq_gas_sensors` tag is pinned at `INFO` in
+[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the 30 s line), put
+it back to `DEBUG` under `logger.logs` to read the chain again.

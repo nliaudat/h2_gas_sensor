@@ -208,7 +208,9 @@ interpolated between RH 33 % and RH 85 %, `T` clamped to -10 … 50 °C, applied
 ```
 
 Details, constants and the full effect table: `docs/temperature_humidity_correction.md`.
-A ready-made package (I2C `sht4x` + wiring) is `packages/mq8_tc.yaml`.
+`packages/mq8.yaml` carries the keys above together with two T/RH sensor examples
+(I2C `sht4x`, 1-wire `dht`) as commented blocks: the ambient sensors are only
+referenced by id, so any temperature/humidity source works.
 
 ## Wiring
 

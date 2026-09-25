@@ -9,14 +9,18 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 
 | Entity (suffix of `friendly_name`) | Unit | Kind | Package |
 |---|---|---|---|
-| `H2 (MQ-8)` | ppm | measurement | `packages/mq8.yaml`, `packages/mq8_tc.yaml` |
-| `MQ-8 AO voltage` | V | diagnostic | both MQ-8 packages |
-| `MQ-8 RS-R0 ratio` | - | diagnostic | both |
-| `MQ-8 RS` | kΩ | diagnostic | both |
-| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8_tc.yaml` |
-| `ambient temperature` | °C | measurement | `packages/mq8_tc.yaml` |
-| `ambient humidity` | % | measurement | `packages/mq8_tc.yaml` |
+| `H2 (MQ-8)` | ppm | measurement | `packages/mq8.yaml` |
+| `MQ-8 AO voltage` | V | diagnostic | `packages/mq8.yaml` |
+| `MQ-8 RS-R0 ratio` | - | diagnostic | `packages/mq8.yaml` |
+| `MQ-8 RS` | kΩ | diagnostic | `packages/mq8.yaml` |
+| `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8.yaml`, compensation enabled |
+| `ambient temperature` | °C | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
+| `ambient humidity` | % | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
 | `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `CO (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `NH3 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `C2H5OH (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `CH4 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
@@ -97,7 +101,11 @@ something looks wrong.
 | "why is the reading what it is?" | the diagnostics: `MQ-8 AO voltage` (wiring/divider), `RS` and `RS-R0 ratio` (RL, ageing), `T/RH correction` (compensation) |
 
 The MiCS-5524 sees five gases on a single output and cannot tell them apart: use
-it for the trend, never as the only alarm source.
+it for the trend, never as the only alarm source. `packages/mics5524.yaml`
+publishes every gas of the vendor table - `H2 trace`, `CO`, `NH3`, `C2H5OH` and
+`CH4` - but these are the *same* analog output interpreted with five different
+curves, not five independent measurements: keep the alerting on `H2 trace` (and
+on the MQ-8).
 
 ## Operations
 
@@ -110,8 +118,9 @@ it for the trend, never as the only alarm source.
 * **Recovery paths** - `safe_mode:` (boots without the custom components after
   repeated crashes), `api: reboot_timeout: 30min`, OTA (`ota: platform: esphome`)
   and the `restart` switch.
-* **Logs** - `logger:` runs at `DEBUG` with per-tag overrides;
-  `esphome logs config.yaml` (or the web log) prints the measurement chain - see
-  [`troubleshooting.md`](troubleshooting.md) for how to read it.
+* **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
+  tags are pinned at `INFO`); `esphome logs config.yaml` (or the web log) prints
+  the measurement chain - see [`troubleshooting.md`](troubleshooting.md) for how
+  to read it.
 * **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
   so the new firmware starts.

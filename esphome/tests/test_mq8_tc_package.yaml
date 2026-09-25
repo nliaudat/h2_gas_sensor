@@ -1,0 +1,57 @@
+# Validation-only fixture: packages/mq8.yaml with the optional T/RH compensation
+# enabled (run: esphome config tests/test_mq8_tc_package.yaml)
+#
+# The package ships the ambient T/RH sensor and the compensation commented out
+# (the default build has no T/RH hardware), so this fixture includes it unchanged
+# and enables the compensation from the outside with an `id: !extend mq8`
+# fragment, driven by two template sensors instead of real hardware. That keeps
+# the *compensated* MQ-8 package configuration (config + compile) covered.
+substitutions:
+  name: mq8_tc_pkg
+  friendly_name: "MQ-8 T-RH package test"
+
+esphome:
+  name: ${name}
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+sensor:
+  # Stand-ins for the ambient sensors of the package (no I2C/1-wire hardware):
+  - platform: template
+    id: ${name}_air_temperature
+    name: "Test temperature"
+    accuracy_decimals: 2
+    update_interval: 60s
+
+  - platform: template
+    id: ${name}_air_humidity
+    name: "Test humidity"
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 60s
+
+  - platform: template
+    id: ${name}_mq8_correction
+    name: "Test correction factor"
+    accuracy_decimals: 4
+
+  # `!extend` merges this fragment into the `id: mq8` sensor of the package
+  # (same keys the commented compensation block in the package would enable):
+  - platform: mq_gas_sensors
+    id: !extend mq8
+    temperature: ${name}_air_temperature
+    humidity: ${name}_air_humidity
+    correction_mode: mqdatascience
+    correction_clamp: absolute
+    correction_sensor: ${name}_mq8_correction
+
+packages:
+  mq8: !include ../packages/mq8.yaml

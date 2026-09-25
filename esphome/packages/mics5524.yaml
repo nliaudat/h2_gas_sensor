@@ -26,6 +26,16 @@
 #   the ESP32 ADC (its lowest usable reading is ~75 mV). Treat the value as an
 #   estimate and keep the MQ-8 as the alarm reference.
 #
+# Published gases
+#   The package instantiates one `mics_5524_gas_sensor` entry per gas of the
+#   vendor table, all reading the same A0 through their own curve: H2 (the trace /
+#   alarm reference), CO, NH3, C2H5OH and CH4. They are *views* of one mixture,
+#   not five independent measurements, and only `conversion: dfrobot` works for
+#   the four extra gases (only CO ships with datasheet coefficients). Every entry
+#   keeps its own clean-air reference (persisted in flash, captured on the first
+#   boot); the ratio / scaled-voltage diagnostics are linked to the H2 entry only,
+#   since the ratio is identical for all five.
+#
 # Calibration
 #   The first boot calibrates the clean-air reference after `calibration.delay`
 #   (max of delay and warm-up) and stores it in flash. To force a new calibration:
@@ -34,11 +44,19 @@
 #   `air_reference: <value>` instead of calibrating at boot.
 
 substitutions:
-  mics_pin: GPIO33  # ADC1_CH5, change to match your wiring
+  mics_pin: GPIO39  # change to match your wiring
   mics_divider_r1: "10.0"  # kOhm, in series with A0 (top)  -> 10k/20k divider
   mics_divider_r2: "20.0"  # kOhm, A0 node to GND (bottom)  -> multiplier 1.5
-  mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
+  # mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
   mics_max_ppm: "1000"  # upper end of the vendor range for H2 (and CO)
+  # Per-gas clamp of the published value - the upper end of the vendor range of
+  # each gas. Only the matching entry below uses its own key, so they can be
+  # tuned independently (the value is the vendor default, so the model would pick
+  # the same number if the key were removed).
+  mics_co_max_ppm: "1000"  # CO vendor range 1 - 1000 ppm
+  mics_nh3_max_ppm: "500"  # NH3 vendor range 10 - 500 ppm
+  mics_ethanol_max_ppm: "500"  # C2H5OH vendor range 10 - 500 ppm
+  mics_ch4_max_ppm: "25000"  # CH4 vendor range 1000 - 25000 ppm
 
 sensor:
   - platform: adc
@@ -71,15 +89,110 @@ sensor:
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
     min_ppm: 0
     max_ppm: ${mics_max_ppm}
-    enable_pin:
-      number: ${mics_enable_pin}
-      inverted: true  # LOW enables the module
+    # enable_pin:
+    #   number: ${mics_enable_pin}
+    #   inverted: true  # LOW enables the module
     calibration:
       delay: 3min  # after boot, in clean air
       samples: 10  # DFRobot averages 10 samples for the reference
       persist: true  # store the reference in flash and reuse it after a reboot
     ratio_sensor: ${name}_mics_ratio
     voltage_sensor: ${name}_mics_voltage
+
+  # The remaining gases of the vendor table. They read the SAME analog output
+  # through their own curve, so they are four *views* of one mixture, not four
+  # independent measurements - the sensor cannot tell which gas is present (see
+  # the accuracy note at the top of this file). Keep the H2 entry as the alarm
+  # reference and use these to see how the other gases would interpret the same
+  # reading. `conversion: dfrobot` is required: only CO ships with datasheet
+  # coefficients (a = 6.3, b = -1.1).
+  - platform: mics_5524_gas_sensor
+    id: mics_co
+    name: "${friendly_name} CO (MiCS-5524)"
+    gas: CO
+    conversion: dfrobot
+    voltage: ${name}_mics_adc
+    divider:
+      r1: ${mics_divider_r1}
+      r2: ${mics_divider_r2}
+    adc_input_max: 3.33
+    vcc: 5.0
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 3min
+    min_ppm: 0
+    max_ppm: ${mics_co_max_ppm}
+    calibration:  # own clean-air reference, persisted once (see the H2 entry)
+      delay: 3min
+      samples: 10
+      persist: true
+
+  - platform: mics_5524_gas_sensor
+    id: mics_nh3
+    name: "${friendly_name} NH3 (MiCS-5524)"
+    gas: NH3
+    conversion: dfrobot
+    voltage: ${name}_mics_adc
+    divider:
+      r1: ${mics_divider_r1}
+      r2: ${mics_divider_r2}
+    adc_input_max: 3.33
+    vcc: 5.0
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 3min
+    min_ppm: 0
+    max_ppm: ${mics_nh3_max_ppm}
+    calibration:
+      delay: 3min
+      samples: 10
+      persist: true
+
+  - platform: mics_5524_gas_sensor
+    id: mics_ethanol
+    name: "${friendly_name} C2H5OH (MiCS-5524)"
+    gas: C2H5OH
+    conversion: dfrobot
+    voltage: ${name}_mics_adc
+    divider:
+      r1: ${mics_divider_r1}
+      r2: ${mics_divider_r2}
+    adc_input_max: 3.33
+    vcc: 5.0
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 3min
+    min_ppm: 0
+    max_ppm: ${mics_ethanol_max_ppm}
+    calibration:
+      delay: 3min
+      samples: 10
+      persist: true
+
+  - platform: mics_5524_gas_sensor
+    id: mics_ch4
+    name: "${friendly_name} CH4 (MiCS-5524)"
+    gas: CH4
+    conversion: dfrobot
+    voltage: ${name}_mics_adc
+    divider:
+      r1: ${mics_divider_r1}
+      r2: ${mics_divider_r2}
+    adc_input_max: 3.33
+    vcc: 5.0
+    update_interval: 30s
+    samples: 4
+    sample_interval: 20ms
+    warmup_time: 3min
+    min_ppm: 0
+    max_ppm: ${mics_ch4_max_ppm}
+    calibration:  # CH4 reports 0 below 1000 ppm - that is the vendor's own floor
+      delay: 3min
+      samples: 10
+      persist: true
 
   # Diagnostics (remove if not needed). The ratio is 1.0 in clean air and drops
   # as soon as a reducing gas arrives, it is the vendor model's raw quantity.

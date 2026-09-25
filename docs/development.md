@@ -24,6 +24,7 @@ cd esphome
 esphome config config.yaml                     # the project configuration
 esphome config tests/test_no_id.yaml           # MQ-8 without id:, pin: sugar, fixed r0
 esphome config tests/test_tc.yaml              # T/RH correction + curve: mqdatascience
+esphome config tests/test_mq8_tc_package.yaml      # the MQ-8 package with its compensation enabled
 esphome config tests/test_mics.yaml            # MiCS: both conversion models, divider, ADS1115 case
 esphome config tests/test_mics_package.yaml    # the shipped MiCS package
 python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
