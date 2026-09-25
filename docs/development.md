@@ -7,9 +7,9 @@ lists the commands below as the "must be clean before a change is done" set.
 ## Layout in one paragraph
 
 `esphome/config.yaml` is the entry point (substitutions + package includes),
-`esphome/packages/*.yaml` are the includes, `esphome/components/` holds the two
-custom components (`mq_gas_sensors`, `mics_5524_gas_sensor`) with their own
-READMEs, `esphome/tests/` holds the host tests and the config fixtures, and
+`esphome/packages/*.yaml` are the includes, `esphome/components/` holds the three
+custom components (`mq_gas_sensors`, `mics_5524_gas_sensor`, `tsdb`) with their
+own READMEs, `esphome/tests/` holds the host tests and the config fixtures, and
 `esphome/script/` holds the vendored ESPHome CI linter (see
 [`../esphome/script/README.md`](../esphome/script/README.md)).
 
@@ -28,11 +28,16 @@ esphome config tests/test_mq8_tc_package.yaml      # the MQ-8 package with its c
 esphome config tests/test_mics.yaml            # MiCS: both conversion models, divider, ADS1115 case
 esphome config tests/test_mics_package.yaml    # the shipped MiCS package
 esphome config tests/test_web_package.yaml     # the offline webserver package (open AP + dashboard)
+esphome config tests/test_tsdb.yaml            # the history package on stand-in sensors
 python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
 ```
 
 Negative cases (`esphome config` must fail with an explanatory message) are part
-of the fixtures too - for example a 5 V module wired straight to an ADC pin.
+of the fixtures too - for example a 5 V module wired straight to an ADC pin; the
+ones of the history component (`scale: 0`, a duplicate column, a
+`max_file_size`/`partition_size` mismatch, `require_time` without `time_id`, an
+unaligned partition, `memory: psram` without `psram:`) are listed in the header
+of [`../esphome/tests/test_tsdb.yaml`](../esphome/tests/test_tsdb.yaml).
 
 ## Build and flash
 
@@ -44,18 +49,21 @@ esphome run config.yaml         # flash over USB or OTA
 
 ## Host tests (the measurement math)
 
-The math of both components lives in a header with no ESPHome/ESP-IDF
+The math of the three components lives in a header with no ESPHome/ESP-IDF
 dependency, so it compiles and asserts on the host:
 
 ```bash
 cd esphome/tests
 g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe
 g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe
+g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe
 ```
 
-Every number quoted in `docs/` is asserted there: change a curve, a coefficient
-or a threshold and the test changes with it. `-Wall -Wextra` must stay
-warning-free.
+Every number quoted in `docs/` is asserted there: change a curve, a coefficient,
+a threshold, a `scale` or the file geometry of the history and the test changes
+with it (the capacity/retention table of
+[`data_logging.md`](data_logging.md) is printed by the tsdb test).
+`-Wall -Wextra` must stay warning-free.
 
 ## Lint
 

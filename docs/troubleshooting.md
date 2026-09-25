@@ -39,6 +39,10 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | no sound at all from the buzzer, while the LEDs work | an "active" buzzer (with its own oscillator) instead of a passive piezo, a piezo behind a transistor that is not driven, or `gain:` at 0 % | use a **passive** piezo on `alarm_buzzer_pin` and press `alarm test` |
 | the `alarm LEDs` show blue for minutes after a reboot | the MQ-8 publishes `unknown` until its first clean-air calibration finished (`calibration.delay` + `samples`), and the annunciator shows that as "no reading" | wait for the delay; if it stays blue, the calibration failed - read the `MQ-8 logs` text sensor |
 | the alarm LEDs flicker or show a random colour once | 3.3 V data into a 5 V SK6812 (marginal, needs ~3.5 V), or no pull-down on the data line | add a 74AHCT125 / a series diode in the strip's 5 V feed, plus the 10 kΩ pull-down - see [`local_alarm.md`](local_alarm.md) |
+| `history records` stays 0 / the log says `no valid time yet` | the clock has no SNTP sync (offline board), so the history refuses to write rows with a boot counter as their timestamp | expected offline; the history starts with the first sync, or set `require_time: false` (see [`data_logging.md`](data_logging.md)) |
+| `history` reports rows but Home Assistant has no history for the window | the history is a **copy on the device**, not a recorder backend: read it with the `history dump` button or the aggregates | see [`data_logging.md`](data_logging.md) for the export paths |
+| `no data/littlefs partition labelled 'littlefs'` after an OTA update | the partition table changed and OTA cannot move partitions | flash once over USB (`esphome run config.yaml`) |
+| `history write errors` above 0 | a write or `tsdb_sync_h()` failed (flash or filesystem trouble) | check `history free`; see [`data_logging.md`](data_logging.md) |
 
 ## Reading the log
 

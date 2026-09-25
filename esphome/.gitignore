@@ -12,6 +12,8 @@ tests/mq_math_test
 tests/mq_math_test.exe
 tests/mics_math_test
 tests/mics_math_test.exe
+tests/tsdb_math_test
+tests/tsdb_math_test.exe
 
 # ruff cache (esphome/pyproject.toml)
 .ruff_cache/

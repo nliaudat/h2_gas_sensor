@@ -25,7 +25,7 @@ external_components:
   - source:
       type: local
       path: components
-    components: [mq_gas_sensors, mics_5524_gas_sensor]  # every component folder must be listed here
+    components: [mq_gas_sensors, mics_5524_gas_sensor, tsdb]  # every component folder must be listed here
 
 # Enable logging
 logger:
@@ -53,6 +53,11 @@ logger:
     # global level - a per-tag level can only be quieter) to read it again.
     mq_gas_sensors: INFO
     mics_5524_gas_sensor: INFO
+    # The history component: INFO keeps the boot banner (partition, capacity,
+    # buffer pool), the warnings and the CSV dump of the "history dump" button;
+    # only the per-write DEBUG lines are dropped. Set it back to DEBUG to see
+    # every sync.
+    tsdb: INFO
 
 packages:
   wifi: !include packages/wifi.yaml
@@ -78,3 +83,8 @@ packages:
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
   mics5524: !include packages/mics5524.yaml
   dht22: !include packages/dht22.yaml
+  # Persistent history of the readings on a LittleFS partition (tsdb component,
+  # ../../docs/data_logging.md).  The first flash after adding this package must
+  # be over USB - the partition table changes.  Comment the line out for a
+  # build without the history partition.
+  tsdb: !include packages/tsdb.yaml

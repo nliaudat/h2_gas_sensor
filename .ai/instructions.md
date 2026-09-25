@@ -31,8 +31,9 @@ PPM    = a * ratio^b                   (MQUnifiedsensor "exponential" regression
 
 Quality bar for any change:
 
-1. Both host tests pass (`esphome/tests/mq_math_test.cpp`,
-   `esphome/tests/mics_math_test.cpp` - no hardware needed).
+1. All three host tests pass (`esphome/tests/mq_math_test.cpp`,
+   `esphome/tests/mics_math_test.cpp`, `esphome/tests/tsdb_math_test.cpp` - no
+   hardware needed).
 2. `esphome config` and `esphome compile` pass for `packages/mq8.yaml` (the
    fixture `tests/test_mq8_tc_package.yaml` enables its commented compensation
    from the outside, so the compensated configuration is covered too) and for
@@ -45,6 +46,16 @@ A second component, `esphome/components/mics_5524_gas_sensor/`, covers the
 (`docs/mics5524_conversion.md`). It follows the same conventions as
 `mq_gas_sensors`: pure math in its own header, host tested, opt-in package, and
 "the numbers in `docs/` are asserted by the host test".
+
+A third component, `esphome/components/tsdb/`, keeps a persistent history of the
+readings in a time-series database on a LittleFS partition
+(`docs/data_logging.md`). It is the only component that adds a *flash partition*
+(the two OTA slots shrink by half of `partition_size`) and the only one that
+pulls third-party code in at build time (esp_tsdb and LittleFS from the ESP-IDF
+component registry, both pinned in `components/tsdb/__init__.py`). Its pure
+arithmetic lives in `tsdb_math.h`, it is host tested the same way, and the
+geometry it prints in the log is static-asserted against the real engine macros
+in `tsdb.cpp`.
 
 ---
 
@@ -67,7 +78,8 @@ h2_gas_sensor/                      git root
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
     ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
     ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
-    ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, ...
+    ├── components/tsdb/                  history component (partition + LittleFS + esp_tsdb)
+    ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, tsdb.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
     └── tests/                      host tests + config fixtures
 ```
@@ -103,7 +115,9 @@ change is considered done.
 | Python (ruff) | `cd esphome && ruff check . && ruff format --check .` | "All checks passed!" / "already formatted" |
 | Host test | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe` | "All mq_math tests passed." and no compiler warning |
 | Host test (MiCS-5524) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe` | "All mics_math tests passed." and no compiler warning |
+| Host test (tsdb) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe` | "All tsdb_math tests passed." and no compiler warning |
 | Config validation | `cd esphome && esphome config config.yaml` | "Configuration is valid!" |
+| Config validation (history fixture) | `cd esphome && esphome config tests/test_tsdb.yaml` | "Configuration is valid!" (the history package on stand-in sensors; its negative cases are listed in the fixture header) |
 | Build | `cd esphome && esphome compile config.yaml` | "Successfully compiled program." |
 
 Notes and gotchas:
@@ -264,7 +278,28 @@ When adding data or formulas, update the Credits in
 `esphome/components/mq_gas_sensors/README.md` and the sources table in
 `docs/README.md`: MQUnifiedsensor/MQSensorsLib and MQDataScience are MIT, the
 SolderedElectronics curve table is a GPL-3.0 data reference. Vendored ESPHome
-scripts stay unmodified and are credited in `esphome/script/README.md`.
+scripts stay unmodified and are credited in `esphome/script/README.md`. The two
+engines of the history component (esp_tsdb, LittleFS) are not vendored - they are
+pinned by version in `components/tsdb/__init__.py` and credited in
+`components/tsdb/README.md`, `docs/README.md` and `esphome/readme.md#licence`.
+
+### 7.6 History (the local copy of the measurement)
+
+* The history is a **copy**, never the source of truth: alerting stays in Home
+  Assistant or in the local pre-alarm, never in `tsdb`. A component that logs can
+  fail (partition, flash, time) without the alarm becoming weaker.
+* A column without a fresh value is **skipped** (`on_missing: skip`), so a gap
+  appears in the history - never write a `0`, which would read as clean air.
+* `sync_interval` is the amount of data a power cut may lose: it is documented in
+  `docs/data_logging.md` and in `packages/tsdb.yaml` and must not be silently
+  raised.
+* A partition that holds data but does not mount is **never** reformatted
+  (`format_on_first_boot` only fires on a blank partition): losing the history
+  silently would be worse than a boot without a database.
+* Every number in `docs/data_logging.md` (records, bytes, days) is asserted by
+  `esphome/tests/tsdb_math_test.cpp`, and the geometry constants are
+  static-asserted against esp_tsdb in `tsdb.cpp` - an engine upgrade that changes
+  the file format must fail the build, not the documentation.
 
 ---
 
@@ -274,6 +309,9 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
   correction constants needs assertions in `esphome/tests/mq_math_test.cpp` (MQ)
   or `esphome/tests/mics_math_test.cpp` (MiCS-5524), with expected values
   recomputed from first principles (never copied from the implementation).
+  Anything in `esphome/components/tsdb/tsdb_math.h` (int16 encoding, file
+  geometry, capacity, retention) is asserted in `esphome/tests/tsdb_math_test.cpp`
+  the same way - including every number `docs/data_logging.md` quotes.
 * Keep the test building with `-Wall -Wextra` and zero warnings.
 * Config-only changes: run `esphome config` for `config.yaml`, `tests/test_no_id.yaml`
   and `tests/test_tc.yaml`; the negative cases (missing `temperature:`, `curve:`
@@ -293,7 +331,8 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 * `docs/` is the versioned, user-facing documentation; `docs/README.md` is the index.
   The user-facing set is `../README.md` (entry point), `getting_started.md` (setup),
   `home_assistant_alerts.md` (usage), `troubleshooting.md` and `development.md`, plus
-  the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`).
+  the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`,
+  `offline_mode`, `local_alarm`, `data_logging`).
 * Every number quoted in `docs/` must be asserted by `mq_math_test.cpp`; when a
   constant changes, update code, test and docs in the same change.
 * Markdown may use Unicode (arrows, multiplication signs, micro, degrees - the ASCII
