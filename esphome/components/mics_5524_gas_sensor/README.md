@@ -112,9 +112,12 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
 * The EN pin is driven once at setup (enabled) and never toggled at runtime:
   the vendor warm-up *is* a calibration, so duty-cycling would invalidate the
   reference.
-* Two entries on the same sensor (e.g. H2 and CO) are technically possible, but
-  they see the same gas mixture with different calibrations - the sensor has no
-  selectivity.
+* Several entries on the same sensor are supported and the shipped
+  `packages/mics5524.yaml` uses that: it instantiates one entry per gas of the
+  vendor table (`H2`, `CO`, `NH3`, `C2H5OH`, `CH4`) on the same analog output.
+  They see the same gas mixture through different curves, each with its own
+  clean-air calibration - the sensor has no selectivity, so they are *views* of
+  one signal, not independent measurements.
 
 ## Troubleshooting
 

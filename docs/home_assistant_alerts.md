@@ -17,6 +17,10 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `ambient temperature` | °C | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
 | `ambient humidity` | % | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
 | `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `CO (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `NH3 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `C2H5OH (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
+| `CH4 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
@@ -97,7 +101,11 @@ something looks wrong.
 | "why is the reading what it is?" | the diagnostics: `MQ-8 AO voltage` (wiring/divider), `RS` and `RS-R0 ratio` (RL, ageing), `T/RH correction` (compensation) |
 
 The MiCS-5524 sees five gases on a single output and cannot tell them apart: use
-it for the trend, never as the only alarm source.
+it for the trend, never as the only alarm source. `packages/mics5524.yaml`
+publishes every gas of the vendor table - `H2 trace`, `CO`, `NH3`, `C2H5OH` and
+`CH4` - but these are the *same* analog output interpreted with five different
+curves, not five independent measurements: keep the alerting on `H2 trace` (and
+on the MQ-8).
 
 ## Operations
 

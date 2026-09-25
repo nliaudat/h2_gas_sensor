@@ -52,7 +52,7 @@ A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
 | `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
 | `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
 | `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
-| `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN (optional hardware) | Only with a MiCS-5524 |
+| `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN plus one gas entity per vendor curve (H2, CO, NH3, C2H5OH, CH4 - optional hardware) | Only with a MiCS-5524 |
 | `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
 | `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |

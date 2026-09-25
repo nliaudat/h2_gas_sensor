@@ -77,12 +77,16 @@ Step by step, with the wiring details and the calibration workflow:
 |---|---|---|
 | `H2 (MQ-8)` | ppm | the alarm reference: 4 000 / 10 000 ppm |
 | `H2 trace (MiCS-5524)` | ppm | early trend, 100 - 1 000 ppm band (optional package) |
+| `CO` / `NH3` / `C2H5OH` / `CH4` (MiCS-5524) | ppm | the same analog output read through the other vendor curves (optional package) |
 
 Plus the diagnostics (`MQ-8 AO voltage`, `MQ-8 RS-R0 ratio`, `MQ-8 RS`,
 `MiCS-5524 ratio`, `WiFi Signal` and - when the optional compensation is enabled -
 `MQ-8 T/RH correction`, `ambient temperature`, `ambient humidity`) and a
-`restart` switch. Full entity list, thresholds and
-paste-ready automations: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
+`restart` switch. The four extra MiCS-5524 gas entities are the *same* analog
+output interpreted with the other vendor curves - not independent measurements;
+the alerting stays on `H2 trace` and `H2 (MQ-8)`. Full entity list, thresholds
+and paste-ready automations:
+[`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
 
 ```yaml
 # Home Assistant (automations.yaml) - pre-alarm at the top of the MQ-8 range.

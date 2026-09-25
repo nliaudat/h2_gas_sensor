@@ -96,6 +96,34 @@ packages:
   mics5524: !include packages/mics5524.yaml
 ```
 
+## Publishing several gases
+
+The package instantiates one `mics_5524_gas_sensor` entry per gas of the vendor
+table, all reading the same `A0`:
+
+| Entity (suffix of `friendly_name`) | Vendor curve |
+|---|---|
+| `H2 trace (MiCS-5524)` | H2 - the trace / alarm reference |
+| `CO (MiCS-5524)` | CO |
+| `NH3 (MiCS-5524)` | NH3 |
+| `C2H5OH (MiCS-5524)` | C2H5OH (ethanol) |
+| `CH4 (MiCS-5524)` | CH4 (methane) |
+
+The per-gas thresholds, gains and ranges are in
+[`mics5524_conversion.md`](mics5524_conversion.md); `conversion: dfrobot` is
+required for the four extra gases (only CO also ships with
+`conversion: datasheet` coefficients).
+
+**They are not five measurements.** There is a single analog output, so all five
+entities are the same `ratio = (VCC - V_AO) / x_air` pushed through five
+different curves: a reading shown as some ppm of H2 becomes a different number
+when the same signal is read as CO, purely because the curves differ. Each entry
+captures and persists its own clean-air reference on the first boot, and the
+ratio / scaled-voltage diagnostics are linked to the H2 entry only (the ratio is
+identical for all five). Use the extra entities to see how the other gases would
+interpret the same signal, never as independent readings - keep the alerting on
+`H2 trace` (and the MQ-8).
+
 ## Confidence checklist before trusting a reading
 
 * ratio diagnostic ≈ 1.0 in clean air, and it *drops* when a reducing gas arrives;
