@@ -196,11 +196,14 @@ on the MQ-8).
   repeated crashes), `api: reboot_timeout: 30min`, OTA (`ota: platform: esphome`)
   and the `restart` switch.
 * **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
-  tags are pinned at `INFO`); `esphome logs config.yaml` (or the web log) prints
-  the measurement chain - see [`troubleshooting.md`](troubleshooting.md) for how
-  to read it. The same messages are mirrored into Home Assistant by the
-  `MQ-8 logs` / `MiCS-5524 logs` text sensors, so the chain is readable without
-  changing the logger level.
+  tags are pinned at `INFO` and the packages enable `log_ppm:`), so the normal
+  mode prints the published values (`'MQ-8 H2': 93.7 ppm`) and the whole
+  measurement chain needs the tags back at `DEBUG`;
+  `esphome logs --no-states config.yaml` removes the `[S]` state lines the log
+  client adds - see [`troubleshooting.md`](troubleshooting.md#reading-the-log) for
+  how to read it. The chain is mirrored into Home Assistant by the `MQ-8 logs` /
+  `MiCS-5524 logs` text sensors, so it is readable without changing the logger
+  level.
 * **Re-calibration** - the `MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons
   start a clean-air calibration from Home Assistant (press them *only* in clean
   air; the value is stored in flash). The MiCS button refreshes all five gas

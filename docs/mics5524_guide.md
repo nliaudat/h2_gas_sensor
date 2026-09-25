@@ -145,6 +145,15 @@ identical for all five). Use the extra entities to see how the other gases would
 interpret the same signal, never as independent readings - keep the alerting on
 `H2 trace` (and the MQ-8).
 
+Only the H2 entry logs its value (`log_ppm: true` in
+[`../esphome/packages/mics5524.yaml`](../esphome/packages/mics5524.yaml)): one
+`INFO` line per update, e.g. `[I][mics_5524_gas_sensor]: 'H2': 0.0 ppm`.  The
+four views stay silent, and the whole chain per gas
+(`V_AO=… V, x=…, ratio=… -> … ppm`) is logged at `DEBUG` - set the
+`mics_5524_gas_sensor` tag back to `DEBUG` under `logger.logs` to read it
+([`troubleshooting.md`](troubleshooting.md#reading-the-log) explains the `[S]`
+lines that `esphome logs` adds on top).
+
 ## Confidence checklist before trusting a reading
 
 * ratio diagnostic ≈ 1.0 in clean air, and it *drops* when a reducing gas arrives;

@@ -71,6 +71,14 @@ void MQGasSensor::log_message_(LogLevel level, const char *format, ...) {
   this->publish_log_(level, message);
 }
 
+void MQGasSensor::log_reading_(float ppm) {
+  if (!this->log_ppm_ || !std::isfinite(ppm))
+    return;
+  // Console only: the detailed chain is what reaches `log_sensor_` (rate
+  // limited there), and a text state per second would flood the recorder.
+  ESP_LOGI(TAG, "'%s %s': %.1f ppm", this->type_.c_str(), this->gas_.c_str(), ppm);
+}
+
 void MQGasSensor::setup() {
   this->r0_pref_ = this->make_entity_preference<float>(R0_PREFERENCE_VERSION);
 
@@ -279,6 +287,7 @@ void MQGasSensor::update() {
   this->correction_ = this->compute_correction_();
   const float ppm = this->read_ppm_();
 
+  this->log_reading_(ppm);
   this->log_message_(LOG_DEBUG, "V=%.4f V, RS=%.4f kOhm, ratio=%.4f (correction=%.4f) -> %.1f ppm",
                      this->sensor_voltage_, this->rs_, this->ratio_, this->correction_, ppm);
 

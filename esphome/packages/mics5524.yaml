@@ -121,6 +121,10 @@ sensor:
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
     min_ppm: 0
     max_ppm: ${mics_max_ppm}
+    # The "normal mode" log line: one INFO line per update with the published
+    # value (`'H2': 93.7 ppm`); the chain (V_AO / x or RS / ratio) stays at DEBUG.
+    # Only this entry logs its value: the four views below are the same signal.
+    log_ppm: true
     # enable_pin:
     #   number: ${mics_enable_pin}
     #   inverted: true  # LOW enables the module
@@ -143,6 +147,8 @@ sensor:
   # reading. `conversion: dfrobot` is required: only CO ships with datasheet
   # coefficients (a = 6.3, b = -1.1).  They have a cadence of their own
   # (`mics_extra_gas_update_interval`) - the H2 entry above is the alarm reference.
+  # They do not log their value (`log_ppm`): the H2 trace entry already carries
+  # the `INFO` line of the same signal, and four more would only be noise.
   - platform: mics_5524_gas_sensor
     id: mics_co
     name: "${friendly_name} CO (MiCS-5524)"
@@ -160,6 +166,7 @@ sensor:
     warmup_time: 3min
     min_ppm: 0
     max_ppm: ${mics_co_max_ppm}
+    log_ppm: false
     calibration:  # own clean-air reference, persisted once (see the H2 entry)
       delay: 3min
       samples: 10
@@ -182,6 +189,7 @@ sensor:
     warmup_time: 3min
     min_ppm: 0
     max_ppm: ${mics_nh3_max_ppm}
+    log_ppm: false
     calibration:
       delay: 3min
       samples: 10
@@ -204,6 +212,7 @@ sensor:
     warmup_time: 3min
     min_ppm: 0
     max_ppm: ${mics_ethanol_max_ppm}
+    log_ppm: false
     calibration:
       delay: 3min
       samples: 10
@@ -226,6 +235,7 @@ sensor:
     warmup_time: 3min
     min_ppm: 0
     max_ppm: ${mics_ch4_max_ppm}
+    log_ppm: false
     calibration:  # CH4 reports 0 below 1000 ppm - that is the vendor's own floor
       delay: 3min
       samples: 10

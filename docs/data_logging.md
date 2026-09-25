@@ -59,8 +59,8 @@ littlefs, data, littlefs, , 0x80000,   # the history
 ```
 
 The 512 KB is split between the two OTA slots, so each of them shrinks from
-1.75 MB to 1.5 MB - the firmware (1 005 871 bytes with the history included) sits
-at 64 % of its slot, which still leaves 566 880 bytes (about 554 KB) of headroom
+1.75 MB to 1.5 MB - the firmware (1 006 047 bytes with the history included) sits
+at 64 % of its slot, which still leaves 566 817 bytes (about 553 KB) of headroom
 for future releases. A
 partition table change cannot be delivered by OTA: **flash once over USB**
 (`esphome run config.yaml`) after enabling the package, then OTA works as before.
@@ -107,7 +107,7 @@ the flash size.
 A bigger `max_file_size` needs a bigger `partition_size`: the partition has to
 hold the file plus `min_free_bytes`, and every KB of it is taken out of **both**
 OTA slots. On this 4 MB flash, with the firmware the history package produces
-(1 005 984 bytes):
+(1 006 160 bytes):
 
 | `partition_size` | Each OTA slot | Firmware share | Verdict |
 |---|---|---|---|
@@ -128,9 +128,13 @@ future build against these numbers:
 
 | Memory | Used | Total | Free |
 |---|---|---|---|
-| Flash (image) | 1 005 871 B (64.0 %) | app slot 1 572 864 B | 566 880 B (36 %) |
+| Flash (image) | 1 006 047 B (64.0 %) | app slot 1 572 864 B | 566 817 B (36 %) |
 | IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
-| DRAM (static) | 53 676 B (29.7 %) | 180 736 B | 127 060 B |
+| DRAM (static) | 53 692 B (29.7 %) | 180 736 B | 127 044 B |
+
+(The per-update `INFO` value line of the two gas components, `log_ppm:`, is
++176 B of flash and +16 B of static DRAM against the numbers recorded before
+it.)
 
 The history itself, object by object (`esp_idf_size --files`):
 
@@ -150,7 +154,7 @@ block caches, the esp_tsdb handle with its header copy and mutex);
 `buffer_pool_size` and `min_free_bytes` are the knobs.
 
 Reading the two size reports: before the history package the image was
-904 299 B, now 1 005 871 B (+101 572 B, ~40 KB of it the feature's own code). The
+904 299 B, now 1 006 047 B (+101 748 B, ~40 KB of it the feature's own code). The
 remainder sits in objects of the base configuration that this change does not
 touch - the current image carries `esp_timer_impl_lac.c.obj` with 91 777 B of
 `.rodata` (the time/newlib data of the `time:`/SNTP support) and the Wi-Fi and
@@ -158,7 +162,7 @@ TLS data of the IDF components. An exact attribution needs an A/B build (comment
 the `tsdb: !include` line, rebuild, diff `--archives`), because `esphome clean`
 deletes the older map file.
 
-Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 880 bytes
+Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 817 bytes
 of the app slot stay free (~1 - 2 KB per release of headroom), IRAM is untouched
 and the 16.7 days of history are worth the 40 KB.
 

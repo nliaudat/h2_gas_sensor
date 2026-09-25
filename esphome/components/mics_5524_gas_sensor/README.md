@@ -79,6 +79,7 @@ the wiring notes).
 | `calibration` | – | `delay:` (default `60s`), `samples:` (default `10`), `persist:` (default `true`). |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional diagnostic entities (the ratio of the active model, RS in kOhm for the datasheet model, the scaled AO voltage). |
 | `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
+| `log_ppm` | `false` | Log the value that is about to be published at **`INFO`** on every update, e.g. `[I][mics_5524_gas_sensor]: 'H2': 93.7 ppm` - the "normal mode" line. The chain (`V_AO=... x=... ratio=... -> ... ppm` / `V_AO=... RS=... ratio=... -> ... ppm`) stays at `DEBUG` and appears once the `mics_5524_gas_sensor` tag is back at `DEBUG`. Console only: the line is *not* mirrored to `log_sensor`. |
 | `update_interval` | `30s` | Normal polling interval.  The shipped `packages/mics5524.yaml` overrides it with its `mics_update_interval` (`1s` by default). |
 
 ## Calibration
@@ -129,6 +130,11 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
   be read from Home Assistant without changing the logger level.  The entity
   state is the *last* message; the per-update line is mirrored at most every
   30 s, so a fast `update_interval` does not flood the recorder.
+* With `log_ppm: true` every update additionally logs the *published* value at
+  `INFO` - the "normal mode" line, e.g. `'H2': 93.7 ppm`.  The chain stays at
+  `DEBUG`, so the shipped configuration (tag at `INFO`) shows the value and the
+  chain only appears once the tag is back at `DEBUG`
+  (see [`../../config.yaml`](../../config.yaml)).
 
 ## Troubleshooting
 

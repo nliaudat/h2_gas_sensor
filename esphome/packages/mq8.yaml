@@ -142,6 +142,11 @@ sensor:
     ratio_sensor: ${name}_mq8_ratio
     rs_sensor: ${name}_mq8_rs
     log_sensor: ${name}_mq8_logs
+    # The "normal mode" log line: one INFO line per update with the published
+    # value (`'MQ-8 H2': 93.7 ppm`); the detailed chain (V / RS / ratio /
+    # correction) stays at DEBUG and needs the tag at DEBUG again - see the
+    # logger comment in ../config.yaml.
+    log_ppm: true
 
   # --- optional ambient T/RH sensor: uncomment ONE of the two blocks ----------
   # Only used by the compensation block of the MQ-8 entry above. The correction

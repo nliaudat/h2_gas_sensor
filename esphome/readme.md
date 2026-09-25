@@ -176,13 +176,19 @@ measurement math and every lint command are collected in
   [`../docs/local_alarm.md`](../docs/local_alarm.md).
 * **Logging** - `logger:` in `config.yaml` runs at `DEBUG` with per-tag
   overrides: the two gas-sensor tags (`mq_gas_sensors`, `mics_5524_gas_sensor`)
-  are pinned at `INFO`, so the per-update raw values are off by default - set
-  them back to `DEBUG` under `logger.logs` to read them
-  (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
-  calibration result).  The same messages are mirrored to the `MQ-8 logs` /
-  `MiCS-5524 logs` text sensors (`log_sensor:` in the packages), so they are also
-  visible in Home Assistant without changing the logger level - the per-update
-  line at most every 30 s, calibration messages and warnings immediately.
+  are pinned at `INFO` and the packages enable `log_ppm:`, so the *normal mode*
+  prints one line per update with the published value
+  (`[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm`).  Set the tags back to `DEBUG`
+  under `logger.logs` to read the whole chain (`V=... RS=... ratio=...
+  (correction=...) -> ... ppm`, the applied T/RH correction, the calibration
+  result).  The chain is mirrored to the `MQ-8 logs` / `MiCS-5524 logs` text
+  sensors (`log_sensor:` in the packages), so it is also visible in Home
+  Assistant without changing the logger level - the per-update line at most every
+  30 s, calibration messages and warnings immediately.  The per-entity
+  `[S][sensor]: '...' >> ...` lines are synthesised by the log *client* for every
+  state change; `esphome logs --no-states config.yaml` (or `ESPHOME_LOG_STATES=0`)
+  leaves only the device log - see
+  [`../docs/troubleshooting.md`](../docs/troubleshooting.md#reading-the-log).
 * **Update rate** - every interval is a substitution at the top of its package:
   `mq8_update_interval` (the H2 entity), `mq8_adc_update_interval` (its raw AO
   voltage entity), `mq8_diag_interval` (RS / ratio / T-RH throttle),

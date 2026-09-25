@@ -2,9 +2,11 @@
 # (run: esphome config tests/test_mics.yaml)
 #
 #   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin,
-#     automatic calibration in clean air and a `log_sensor:` mirror
-#   * datasheet model (`conversion: datasheet`) with explicit a/b, a fixed r0 and
-#     a shared external voltage source
+#     automatic calibration in clean air, a `log_sensor:` mirror and the
+#     per-update `INFO` value line (`log_ppm: true`)
+#   * datasheet model (`conversion: datasheet`) with explicit a/b, a fixed r0, a
+#     shared external voltage source and no `log_ppm` (the default `false` keeps
+#     the value line off - like the four extra views of `packages/mics5524.yaml`)
 #   * diagnostics for both models
 esphome:
   name: mics_test
@@ -47,6 +49,7 @@ sensor:
     ratio_sensor: mics_ratio
     voltage_sensor: mics_voltage
     log_sensor: mics_logs
+    log_ppm: true
 
   - platform: mics_5524_gas_sensor
     id: mics_co

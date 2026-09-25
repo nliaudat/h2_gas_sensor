@@ -66,6 +66,10 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
   void set_correction_sensor(sensor::Sensor *sensor) { this->correction_sensor_ = sensor; }
   void set_log_sensor(text_sensor::TextSensor *sensor) { this->log_sensor_ = sensor; }
+  /// Log the value that is about to be published at `INFO` on every update.  It
+  /// is the "normal mode" line: the detailed chain (V / RS / ratio / correction)
+  /// stays at `DEBUG` and only appears with the logger tag back at `DEBUG`.
+  void set_log_ppm(bool log_ppm) { this->log_ppm_ = log_ppm; }
 
   /// Console level of a `log_message_()` call.  The order mirrors the verbosity
   /// of ESP-IDF's `esp_log_level_t`: `LOG_ERROR` is always printed, `LOG_DEBUG`
@@ -118,6 +122,11 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void save_r0_();
   bool load_r0_();
   void log_config_();
+  /// Log the value published by the next `publish_state()` at `INFO`
+  /// (`'<type> <gas>': <ppm> ppm`), the "normal mode" counterpart of the
+  /// `LOG_DEBUG` chain in `update()`.  No-op when `log_ppm:` is off or the
+  /// reading is invalid; console only - the chain is what reaches `log_sensor_`.
+  void log_reading_(float ppm);
   /// Publish a message to `log_sensor_` (no-op when it is not configured);
   /// `LOG_DEBUG` messages are rate limited to `LOG_SENSOR_DEBUG_INTERVAL_MS`.
   void publish_log_(LogLevel level, const char *message);
@@ -152,6 +161,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   uint32_t sample_interval_{20};
   uint32_t warmup_time_{0};
   bool r0_configured_{false};
+  bool log_ppm_{false};  ///< log the published value at INFO on every update (`log_ppm: true`)
 
   // -------------------------------------------------------------- calibration
   bool calibration_enabled_{false};

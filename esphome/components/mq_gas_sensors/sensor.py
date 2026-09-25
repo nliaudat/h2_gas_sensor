@@ -44,6 +44,7 @@ from . import (
     CONF_DIVIDER,
     CONF_GAS,
     CONF_HUMIDITY,
+    CONF_LOG_PPM,
     CONF_LOG_SENSOR,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
@@ -412,6 +413,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_CORRECTION_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_LOG_SENSOR): cv.use_id(text_sensor.TextSensor),
+            cv.Optional(CONF_LOG_PPM, default=False): cv.boolean,
         }
     )
     .extend(cv.polling_component_schema("60s")),
@@ -515,6 +517,8 @@ async def to_code(config: ConfigType) -> None:
         cg.add(var.set_source(await cg.get_variable(source_id)))
     else:
         cg.add(var.set_source(await _create_internal_adc(config)))
+
+    cg.add(var.set_log_ppm(config[CONF_LOG_PPM]))
 
     for key, setter in (
         (CONF_RATIO_SENSOR, var.set_ratio_sensor),

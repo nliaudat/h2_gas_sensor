@@ -46,16 +46,42 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 
 ## Reading the log
 
-`esphome logs config.yaml` (or the web log) prints one line per update at
-`DEBUG` level, prefixed with `[D][tag]`. The two gas-sensor tags are pinned at
-`INFO` in [`../esphome/config.yaml`](../esphome/config.yaml) to keep the log
-readable; set `mq_gas_sensors` / `mics_5524_gas_sensor` back to `DEBUG` under
-`logger.logs` to read the chain (illustrative values):
+`esphome logs config.yaml` (or the web log) mixes two sources. **The device log**
+is what the firmware prints: with the shipped `logger:` configuration
+([`../esphome/config.yaml`](../esphome/config.yaml), both gas-sensor tags pinned
+at `INFO`) that is one line per update with the published value - the "normal
+mode":
+
+```
+[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm
+[I][mics_5524_gas_sensor]: 'H2': 0.0 ppm
+```
+
+The whole measurement chain stays at `DEBUG` and appears as soon as
+`mq_gas_sensors` / `mics_5524_gas_sensor` are set back to `DEBUG` under
+`logger.logs` (`log_ppm:` in the two packages switches the value line above -
+see the logger comment in `config.yaml`).  Illustrative values:
 
 ```
 [D][mq_gas_sensors]: 'MQ-8 H2': V=1.234 V, RS=12.345 kOhm, ratio=42.100 (correction=0.9987) -> 74.5 ppm
 [D][mics_5524_gas_sensor]: 'H2': V_AO=1.234 V, x=3.7660, ratio=0.9980 (dfrobot) -> 0.0 ppm
 [D][mics_5524_gas_sensor]: 'CO': V_AO=1.234 V, RS=30.519 kOhm, ratio=0.8720 (datasheet) -> 7.3 ppm
+```
+
+**The synthesised state lines** are the second source: the log *client*
+(`esphome logs`, the dashboard) subscribes to every entity state and prints one
+line per change, tagged `[S]`:
+
+```
+[S][sensor]: 'H2 sensor board MQ-8 RS' >> 86.829 kOhm
+```
+
+They do not come from the firmware (no logger tag or level can filter them) and
+they are what makes a 1 Hz device look noisy.  Switch them off when only the
+values matter and the log shows exactly the device log above:
+
+```bash
+esphome logs --no-states config.yaml     # or: set ESPHOME_LOG_STATES=0
 ```
 
 * `V` (MQ) / `V_AO` (MiCS) is the scaled voltage at the pin (after
@@ -68,7 +94,8 @@ readable; set `mq_gas_sensors` / `mics_5524_gas_sensor` back to `DEBUG` under
 * `correction` is the T/RH factor (1.0000 = none);
 * the ppm value at the end is what the sensor entity publishes.
 
-Both packages also mirror these lines - and the calibration messages and
-warnings - into the `MQ-8 logs` / `MiCS-5524 logs` text sensors
-(`log_sensor:`), so the same chain can be read from Home Assistant without
-changing `logger.logs`.
+Both packages also mirror the chain - and the calibration messages and warnings
+- into the `MQ-8 logs` / `MiCS-5524 logs` text sensors (`log_sensor:`), so the
+same chain can be read from Home Assistant without changing `logger.logs`.  The
+per-update *value* line is console-only: a text state per second would flood the
+recorder.

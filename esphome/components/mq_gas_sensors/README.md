@@ -48,9 +48,10 @@ averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
   automatic **clean-air calibration** after a configurable delay.
 * Warm-up/burn-in suppression, PPM range clamps, `correction_factor`, ratio
   direction switch for bit-exact `MQUnifiedsensor::readSensorR0Rs()` parity.
-* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage, and a `log_sensor:`
+* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage, a `log_sensor:`
   `text_sensor` that mirrors the component log (chain, calibration, warnings)
-  into Home Assistant.
+  into Home Assistant, and `log_ppm:` - one `INFO` line per update with the
+  published value, while the detailed chain stays at `DEBUG`.
 * Host-testable math (`tests/mq_math_test.cpp`, no ESPHome needed).
 
 ## Minimal configuration
@@ -120,6 +121,7 @@ sensor:
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
 | `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
+| `log_ppm` | `false` | Log the value that is about to be published at **`INFO`** on every update, e.g. `[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm` - the "normal mode" line. The detailed chain (`V=... RS=... ratio=... (correction=...) -> ... ppm`) stays at `DEBUG` and appears once the `mq_gas_sensors` tag is back at `DEBUG`. Console only: the line is *not* mirrored to `log_sensor` (a text state per second would flood the recorder). |
 | `update_interval` | `60s` | Normal sensor polling interval.  The shipped `packages/mq8.yaml` overrides it with its `mq8_update_interval` (`1s` by default). |
 
 With `pin:`, the generated `adc` entry is validated by the ADC platform's own
@@ -327,6 +329,12 @@ your own coefficients fitted to the port's convention.
   logger level.  The entity state is the *last* message; the per-update line is
   mirrored at most every 30 s, so a fast `update_interval` does not flood the
   recorder.
+* With `log_ppm: true` every update additionally logs the *published* value at
+  `INFO` - the "normal mode" line, e.g. `'MQ-8 H2': 93.7 ppm`.  The chain above
+  stays at `DEBUG`, so the shipped configuration (tag at `INFO`) shows the value
+  and the whole measurement chain only appears once the tag is back at `DEBUG`
+  (see [`../../config.yaml`](../../config.yaml)).  Invalid readings log nothing
+  here: the one-time warnings cover them.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
   broken sensor cannot look like clean air.

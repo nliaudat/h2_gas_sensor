@@ -70,6 +70,14 @@ void MiCS5524GasSensor::log_message_(LogLevel level, const char *format, ...) {
   this->publish_log_(level, message);
 }
 
+void MiCS5524GasSensor::log_reading_(float ppm) {
+  if (!this->log_ppm_ || !std::isfinite(ppm))
+    return;
+  // Console only: the detailed chain is what reaches `log_sensor_` (rate
+  // limited there), and a text state per second would flood the recorder.
+  ESP_LOGI(TAG, "'%s': %.1f ppm", this->gas_.c_str(), ppm);
+}
+
 void MiCS5524GasSensor::setup() {
   this->reference_pref_ = this->make_entity_preference<float>(REFERENCE_PREFERENCE_VERSION + this->conversion_);
 
@@ -254,6 +262,8 @@ void MiCS5524GasSensor::update() {
 
   this->ratio_ = this->current_ratio_();
   const float ppm = this->read_ppm_();
+
+  this->log_reading_(ppm);
 
   // The vendor model has no RS, the datasheet model has no x - log the quantity
   // the active model actually uses.
