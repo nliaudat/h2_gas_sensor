@@ -1,7 +1,12 @@
+substitutions:
+  # Diagnostics only - 1 min is plenty, and the Home Assistant recorder does not
+  # need more.
+  wifi_signal_update_interval: 60s
+
 sensor:
   - platform: wifi_signal
     name: "${friendly_name} WiFi Signal"
-    update_interval: 60s
+    update_interval: ${wifi_signal_update_interval}
     entity_category: "diagnostic"
     id: ${name}_wifi_signal_db
 

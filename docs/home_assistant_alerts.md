@@ -30,6 +30,8 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MiCS-5524 recalibrate` | - | button (config) | `packages/mics5524.yaml` |
 | `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
 | `restart` | - | switch | `packages/switch.yaml` |
+| `alarm LEDs` | - | light (diagnostic) | `packages/alarm.yaml` |
+| `alarm test` | - | button (config) | `packages/alarm.yaml` |
 
 Diagnostic entities are categorised as such, so they stay out of the default
 dashboard. With `friendly_name: "H2 sensor board"` the alarm entity is
@@ -48,15 +50,34 @@ The two `recalibrate` buttons start a clean-air calibration (`request_calibratio
 used from then on.  A request is deferred until `warmup_time` has elapsed and the
 value stays `unknown` while the calibration is pending or running.
 
+The local pre-alarm (`packages/alarm.yaml`, optional hardware) adds a `light`
+entity for the 2-LED status strip and an `alarm test` button that plays the
+buzzer melody.  It works without Home Assistant on purpose - it *is* the local
+warning - and it changes none of the automations below: amber + a beep every 5 s
+from 4 000 ppm, red and **silent** from 10 000 ppm (the MQ-8 ceiling, so possibly
+already past 50 % of the LEL), blue while the reading is invalid.  Details:
+[`local_alarm.md`](local_alarm.md).
+
 ## Update rate, latency and the recorder
 
 | Entity | Refresh |
 |---|---|
-| `H2 (MQ-8)`, `H2 trace (MiCS-5524)` | **1 s** (four ADC conversions averaged per second ≈ 60 ms of sampling) |
-| `MQ-8 AO voltage`, `MQ-8 RS`, `MQ-8 RS-R0 ratio`, `MQ-8 T-RH correction` | 30 s (throttled on the device) |
-| `MiCS-5524 AO voltage`, `MiCS-5524 AO (scaled)`, `MiCS-5524 ratio`, the four extra gas views, the two `logs` sensors | 30 s |
-| `ambient temperature` / `ambient humidity` | 60 s (the DHT needs ≥ 2 s between reads) |
-| `WiFi Signal` | 60 s |
+| `H2 (MQ-8)`, `H2 trace (MiCS-5524)` | **1 s** (`mq8_update_interval` / `mics_update_interval`; four ADC conversions averaged per second ≈ 60 ms of sampling) |
+| `MQ-8 AO voltage`, `MQ-8 RS`, `MQ-8 RS-R0 ratio`, `MQ-8 T-RH correction` | 1 s (`mq8_adc_update_interval` / `mq8_diag_interval`) |
+| `MiCS-5524 AO voltage`, `MiCS-5524 AO (scaled)`, `MiCS-5524 ratio` | 1 s (`mics_adc_update_interval` / `mics_diag_interval`) |
+| the four extra MiCS-5524 gas views (`CO`, `NH3`, `C2H5OH`, `CH4`) | 1 s (`mics_extra_gas_update_interval`) |
+| the two `logs` text sensors | the console keeps every line; the *entity* is capped at 30 s inside the component, whatever the poll rate |
+| `ambient temperature` / `ambient humidity` | 60 s (`dht22_update_interval`; the DHT needs ≥ 2 s between reads) |
+| `WiFi Signal` | 60 s (`wifi_signal_update_interval`) |
+
+Every cadence is a substitution at the top of its package (see the table in
+[`getting_started.md`](getting_started.md)), so a whole chain can be slowed down in
+one place: set `mq8_diag_interval: 30s`, `mics_diag_interval: 30s` and
+`mics_extra_gas_update_interval: 30s` in the `substitutions:` of
+[`../esphome/config.yaml`](../esphome/config.yaml) to keep the diagnostics out of
+the recorder while the alarm entities stay at 1 Hz.  `never` is only valid on the
+two `*_adc_update_interval` keys: it switches the raw-voltage entity off, the ppm
+value is still measured (the gas entry samples the ADC itself on every poll).
 
 The two alarm entities are the fast ones (the MOX heaters run continuously, so
 slow polling saves nothing): an alarm state reaches Home Assistant within about a
@@ -82,7 +103,7 @@ recorder:
       - sensor.h2_sensor_board_mics_5524_ao_scaled
       - sensor.h2_sensor_board_mics_5524_ratio
       - sensor.h2_sensor_board_mics_5524_logs
-      # optional: the four extra MiCS-5524 gas views (30 s, not used for alerting)
+      # optional: the four extra MiCS-5524 gas views (1 s, not used for alerting)
       - sensor.h2_sensor_board_co_mics_5524
       - sensor.h2_sensor_board_nh3_mics_5524
       - sensor.h2_sensor_board_c2h5oh_mics_5524

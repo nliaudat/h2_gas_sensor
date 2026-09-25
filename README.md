@@ -15,6 +15,7 @@ cycle.
 | | |
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
+| PCB | [`pcb/`](pcb/) - EasyEDA schematic, layout, render and Gerber of the carrier board; pin table and caveats in [`docs/hardware.md`](docs/hardware.md) |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
 | Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the compensation of the MQ-8 ratio |
 | Firmware | [`esphome/`](esphome/) - entry point [`esphome/config.yaml`](esphome/config.yaml) |
@@ -30,6 +31,8 @@ cycle.
 | 2 resistors per sensor (e.g. 10 kΩ + 20 kΩ) | the voltage divider - **the ESP32 ADC pins are not 5 V tolerant** |
 | MiCS-5524 module (optional) | 5 V, `A0` + `EN` pad, trace band 100 - 1 000 ppm |
 | SHT4x / SHT3x or DHT11 (optional) | temperature/humidity sensor for the optional compensation inside `packages/mq8.yaml` |
+| Passive piezo buzzer (optional) | the local pre-alarm (`packages/alarm.yaml`): a bare disc **without** an internal oscillator - an active buzzer only clicks, and a magnetic one needs a transistor |
+| 2 x SK6812 LEDs (optional) | the status LEDs of the local pre-alarm: 5 V feed, 3.3 V data (add a level shifter or a diode), series resistor, 10 kΩ pull-down, bulk capacitor - see [`docs/local_alarm.md`](docs/local_alarm.md) |
 
 ## Wiring at a glance
 
@@ -50,6 +53,19 @@ MQ-8 / MiCS-5524 at 5 V
   range can clip. Use 10k/10k (2.5 V) or an ADS1115 if that matters to you.
 * Use an **ADC1** pin (GPIO32-39): ADC2 is unusable while Wi-Fi is active, and
   GPIO12 must not be used.
+* The optional local pre-alarm (`packages/alarm.yaml`) uses its own two pins: a
+  **passive** piezo on GPIO33 and 2 x SK6812 on GPIO19 (5 V feed) - see
+  [`docs/local_alarm.md`](docs/local_alarm.md).
+
+If you build the **PCB in [`pcb/`](pcb/)** instead of wiring on a breadboard: its
+schematic pairs the MQ-8 with `ADC-2` (**GPIO39**) and the MiCS-5524 with `ADC-1`
+(**GPIO36**), which is exactly what `mq8_pin` / `mics_pin` already default to - so
+no pin override is needed. Calibrate once after the first flash (`R0` and the MiCS
+air reference are stored per measurement chain), and if you *did* wire a
+breadboard on the older pins (MQ-8 on GPIO36, MiCS-5524 on GPIO39), uncomment the
+two overrides in [`esphome/config.yaml`](esphome/config.yaml). The whole
+net-to-GPIO table, the power input and the pre-alarm hardware of the board are in
+[`docs/hardware.md`](docs/hardware.md).
 
 ## Quick start
 
@@ -90,12 +106,23 @@ the alerting stays on `H2 trace` and `H2 (MQ-8)`. Full entity list, thresholds
 and paste-ready automations:
 [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md).
 
+The optional local pre-alarm (`packages/alarm.yaml`) adds an `alarm LEDs` light
+and an `alarm test` button: amber LEDs plus a beep every 5 s from 4 000 ppm
+(10 % of the LEL, the early-warning band) and red **without** the buzzer from
+10 000 ppm, where the MQ-8 sits at its ceiling and the reading may already be past
+50 % of the LEL.  It is a local indicator, not a certified detector - see
+[`docs/local_alarm.md`](docs/local_alarm.md).
+
 The two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`) refresh every
 **second** - the metal-oxide heaters run continuously, so there is nothing to save
-by polling slowly - while every diagnostic entity is throttled to 30 s on the
-device and the DHT22 stays at 60 s. See
-[`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) for the Home
-Assistant `recorder: exclude:` recipe that keeps 1 Hz data out of the database.
+by polling slowly.  Every diagnostic and ambient entity has its own substitution
+too (`mq8_diag_interval`, `mics_extra_gas_update_interval`, `dht22_update_interval`,
+`wifi_signal_update_interval`, ... in the package headers): they are 1 s like the
+alarm entities, except the DHT22 and `WiFi Signal` at 60 s - slow the diagnostics
+down there instead of touching the alarm entities.  See
+[`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) for the update-rate
+table and the Home Assistant `recorder: exclude:` recipe that keeps 1 Hz data out
+of the database.
 
 ```yaml
 # Home Assistant (automations.yaml) - pre-alarm at the top of the MQ-8 range.
@@ -118,6 +145,7 @@ Assistant `recorder: exclude:` recipe that keeps 1 Hz data out of the database.
 
 * [`docs/README.md`](docs/README.md) - index of every document.
 * Setup: [`docs/getting_started.md`](docs/getting_started.md) - secrets, substitutions, packages, wiring, flashing, calibration.
+* Board: [`docs/hardware.md`](docs/hardware.md) - the PCB in [`pcb/`](pcb/): schematic sheets, the net-to-GPIO table, the analog front ends, power, BOM.
 * Usage: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) - entities, thresholds, automations, operations.
 * Hardware depth: [`docs/mq8_sensor_guide.md`](docs/mq8_sensor_guide.md), [`docs/mics5524_guide.md`](docs/mics5524_guide.md).
 * Problems: [`docs/troubleshooting.md`](docs/troubleshooting.md).

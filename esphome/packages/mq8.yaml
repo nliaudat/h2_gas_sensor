@@ -12,6 +12,18 @@
 # Documentation: ../../docs/mq8_sensor_guide.md, ../../docs/mq8_h2_curve.md,
 # ../../docs/temperature_humidity_correction.md, ../../docs/h2_thresholds.md
 #
+# Update intervals
+#   Declared once in `substitutions:` below, so the cadence of every entity of
+#   this package can be read (and changed) in one place:
+#   `mq8_update_interval` paces the H2 (MQ-8) entity - the measurement itself -,
+#   `mq8_adc_update_interval` only the raw AO voltage entity (`never` switches
+#   that entity off, the ppm value is unaffected), `mq8_diag_interval` is the
+#   publish throttle of the RS / ratio / T-RH diagnostics and
+#   `mq8_trh_update_interval` the two commented T/RH examples at the end.
+#   1 Hz for the gas entry is deliberate: the MOX heater runs continuously, so
+#   slower polling saves nothing.  Slow down the diagnostics instead when the
+#   Home Assistant recorder matters (../../docs/home_assistant_alerts.md).
+#
 # Wiring
 #   MQ-8:  VCC -> 5 V, GND -> GND, AO -> ADC pin through a voltage divider.
 #          The module's AO output can go up to VCC (5 V) while the ESP32 ADC is
@@ -37,18 +49,24 @@
 #   be pinned in the YAML with `r0: <value>`.
 
 substitutions:
-  mq8_pin: GPIO36  # (input only pin), change to match your wiring
+  mq8_pin: GPIO39  # (input only pin), change to match your wiring
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
+  # Update intervals - the cadence of every entity of this package (see the header
+  # comment).  The component's own default is 60s.
+  mq8_update_interval: 1s  # H2 (MQ-8) - the alarm entity
+  mq8_adc_update_interval: 1s  # raw AO voltage entity; `never` = entity off, ppm unaffected
+  mq8_diag_interval: 1s  # publish throttle of the RS / ratio / T-RH diagnostics
+  mq8_trh_update_interval: 60s  # the commented SHT4x / DHT examples (>= 2 s for a DHT)
   # Wiring of the commented ambient T/RH sensor examples at the end of the
   # `sensor:` list - only used when one of them (and the compensation block in
   # the MQ-8 entry) is uncommented.
-  mq8_i2c_sda: GPIO21  # SDA of the SHT4x example
-  mq8_i2c_scl: GPIO22  # SCL of the SHT4x example
-  mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
-  mq8_dht_pin: GPIO27  # DATA of the DHT11/DHT22 example (bidirectional GPIO)
-  mq8_dht_model: DHT11  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 (ESPHome `dht`)
+  # mq8_i2c_sda: GPIO21  # SDA of the SHT4x example
+  # mq8_i2c_scl: GPIO22  # SCL of the SHT4x example
+  # mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
+  # mq8_dht_pin: GPIO27  # DATA of the DHT11/DHT22 example (bidirectional GPIO)
+  # mq8_dht_model: AUTO_DETECT  # AUTO_DETECT, DHT11, DHT22, DHT22_TYPE2, AM2302, RHT03, SI7021, AM2120
 
 # I2C bus of the SHT4x example - uncomment together with that sensor block:
 # i2c:
@@ -66,8 +84,9 @@ sensor:
     attenuation: 12db
     # Diagnostic only: the gas entry below converts the ADC itself on every poll
     # (`ADCSensor::sample()` takes a fresh reading), so this interval does not limit
-    # the ppm refresh rate - it only paces this entity.
-    update_interval: 30s
+    # the ppm refresh rate - it only paces this entity (`never` switches the entity
+    # off without touching the ppm value).
+    update_interval: ${mq8_adc_update_interval}
     accuracy_decimals: 3
     entity_category: diagnostic
 
@@ -86,10 +105,11 @@ sensor:
     adc_input_max: 3.33
     vcc: 5.0
     rl: ${mq8_rl}
-    # 1 s: the alarm entity is the fast one (~60 ms of ADC averaging per second -
-    # the MOX heater runs continuously, so there is nothing to save by polling
-    # slowly). The diagnostics below are throttled to the old 30 s cadence.
-    update_interval: 1s
+    # The alarm entity is the fast one (~60 ms of ADC averaging per second: four
+    # samples with 20 ms between them; the MOX heater runs continuously, so there is
+    # nothing to save by polling slowly).  The diagnostics below have a cadence of
+    # their own (`mq8_diag_interval`).
+    update_interval: ${mq8_update_interval}
     samples: 4
     sample_interval: 20ms
     warmup_time: 0s  # set to 24h for the burn-in of a brand new sensor
@@ -133,7 +153,7 @@ sensor:
   # - platform: sht4x
   #   i2c_id: ${name}_i2c
   #   address: ${mq8_sht4x_address}
-  #   update_interval: 60s
+  #   update_interval: ${mq8_trh_update_interval}
   #   temperature:
   #     id: ${name}_mq8_temperature
   #     name: "${friendly_name} ambient temperature"
@@ -151,7 +171,7 @@ sensor:
   # - platform: dht
   #   pin: ${mq8_dht_pin}
   #   model: ${mq8_dht_model}
-  #   update_interval: 60s
+  #   update_interval: ${mq8_trh_update_interval}
   #   temperature:
   #     id: ${name}_mq8_temperature
   #     name: "${friendly_name} ambient temperature"
@@ -172,7 +192,7 @@ sensor:
     icon: mdi:thermometer-water
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
 
   # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
   # (remove all four keys/entities together if these entities are not wanted; the
@@ -185,7 +205,7 @@ sensor:
     icon: mdi:chart-line
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
 
   - platform: template
     id: ${name}_mq8_rs
@@ -195,7 +215,7 @@ sensor:
     icon: mdi:omega
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
 
 # Mirror of the MQ-8 log (the id given by `log_sensor:` above): per-update chain
 # (`V=... RS=... ratio=... -> ... ppm`), calibration messages and warnings - the

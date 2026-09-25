@@ -8,13 +8,14 @@
 #
 # Wiring: VCC -> 3.3 V, GND -> GND, DATA -> `dht22_pin` with a 4.7k - 10k pull-up
 # to 3.3 V (bare 3-pin sensors need it).  The pin must be a bidirectional GPIO
-# (never 34-39) and must not collide with `mq8_pin` (GPIO36) or `mics_pin`
-# (GPIO39).  The DHT needs >= 2 s between reads, so it stays at the slow interval
-# (the T/RH compensation changes slowly - the fast sensors are the gas ones).
-# Never power the module from 5 V.
+# (never 34-39) and must not collide with `mq8_pin` (GPIO39) or `mics_pin`
+# (GPIO36).  The DHT needs >= 2 s between reads, so it stays at the slow interval
+# `dht22_update_interval` (the T/RH compensation changes slowly - the fast sensors
+# are the gas ones).  Never power the module from 5 V.
 substitutions:
   dht22_pin: GPIO32  # DATA of the DHT22
   dht22_model: AUTO_DETECT  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 / AUTO_DETECT
+  dht22_update_interval: 60s  # 1-wire poll interval (>= 2 s, the protocol limit)
 
 sensor:
   - platform: dht
@@ -26,7 +27,7 @@ sensor:
     humidity:
       name: "${friendly_name} ambient humidity"
       id: dht_humidity
-    update_interval: 60s
+    update_interval: ${dht22_update_interval}
 
   # Merges the two ambient links into the MQ-8 entry of `packages/mq8.yaml` (the
   # keys its commented compensation block documents).  Both links present =>

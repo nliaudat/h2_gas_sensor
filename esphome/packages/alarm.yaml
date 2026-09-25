@@ -1,0 +1,281 @@
+# Local pre-alarm annunciator: RTTTL buzzer + 2 x SK6812 status LEDs.
+#
+# Role in this project: a *local* early warning that works without Wi-Fi, Home
+# Assistant or a broker.  The MQ-8 stays the alarm reference, this package only
+# turns its value into light and sound next to the sensor (see
+# ../../docs/local_alarm.md and ../../docs/h2_thresholds.md).
+#
+# It is NOT a gas detector, NOT an Ex/ATEX device and NOT a replacement for a
+# certified alarm: it is a hobby-grade indicator on an uncertified board.
+#
+# Requires `packages/mq8.yaml` (it reads `id: mq8`): keep the include *after*
+# `mq8:` in config.yaml, the `on_value_range` fragment below is merged into that
+# sensor with `!extend` (the same pattern as `packages/dht22.yaml`).  Minimal
+# combination: ../tests/test_alarm_package.yaml
+#
+# States (thresholds from ../../docs/h2_thresholds.md, see both substitutions):
+#
+#   ppm                      level          LEDs              buzzer
+#   -----------------------  -------------  ----------------  ----------------
+#   no value (NaN)           no reading     blue, steady      silent
+#   below 4000               ok             green, heartbeat  silent
+#   4000 .. 9999             early warning  amber, slow       one beep / 5 s
+#   10000 and above          danger         red, fast         SILENT
+#
+#   4 000 ppm = 10 % of the H2 LEL  -> early warning (the local pre-alarm band)
+#   10 000 ppm = 25 % of the H2 LEL -> the MQ-8 ceiling (its `max_ppm: 10000`)
+#
+# Why the buzzer is *silenced* at 10 000 ppm instead of at the 20 000 ppm tier of
+# h2_thresholds.md: the component clamps the published value, so a reading of
+# exactly 10 000 ppm means "10 000 ppm or more, upper bound unknown" - it can
+# already be past 50 % of the LEL.  A buzzer that keeps sounding there would be
+# claiming a measurement the sensor can no longer make, so the annunciator stops
+# making noise and keeps showing the (visual) danger state.  Raising
+# `alarm_danger_ppm` to 20000 only makes sense together with an MQ-8 `max_ppm`
+# above 20 000, which extrapolates the curve outside its documented range.
+#
+# Wiring
+#   Buzzer: `alarm_buzzer_pin` -> a *passive* piezo (a bare disc, no internal
+#   oscillator) to GND.  An "active" buzzer ignores the note frequency and only
+#   clicks.  A magnetic/coil buzzer draws far more than a piezo: drive it through
+#   a transistor, never straight from the GPIO.
+#   LEDs: `alarm_led_pin` -> DIN of the first SK6812; VDD of the strip -> the 5 V
+#   rail, GND -> common ground with the ESP32.  The 3.3 V data level is marginal
+#   against the ~3.5 V threshold of a 5 V SK6812: add a 100 - 500 Ohm series
+#   resistor close to the first LED and either a 74AHCT125 level shifter or a
+#   silicon diode in the strip's 5 V feed (4.3 V still lights them, 3.0 V is a
+#   valid high).  100 nF per LED plus one 470 - 1000 uF bulk capacitor, and a
+#   10 kOhm pull-down on the data line so the first LED cannot latch a random
+#   colour while the ESP32 boots.  Keep the brightness low: the 5 V rail is
+#   shared with the MQ-8 heater (see ../../README.md).
+#   The pins must not collide with `mq8_pin`, `mics_pin`, `dht22_pin` or the
+#   input-only pins 34 - 39 (this package uses GPIO33 and GPIO19).
+#
+# Tuning
+#   All four light states are `strobe` effects: change colours/durations in the
+#   `effects:` list, change `alarm_rtttl` for another melody (the RTTTL "Common
+#   Beeps" of the ESPHome docs are a good source), and move `alarm_early_ppm` /
+#   `alarm_danger_ppm` to retune the bands - the thresholds are the only place
+#   the policy lives.  `gain:` sets the buzzer volume.  The two `logger.log`
+#   strings in the `sensor:` fragment quote the default numbers - update them too.
+#   There is deliberately no mute switch: nothing in Home Assistant can silence
+#   the local pre-alarm without editing this file.
+
+substitutions:
+  alarm_buzzer_pin: GPIO33  # LEDC output -> passive piezo (a transistor if magnetic)
+  alarm_led_pin: GPIO19  # data line of the SK6812 strip
+  alarm_led_count: "2"  # number of LEDs in the strip
+  alarm_led_chipset: SK6812  # WS2811 / WS2812 / SK6812 / APA106 / SM16703
+  alarm_led_channel_colors: GRB  # GRB for RGB, GRBW for an SK6812 RGBW
+  alarm_early_ppm: "4000"  # 10 % LEL: LEDs amber, the buzzer starts beeping
+  alarm_danger_ppm: "10000"  # 25 % LEL: MQ-8 ceiling - buzzer silent, LEDs red
+  alarm_beep_interval: 5s  # repeat interval of the pre-alarm beep
+  alarm_rtttl: "two_short:d=4,o=5,b=100:16e6,16e6"  # the pre-alarm melody
+  alarm_led_refresh_interval: 60s  # how often the LED state is re-asserted (self-heal)
+
+output:
+  - platform: ledc
+    id: ${name}_buzzer_out
+    pin: ${alarm_buzzer_pin}
+    # 1 kHz is only the idle frequency: rtttl sets the note frequency itself.
+
+rtttl:
+  id: ${name}_rtttl
+  output: ${name}_buzzer_out
+  gain: 80%  # 0 .. 100 %, the loudness of a passive piezo
+  on_finished_playback:
+    - logger.log: "Alarm melody finished"
+
+light:
+  # Two addressable LEDs that mirror one state each.  `restore_mode: ALWAYS_OFF`
+  # keeps a boot from replaying the last alarm colour; the first sensor update
+  # (or the `alarm_led_refresh_interval` self-heal below) sets the real state within
+  # Every state is a strobe effect with its own colours, so the automations only
+  # ever call `light.turn_on: effect: <name>` - one call shape, and re-applying a
+  # state cannot leave a half-applied colour behind.
+  - platform: esp32_rmt_led_strip
+    id: ${name}_alarm_led
+    name: "${friendly_name} alarm LEDs"
+    pin: ${alarm_led_pin}
+    num_leds: ${alarm_led_count}
+    chipset: ${alarm_led_chipset}
+    channel_colors: ${alarm_led_channel_colors}
+    restore_mode: ALWAYS_OFF
+    entity_category: diagnostic
+    effects:
+      # Below 10 % LEL: dim green with a 2 s heartbeat - proves the strip is alive.
+      - strobe:
+          name: "ok"
+          colors:
+            - state: true
+              brightness: 20%
+              red: 0%
+              green: 100%
+              blue: 0%
+              duration: 2s
+            - state: false
+              duration: 100ms
+      # 10 .. 25 % LEL: amber, slow.
+      - strobe:
+          name: "pre-alarm"
+          colors:
+            - state: true
+              brightness: 30%
+              red: 100%
+              green: 35%
+              blue: 0%
+              duration: 400ms
+            - state: false
+              duration: 1600ms
+      # 25 % LEL and above: red, fast - the state the buzzer refuses to accompany.
+      - strobe:
+          name: "danger"
+          colors:
+            - state: true
+              brightness: 40%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 250ms
+            - state: false
+              duration: 250ms
+      # No valid ppm (warm-up, calibration pending/running, broken sensor): blue,
+      # steady.  Re-applying a steady colour is idempotent, which matters because
+      # the component publishes `unknown` once per second while it calibrates.
+      - strobe:
+          name: "no-reading"
+          colors:
+            - state: true
+              brightness: 10%
+              red: 0%
+              green: 0%
+              blue: 100%
+              duration: 4s
+            - state: false
+              duration: 100ms
+
+# One place that decides the LED state from the current MQ-8 value.  It is called
+# on band changes, while the value is invalid and by the `alarm_led_refresh_interval`
+# self-heal below - never once per second inside a *blinking* band, which keeps the
+# intact.  The invalid case is checked first on purpose: a dead sensor must show
+# blue, never the green of clean air.
+script:
+  - id: ${name}_alarm_state
+    then:
+      - if:
+          condition:
+            lambda: return isnan(id(mq8).state);
+          then:
+            - rtttl.stop:
+                id: ${name}_rtttl
+            - light.turn_on:
+                id: ${name}_alarm_led
+                effect: "no-reading"
+          else:
+            - if:
+                condition:
+                  sensor.in_range:
+                    id: mq8
+                    above: ${alarm_danger_ppm}
+                then:
+                  # Danger: no local sound, only the red LEDs.  `rtttl.stop` also
+                  # covers a beep that was still running when the band flipped.
+                  - rtttl.stop:
+                      id: ${name}_rtttl
+                  - light.turn_on:
+                      id: ${name}_alarm_led
+                      effect: "danger"
+                else:
+                  - if:
+                      condition:
+                        sensor.in_range:
+                          id: mq8
+                          above: ${alarm_early_ppm}
+                      then:
+                        - light.turn_on:
+                            id: ${name}_alarm_led
+                            effect: "pre-alarm"
+                      else:
+                        - rtttl.stop:
+                            id: ${name}_rtttl
+                        - light.turn_on:
+                            id: ${name}_alarm_led
+                            effect: "ok"
+
+sensor:
+  # Merges the band transitions into the MQ-8 entry of `packages/mq8.yaml`.
+  # `on_value_range` only fires when the value *enters* a band (esp. `above:` is
+  # inclusive, `x >= min`) and the first matching range wins - hence the order:
+  # 10 000 ppm belongs to the danger band, 4 000 ppm to the pre-alarm band (the
+  # thresholds of ../../docs/h2_thresholds.md).
+  - platform: mq_gas_sensors
+    id: !extend mq8
+    on_value_range:
+      - above: ${alarm_danger_ppm}
+        then:
+          - script.execute: ${name}_alarm_state
+          - logger.log: "H2 at or above 10000 ppm (25 percent of the LEL) - local buzzer kept silent"
+      - above: ${alarm_early_ppm}
+        below: ${alarm_danger_ppm}
+        then:
+          - script.execute: ${name}_alarm_state
+          - logger.log: "H2 pre-alarm band 4000 - 9999 ppm (10 to 25 percent of the LEL)"
+      - below: ${alarm_early_ppm}
+        then:
+          - script.execute: ${name}_alarm_state
+          - logger.log: "H2 below 4000 ppm (10 percent of the LEL)"
+    # `unknown` (NaN) means no valid reading - the ranges above cannot see it
+    # (every comparison with NaN is false), so it is caught here.  Only the LED
+    # state is re-applied; the beep timer below cannot fire on NaN.
+    on_value:
+      - if:
+          condition:
+            lambda: return isnan(x);
+          then:
+            - script.execute: ${name}_alarm_state
+
+interval:
+  # The audible pre-alarm: one short beep per `alarm_beep_interval` while - and
+  # only while - the value is inside the pre-alarm band.  `sensor.in_range` is
+  # inclusive on both ends, so the "not above the danger threshold" test is what
+  # keeps the danger band silent; the `rtttl.is_playing` guard never cuts a
+  # melody off in the middle.
+  - interval: ${alarm_beep_interval}
+    then:
+      - if:
+          condition:
+            - sensor.in_range:
+                id: mq8
+                above: ${alarm_early_ppm}
+            - not:
+                sensor.in_range:
+                  id: mq8
+                  above: ${alarm_danger_ppm}
+            - not:
+                rtttl.is_playing:
+                  id: ${name}_rtttl
+          then:
+            - rtttl.play:
+                id: ${name}_rtttl
+                rtttl: "${alarm_rtttl}"
+  # Visual self-heal: re-assert the state every `alarm_led_refresh_interval`, so a
+  # stray command (or the light entity toggled from Home Assistant) cannot leave
+  # the LEDs lying for long.  A once-a-minute restart of a strobe is invisible,
+  # which is why the fast path above uses band changes instead of a 1 s timer.
+  - interval: ${alarm_led_refresh_interval}
+    then:
+      - script.execute: ${name}_alarm_state
+
+button:
+  # Lets you hear the buzzer (and check the wiring) without hydrogen: it plays the
+  # same melody the pre-alarm uses.  The LED states are visible anyway (boot and
+  # every band change, or by selecting an effect on the light entity).
+  - platform: template
+    id: ${name}_alarm_test
+    name: "${friendly_name} alarm test"
+    icon: mdi:music-note
+    entity_category: config
+    on_press:
+      - rtttl.play:
+          id: ${name}_rtttl
+          rtttl: "${alarm_rtttl}"

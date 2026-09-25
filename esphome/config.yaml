@@ -9,6 +9,15 @@ substitutions:
   ### board
   board_type: az-delivery-devkit-v4  # nodemcu-32s, esp-wrover-kit
 
+  ### The package defaults (mq8_pin: GPIO39, mics_pin: GPIO36) are the two analog
+  ### pins of the PCB in pcb/ (docs/hardware.md), which pairs the MQ-8 with ADC-2
+  ### and the MiCS-5524 with ADC-1.  A hand-wired setup on the older pins - MQ-8 on
+  ### GPIO36, MiCS-5524 on GPIO39 - needs these two overrides instead, followed by
+  ### a new clean-air calibration (the stored R0 / air reference belong to the pin
+  ### that was measured before).
+  # mq8_pin: GPIO36   # MQ-8 A0 on socket pin 3 (SENSOR_VP, ADC1_CH0)
+  # mics_pin: GPIO39  # MiCS A0 on socket pin 4 (SENSOR_VN, ADC1_CH3)
+
   ### time
   TZ: "Europe/Zurich"  # timezone
 
@@ -56,6 +65,11 @@ packages:
   # ratio. Uncomment the matching blocks inside the package when a T/RH sensor is
   # wired (see ../../docs/temperature_humidity_correction.md).
   mq8: !include packages/mq8.yaml
+  # Local pre-alarm: RTTTL buzzer on GPIO33 + 2 x SK6812 status LEDs on GPIO19.
+  # The package merges its band logic into `id: mq8` with `!extend`, so this
+  # include must stay *after* `mq8:`.  Optional hardware - remove the line if
+  # there is no buzzer/LED strip (see ../../docs/local_alarm.md).
+  alarm: !include packages/alarm.yaml
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
   mics5524: !include packages/mics5524.yaml
   dht22: !include packages/dht22.yaml

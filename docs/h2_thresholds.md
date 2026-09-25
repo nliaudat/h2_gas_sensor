@@ -60,6 +60,15 @@ component. The value published by the component is the one to use:
   best estimate) but keep in mind that it is ~7 % below the uncorrected one in
   typical indoor conditions.
 
+A local pre-alarm (buzzer + two SK6812 status LEDs) is available as the optional
+package [`../esphome/packages/alarm.yaml`](../esphome/packages/alarm.yaml) - see
+[`local_alarm.md`](local_alarm.md). It follows the same thresholds but stays
+*audible* only inside the 4 000 - 9 999 ppm band: a published 10 000 ppm is the
+MQ-8 ceiling, i.e. "10 000 ppm or more", so the buzzer is silenced there (the
+20 000 ppm tier cannot be measured by the MQ-8 at all) and the visual danger
+state plus the Home Assistant automations take over. It replaces none of the
+automations above.
+
 ```yaml
 # packages/mq8*.yaml
     on_value:

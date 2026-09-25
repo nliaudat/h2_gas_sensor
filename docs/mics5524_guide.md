@@ -92,10 +92,12 @@ module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clo
 * ESP32 ADC readings are noisy: `samples: 4` (default) averages four conversions
   per update, `samples: 16` is worth trying if your values jitter. A 100 nF
   capacitor from the ADC pin to ground also helps.
-* The shipped package polls the H2 trace entry every second (the alarm band) and
-  its diagnostics every 30 s - the 1 s entity therefore jitters more than the
-  throttled `ratio` / `AO (scaled)` views. Raise `samples:` if the raw value
-  matters more than the response time.
+* The shipped package polls the H2 trace entry and its diagnostics every second
+  (`mics_update_interval`, `mics_diag_interval`) - the four extra gas views are the
+  same signal through other curves, so they carry their own key
+  (`mics_extra_gas_update_interval`) and can be slowed down (e.g. `30s`) without
+  touching the alarm entity.  Raise `samples:` if the raw value matters more than
+  the response time.
 
 ## Role in this project (H2 battery room)
 

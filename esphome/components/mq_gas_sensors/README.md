@@ -120,7 +120,7 @@ sensor:
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
 | `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
-| `update_interval` | `60s` | Normal sensor polling interval. |
+| `update_interval` | `60s` | Normal sensor polling interval.  The shipped `packages/mq8.yaml` overrides it with its `mq8_update_interval` (`1s` by default). |
 
 With `pin:`, the generated `adc` entry is validated by the ADC platform's own
 schema and stored inside this sensor's configuration under the internal
