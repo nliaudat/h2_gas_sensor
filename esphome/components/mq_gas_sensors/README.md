@@ -112,10 +112,10 @@ sensor:
 | `warmup_time` | `0s` | Burn-in/warm-up: nothing is published (state `unknown`) before it elapses. Use `24h`+ for a new sensor. |
 | `min_ppm`, `max_ppm` | table/datasheet | Clamp of the published value (`MQ-8`: 0 … 10 000 ppm). |
 | `correction_factor` | `0.0` | Added to the ratio (and to R0) as in `MQUnifiedsensor` (`readSensor(correctionFactor)`). |
-| `correction_mode` | `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Needs `temperature:`/`humidity:` and a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
+| `correction_mode` | `mqdatascience` when both links are set, otherwise `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Selected automatically by `temperature:`/`humidity:`; needs a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm` (the alarm ceiling does not move); `scaled` clips to `max_ppm * correction` (MQDataScience's own behaviour). |
 | `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `a:`/`b:`. |
-| `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors used by `correction_mode`. |
+| `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors. **Linking both selects `correction_mode: mqdatascience`**; a half-wired pair (only one of the two) is rejected at config time. |
 | `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
@@ -330,13 +330,16 @@ your own coefficients fitted to the port's convention.
   broken sensor cannot look like clean air.
 * Out-of-range results (overflow, `FLT_MAX`) are clamped to `max_ppm`; with
   `correction_clamp: scaled` the ceiling follows the correction factor.
-* With `correction_mode: mqdatascience` the ratio is divided by the T/RH
-  correction before the regression; `ratio_sensor` still publishes the measured
-  RS/R0, `correction_sensor` the applied factor, and the debug log shows
+* With `correction_mode: mqdatascience` (selected as soon as `temperature:` and
+  `humidity:` are both linked) the ratio is divided by the T/RH correction before
+  the regression; `ratio_sensor` still publishes the measured RS/R0,
+  `correction_sensor` the applied factor, and the debug log shows
   `V=… RS=… ratio=… (correction=…) -> … ppm`.
 * Configuration problems (unknown `sensor_type`, gas without a curve, missing
-  `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`) are reported at
-  compile time; missing calibration and heater notes are logged as warnings.
+  `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`, a correction mode
+  without both ambient links, a half-wired `temperature:`/`humidity:` pair) are
+  reported at compile time; missing calibration and heater notes are logged as
+  warnings.
 
 ## Troubleshooting
 

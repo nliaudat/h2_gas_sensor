@@ -65,13 +65,16 @@ Wiring, in the package you include:
 
 | Package | Sensor | When to use |
 |---|---|---|
-| `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor and the compensation are commented out inside |
+| `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor examples and the comment-only compensation keys are inside |
+| `packages/dht22.yaml` | DHT22 (ambient T/RH) | when a DHT22 is wired: it links `temperature:`/`humidity:` into `id: mq8`, which selects the compensation |
 | `packages/mics5524.yaml` | MiCS-5524 | additive, when the trace sensor is wired |
 
 There is a single MQ-8 package: it defines `id: mq8` and links the ambient sensors
-by id (`temperature:` / `humidity:`), so the optional compensation is switched on
-by uncommenting the matching blocks inside the package instead of by including
-another package. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
+by id (`temperature:` / `humidity:`), so there is no per-sensor variant. **Linking
+both ids selects the MQDataScience compensation** - either from
+`packages/dht22.yaml` (the shipped `id: !extend mq8` fragment) or by uncommenting
+the matching block inside `packages/mq8.yaml`; `correction_mode: none` is the
+explicit opt-out. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
 
 ## 5. Wire it
 
@@ -86,8 +89,9 @@ another package. `mics5524.yaml` can be added on top of it (it uses `id: mics`).
 * Optional SHT4x (the I2C example in `packages/mq8.yaml`): `VDD` 3.3 V, `GND`,
   `SDA` / `SCL` to `mq8_i2c_sda` / `mq8_i2c_scl` (most breakouts already carry
   the pull-ups); uncomment the `i2c:` block and that sensor.
-* Optional DHT11/DHT22 (the 1-wire example in `packages/mq8.yaml`): `VCC` 3.3 V,
-  `GND`, `DATA` -> `mq8_dht_pin` plus a 4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare
+* Optional DHT11/DHT22 - the 1-wire example inside `packages/mq8.yaml`
+  (`mq8_dht_pin`) or the shipped `packages/dht22.yaml` (`dht22_pin`): `VCC` 3.3 V,
+  `GND`, `DATA` -> that pin plus a 4.7 kΩ - 10 kΩ pull-up to 3.3 V (bare
   3-pin sensors need it). Never route `DATA` to an input-only pin (GPIO34-39) -
   the 1-wire protocol drives the line - and do not power a module whose pull-up
   sits on 5 V from 5 V: the GPIO is not 5 V tolerant.

@@ -14,8 +14,8 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MQ-8 RS-R0 ratio` | - | diagnostic | `packages/mq8.yaml` |
 | `MQ-8 RS` | kΩ | diagnostic | `packages/mq8.yaml` |
 | `MQ-8 T/RH correction` | - | diagnostic | `packages/mq8.yaml`, compensation enabled |
-| `ambient temperature` | °C | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
-| `ambient humidity` | % | measurement | `packages/mq8.yaml`, T/RH sensor enabled |
+| `ambient temperature` | °C | measurement | `packages/dht22.yaml` (or the mq8 example, T/RH sensor enabled) |
+| `ambient humidity` | % | measurement | `packages/dht22.yaml` (or the mq8 example, T/RH sensor enabled) |
 | `H2 trace (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `CO (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |
 | `NH3 (MiCS-5524)` | ppm | measurement | `packages/mics5524.yaml` |

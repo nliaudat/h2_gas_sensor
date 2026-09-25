@@ -3,9 +3,11 @@
 #
 # The package ships the ambient T/RH sensor and the compensation commented out
 # (the default build has no T/RH hardware), so this fixture includes it unchanged
-# and enables the compensation from the outside with an `id: !extend mq8`
-# fragment, driven by two template sensors instead of real hardware. That keeps
-# the *compensated* MQ-8 package configuration (config + compile) covered.
+# and links two template sensors from the outside with an `id: !extend mq8`
+# fragment - that is also how a real installation wires its T/RH sensor.  The
+# fragment does **not** set `correction_mode`: linking `temperature:`/`humidity:`
+# selects the mqdatascience compensation by itself, which keeps the
+# *compensated* MQ-8 package configuration (config + compile) covered.
 substitutions:
   name: mq8_tc_pkg
   friendly_name: "MQ-8 T-RH package test"
@@ -43,13 +45,13 @@ sensor:
     name: "Test correction factor"
     accuracy_decimals: 4
 
-  # `!extend` merges this fragment into the `id: mq8` sensor of the package
-  # (same keys the commented compensation block in the package would enable):
+  # `!extend` merges this fragment into the `id: mq8` sensor of the package (the
+  # keys the commented compensation block in the package documents).  No
+  # `correction_mode:`: the two links select it.
   - platform: mq_gas_sensors
     id: !extend mq8
     temperature: ${name}_air_temperature
     humidity: ${name}_air_humidity
-    correction_mode: mqdatascience
     correction_clamp: absolute
     correction_sensor: ${name}_mq8_correction
 

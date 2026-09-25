@@ -8,7 +8,7 @@ value and publishes it to Home Assistant.
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
-| Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the MQDataScience compensation of the MQ-8 ratio |
+| Optional | Ambient temperature/humidity: `packages/dht22.yaml` (1-wire DHT22, shipped) or any other sensor (SHT4x on I2C, ...) linked by id - it selects the MQDataScience compensation of the MQ-8 ratio |
 | Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A) and `components/mics_5524_gas_sensor/` (MiCS-5524) |
 
 This file is the **firmware reference**: which package does what, where every
@@ -27,22 +27,32 @@ packages:
   sensors_others: !include packages/sensors_others.yaml
   switch: !include packages/switch.yaml
   mq8: !include packages/mq8.yaml          # ADC + gas sensor; T/RH blocks commented inside
+  dht22: !include packages/dht22.yaml      # ambient T/RH + the links that switch the compensation on
   # mics5524: !include packages/mics5524.yaml   # additive, optional hardware
 ```
 
 | Package | Sensor | Notes |
 |---|---|---|
-| `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the compensation are commented out |
+| `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
+| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:` into `id: mq8` with `!extend`, which selects the compensation |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
 (`temperature:`/`humidity:` in the `mq_gas_sensors` entry), so there is no
-per-sensor variant and nothing to keep in sync. Uncomment one of the two
-commented T/RH sensor blocks (SHT4x on I2C, DHT11/DHT22 on 1-wire), the matching
-wiring substitutions and the compensation block inside the package when such a
-sensor is wired - see
-[`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md).
-A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
+per-sensor variant and nothing to keep in sync. Linking **both** ids selects the
+MQDataScience compensation automatically; `correction_mode: none` in the linking
+fragment is the explicit opt-out and a half-wired pair fails at config time. Two
+ways to link, both documented in
+[`../docs/temperature_humidity_correction.md`](../docs/temperature_humidity_correction.md):
+
+* `packages/dht22.yaml` - the shipped 1-wire example, which extends the MQ-8 entry
+  from the outside (`id: !extend mq8`), so `mq8.yaml` stays untouched;
+* uncomment the SHT4x/DHT block inside `packages/mq8.yaml` together with the two
+  `temperature:`/`humidity:` keys (the ids `${name}_mq8_temperature` /
+  `${name}_mq8_humidity` are defined by those examples).
+
+A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error, a
+DHT22 (±0.5 °C / ±2 % RH) is better, an SHT4x better still.
 `mics5524.yaml` can be added on top and keeps the MQ-8 defaults untouched.
 
 ## User-editable files
@@ -52,6 +62,7 @@ A DHT11 (1 °C / 1 % RH resolution) keeps the compensation within its own error.
 | `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
 | `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
 | `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
+| `packages/dht22.yaml` | DHT22 pin/model (`dht22_pin`, `dht22_model`) + the `!extend mq8` fragment that links `temperature:`/`humidity:` (drop the package include when no T/RH sensor is wired) | Only with a DHT22 |
 | `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN plus one gas entity per vendor curve (H2, CO, NH3, C2H5OH, CH4 - optional hardware) | Only with a MiCS-5524 |
 | `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |

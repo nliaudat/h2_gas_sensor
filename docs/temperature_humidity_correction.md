@@ -4,10 +4,22 @@ The MQ-8 resistance depends on the ambient temperature and humidity, so the same
 hydrogen concentration produces a different `RS/R0` in a cold dry cellar than in
 a warm humid one. This component can compensate for that with the model published
 by [MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience)
-(`src/Correction.cpp`), switched on per sensor with `correction_mode`.
+(`src/Correction.cpp`). On the MQ-8 it is switched on by linking the two ambient
+measurements (`temperature:`/`humidity:`), see below.
 
-Default: **off** (`correction_mode: none`) — the compensation needs a T/RH sensor
-and slightly lowers the reported ppm values, so it is opt-in.
+The compensation is **selected automatically as soon as both ambient
+measurements are linked**: write `temperature:` and `humidity:` on the MQ-8 entry
+and the `mqdatascience` model runs - a separate `correction_mode:` is not
+needed. The rules are:
+
+| Configuration | Result |
+|---|---|
+| `temperature:` **and** `humidity:` linked | compensation **on** (`mqdatascience`), with an `INFO` in the log |
+| both links, `correction_mode: none` | valid, published **uncorrected** (explicit opt-out, `INFO`) |
+| only one of the two links | **rejected** at `esphome config` time - a half-wired pair is always a mistake |
+| explicit `correction_mode:` without the links | **rejected** |
+| `correction_mode:` for a type without constants | **rejected** (list of supported types in the message) |
+| both links on a type without constants | valid, links **ignored** with a `WARNING` |
 
 ## The model
 
@@ -77,28 +89,50 @@ sensor:
     sensor_type: MQ-8
     gas: H2
     pin: GPIO34
-    temperature: air_temperature     # required with the correction
-    humidity: air_humidity           # required with the correction
-    correction_mode: mqdatascience
+    temperature: air_temperature     # linking both switches the correction on
+    humidity: air_humidity
+    # correction_mode: none          # only to opt out again
     correction_clamp: absolute       # default: keep max_ppm as the ceiling
     correction_sensor: mq8_correction  # optional diagnostic entity
 ```
 
-The shipped package [`../esphome/packages/mq8.yaml`](../esphome/packages/mq8.yaml)
-carries the whole setup as commented blocks - the two links, the compensation keys
-and two ambient sensor examples (I2C `sht4x` and 1-wire `dht`, uncomment one of
-them). Both examples define the same ids, so the links never change; any other
-platform works as well (BME280, a sensor imported from Home Assistant, ...),
-because only the id is used, wherever it is defined. The DHT11 resolves only
-1 °C / 1 % RH over 0 - 50 °C / 20 - 90 % RH, which is about the ±3 % the
-compensation shifts indoors - prefer the SHT4x when the ambient reading itself
+The shipped package
+[`../esphome/packages/mq8.yaml`](../esphome/packages/mq8.yaml) keeps the links
+commented, because their ids only exist once a T/RH sensor is wired - a package
+cannot add keys by itself. The idiomatic way to connect a sensor that lives in
+your own file/package is **`id: !extend mq8`**, which merges the links into the
+package entry without editing it (the same mechanism
+[`../esphome/tests/test_mq8_tc_package.yaml`](../esphome/tests/test_mq8_tc_package.yaml)
+verifies):
+
+```yaml
+sensor:
+  - platform: dht
+    pin: GPIO32
+    model: DHT22
+    temperature: { id: air_temperature, name: "Ambient temperature" }
+    humidity:    { id: air_humidity,    name: "Ambient humidity" }
+
+  - platform: mq_gas_sensors
+    id: !extend mq8                  # the entry of packages/mq8.yaml
+    temperature: air_temperature
+    humidity: air_humidity
+```
+
+Both variants define the same two keys, so any platform works (SHT4x, DHT22,
+BME280, a sensor imported from Home Assistant, ...): only the ids are used,
+wherever they are defined. The package also carries commented `sht4x` and `dht`
+examples that define `${name}_mq8_temperature` / `${name}_mq8_humidity`, for the
+"uncomment and go" setup. The DHT11 resolves only 1 °C / 1 % RH over
+0 - 50 °C / 20 - 90 % RH, which is about the ±3 % the compensation shifts indoors
+- prefer the SHT4x (or a DHT22, ±0.5 °C / ±2 % RH) when the ambient reading itself
 matters.
 
 | Key | Default | Description |
 |---|---|---|
-| `temperature` | – | `id` of a temperature sensor (°C). Required for `correction_mode`. |
-| `humidity` | – | `id` of a relative humidity sensor (%). Required for `correction_mode`. |
-| `correction_mode` | `none` | `none` or `mqdatascience`. |
+| `temperature` | – | `id` of a temperature sensor (°C). Linking it **and** `humidity` switches the compensation on. |
+| `humidity` | – | `id` of a relative humidity sensor (%). |
+| `correction_mode` | `mqdatascience` when both links are set, otherwise `none` | `none` or `mqdatascience` - only needed to opt out or to be explicit. |
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm`; `scaled` clips to `max_ppm × correction` (MQDataScience's own behaviour). |
 | `correction_sensor` | – | Optional diagnostic entity receiving the applied factor (1.0000 = uncorrected). |
 
@@ -117,9 +151,11 @@ matters.
   `V=… RS=… ratio=… (correction=…) -> … ppm`.
 * **Calibration is uncorrected**, like MQDataScience: `R0` is computed from the
   raw clean-air `RS`, the compensation is applied to every later reading.
-* Enabling the compensation for a type without constants, or enabling it without
-  `temperature:`/`humidity:`, fails at `esphome config` time with an explanatory
-  message.
+* The resolution is checked at `esphome config` time: an explicit
+  `correction_mode` without both links, a mode for a type without constants, and a
+  *partial* link (`temperature:` without `humidity:`) fail with an explanatory
+  message. Both links on a type without constants stay valid and warn that they
+  are ignored - that type cannot compensate.
 
 ## Verification
 

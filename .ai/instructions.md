@@ -2,7 +2,7 @@
 
 **Repository:** the H2 battery-room monitoring node (ESPHome component `mq_gas_sensors`)
 **Primary goal:** measure hydrogen with an MQ-8 sensor and publish a trustworthy ppm value for Home Assistant
-**Hardware:** ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) + MQ-8 module (+ optional ambient T/RH sensor, e.g. SHT4x or DHT11, linked into `packages/mq8.yaml`)
+**Hardware:** ESP32 devkit (az-delivery-devkit-v4 / nodemcu-32s) + MQ-8 module (+ optional ambient T/RH sensor, e.g. DHT22 in `packages/dht22.yaml` or any other sensor, linked by id into `packages/mq8.yaml` - both links select the compensation)
 **Toolchain:** ESPHome 2026.9.0, ESP-IDF 5.5.5, C++17-compatible code, Python 3.12
 **License:** Apache-2.0 OR MIT (dual, at your option - this repo); component data/credits: MQUnifiedsensor (MIT), SolderedElectronics (data), MQDataScience (MIT)
 
@@ -67,7 +67,7 @@ h2_gas_sensor/                      git root
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
     ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
     ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
-    ├── packages/                   mq8.yaml (T/RH + compensation blocks commented), mics5524.yaml, board.yaml, ...
+    ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
     └── tests/                      host tests + config fixtures
 ```
@@ -164,7 +164,7 @@ relative imports **inside** the component (`from . import ...`,
 |---|---|
 | Validate at config time | every user error must fail during `esphome config` with `cv.Invalid`, never at runtime on the device. |
 | Error messages | name the offending value, list the valid alternatives (`expected one of: ...`, `available gases: ...`), and suggest the fix when it is obvious. |
-| Cross-checks | put them in `_validate_config()` (`cv.All(..., _validate_config)`); examples already implemented: `max_ppm > min_ppm`, `r0:` vs `calibration:`, `correction_mode` needs both `temperature:`/`humidity:`, `curve:` forbids explicit `a:`/`b:`. |
+| Cross-checks | put them in `_validate_config()` (`cv.All(..., _validate_config)`); examples already implemented: `max_ppm > min_ppm`, `r0:` vs `calibration:`, `correction_mode` is *resolved* there (both `temperature:`/`humidity:` links select `mqdatascience`, `none` is the explicit opt-out, a half-wired pair or an explicit mode without the links is rejected), `curve:` forbids explicit `a:`/`b:`. |
 | Warnings | use `_LOGGER.warning` for "valid but probably not what you want" (e.g. both `r0:` and `calibration:`), `_LOGGER.info` for resolved-but-non-default choices. |
 | Schema style | `sensor.sensor_schema(...).extend({...}).extend(cv.polling_component_schema("60s"))`; `cv.Optional(CONF_X, default=...)` with an explicit type/validator; `cv.one_of(*MAP, lower=True)` for enum-like keys backed by a module-level `dict` (see `REGRESSION_METHODS`, `CORRECTION_MODES`, `RATIO_MODES`). |
 | Constants | `CONF_*` keys live in `__init__.py`; data tables and helpers in `coefficients.py`; keep both free of ESPHome imports where possible. |
