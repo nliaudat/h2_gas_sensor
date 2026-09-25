@@ -24,6 +24,10 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MiCS-5524 AO voltage` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
+| `MQ-8 logs` | text | diagnostic | `packages/mq8.yaml` |
+| `MQ-8 recalibrate` | - | button (config) | `packages/mq8.yaml` |
+| `MiCS-5524 logs` | text | diagnostic | `packages/mics5524.yaml` |
+| `MiCS-5524 recalibrate` | - | button (config) | `packages/mics5524.yaml` |
 | `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
 | `restart` | - | switch | `packages/switch.yaml` |
 
@@ -31,6 +35,17 @@ Diagnostic entities are categorised as such, so they stay out of the default
 dashboard. With `friendly_name: "H2 sensor board"` the alarm entity is
 `sensor.h2_sensor_board_h2_mq_8` - keep `name` / `friendly_name` stable once you
 have automations, otherwise every entity id changes.
+
+The two `logs` text sensors mirror the component log (the per-update chain, the
+calibration messages and the warnings) - the same text `esphome logs` prints, so
+the measurement chain can be read from Home Assistant without touching
+`logger.logs`.  Each state replaces the previous one; exclude them from the
+recorder if the 30 s history is not wanted.
+
+The two `recalibrate` buttons start a clean-air calibration (`request_calibration()`).
+**Only press them in clean air**: the measured reference is written to flash and
+used from then on.  A request is deferred until `warmup_time` has elapsed and the
+value stays `unknown` while the calibration is pending or running.
 
 Each sensor updates every **30 s** (four averaged ADC samples). The
 temperature/humidity-corrected value is published on the same `H2 (MQ-8)`
@@ -121,6 +136,12 @@ on the MQ-8).
 * **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
   tags are pinned at `INFO`); `esphome logs config.yaml` (or the web log) prints
   the measurement chain - see [`troubleshooting.md`](troubleshooting.md) for how
-  to read it.
+  to read it. The same messages are mirrored into Home Assistant by the
+  `MQ-8 logs` / `MiCS-5524 logs` text sensors, so the chain is readable without
+  changing the logger level.
+* **Re-calibration** - the `MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons
+  start a clean-air calibration from Home Assistant (press them *only* in clean
+  air; the value is stored in flash). The MiCS button refreshes all five gas
+  entries because they share one physical sensor.
 * **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
   so the new firmware starts.

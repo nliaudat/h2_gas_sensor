@@ -100,7 +100,8 @@ hydrogen is present:
 | Delay / samples | 5 min / 50 | 3 min / 10 |
 | Pin it with | `r0: <value>` | `air_reference: <value>` |
 
-Force a re-calibration when the wiring, the divider or `rl:` changed:
+Force a re-calibration when the wiring, the divider or `rl:` changed - the
+`MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons in Home Assistant, or:
 
 ```yaml
 esphome:
@@ -109,9 +110,15 @@ esphome:
     - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
 ```
 
-The log prints the result (`R0 = ... kOhm`, `air reference = ...`); pin it and
-drop the `calibration:` block for a deterministic setup. Re-calibrate every few
-months - metal-oxide sensors drift. Full workflow:
+A request is deferred until `warmup_time` has elapsed (a cold sensor would
+capture a wrong reference) and the value stays `unknown` while the calibration is
+pending or running - a calibration changes the reference, so the previous value
+must not stay visible.
+
+The log prints the result (`R0 = ... kOhm`, `air reference = ...`) and mirrors it
+to the `MQ-8 logs` / `MiCS-5524 logs` text sensor; pin it and drop the
+`calibration:` block for a deterministic setup. Re-calibrate every few months -
+metal-oxide sensors drift. Full workflow:
 [`../docs/getting_started.md`](../docs/getting_started.md).
 
 ## Validate, flash, test
@@ -135,7 +142,9 @@ measurement math and every lint command are collected in
   are pinned at `INFO`, so the per-update raw values are off by default - set
   them back to `DEBUG` under `logger.logs` to read them
   (`V=... RS=... ratio=... -> ... ppm`, the applied T/RH correction, the
-  calibration result).
+  calibration result).  The same messages are mirrored to the `MQ-8 logs` /
+  `MiCS-5524 logs` text sensors (`log_sensor:` in the packages), so they are also
+  visible in Home Assistant without changing the logger level.
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
   06:00 (SNTP must be synced first). Useful to recover from long-run drift; the
   calibration is in flash and survives it.

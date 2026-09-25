@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -9,6 +10,7 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/preferences.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/voltage_sampler/voltage_sampler.h"
 
 #include "mics_math.h"
@@ -56,9 +58,24 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   void set_ratio_sensor(sensor::Sensor *sensor) { this->ratio_sensor_ = sensor; }
   void set_rs_sensor(sensor::Sensor *sensor) { this->rs_sensor_ = sensor; }
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
+  void set_log_sensor(text_sensor::TextSensor *sensor) { this->log_sensor_ = sensor; }
+
+  /// Console level of a `log_message_()` call.  The order mirrors the verbosity
+  /// of ESP-IDF's `esp_log_level_t`: `LOG_ERROR` is always printed, `LOG_DEBUG`
+  /// only with `logger: level: DEBUG`.  The message is mirrored to `log_sensor:`
+  /// either way, so the measurement chain stays readable from Home Assistant.
+  enum LogLevel : uint8_t {
+    LOG_DEBUG = 0,
+    LOG_INFO = 1,
+    LOG_WARN = 2,
+    LOG_ERROR = 3,
+  };
+
+  /// Size of the message buffer of `log_message_()` (also the text sensor limit).
+  static constexpr size_t LOG_BUFFER_SIZE = 160;
 
   // ----------------------------------------------------------------- runtime
-  /// (Re)start the clean-air calibration.
+  /// (Re)start the clean-air calibration (deferred until `warmup_time` ended).
   void request_calibration();
   bool is_calibrating() const { return this->calibrating_; }
   /// A clean-air reference (x_air or R0) is available.
@@ -89,6 +106,11 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   void save_reference_();
   bool load_reference_();
   void log_config_();
+  /// Publish a message to `log_sensor_` (no-op when it is not configured).
+  void publish_log_(const char *message);
+  /// Log a message on the console and mirror it to `log_sensor_`; it is prefixed
+  /// with the gas (`'H2': ...`) so several channels stay readable.
+  void log_message_(LogLevel level, const char *format, ...);
 
   // ------------------------------------------------------------- configuration
   std::string gas_{"CUSTOM"};
@@ -141,6 +163,7 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   sensor::Sensor *ratio_sensor_{nullptr};
   sensor::Sensor *rs_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
+  text_sensor::TextSensor *log_sensor_{nullptr};
 
   ESPPreferenceObject reference_pref_{};
 };

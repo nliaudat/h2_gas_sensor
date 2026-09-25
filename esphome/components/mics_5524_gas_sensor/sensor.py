@@ -13,7 +13,7 @@ import logging
 
 from esphome import pins
 import esphome.codegen as cg
-from esphome.components import sensor, voltage_sampler
+from esphome.components import sensor, text_sensor, voltage_sampler
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ATTENUATION,
@@ -44,6 +44,7 @@ from . import (
     CONF_DIVIDER,
     CONF_ENABLE_PIN,
     CONF_GAS,
+    CONF_LOG_SENSOR,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
     CONF_PERSIST,
@@ -301,6 +302,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RATIO_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_RS_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_LOG_SENSOR): cv.use_id(text_sensor.TextSensor),
         }
     )
     .extend(cv.polling_component_schema("30s")),
@@ -389,6 +391,7 @@ async def to_code(config: ConfigType) -> None:
         (CONF_RATIO_SENSOR, var.set_ratio_sensor),
         (CONF_RS_SENSOR, var.set_rs_sensor),
         (CONF_VOLTAGE_SENSOR, var.set_voltage_sensor),
+        (CONF_LOG_SENSOR, var.set_log_sensor),
     ):
         if (target := config.get(key)) is not None:
             cg.add(setter(await cg.get_variable(target)))

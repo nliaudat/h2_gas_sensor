@@ -2,6 +2,7 @@
 #
 #   * MQ sensor without an explicit `id:` (name only)
 #   * `pin:` sugar with a lowercase `gas:` and a fixed `r0:` (no calibration)
+#   * `log_sensor:` mirroring the component log into a text sensor
 #   * deliberately no `adc_input_max`: with the 10k/20k divider (1.5) the guard
 #     logs the "3.33 V at the ADC input > 3.3 V, the top of the range may clip"
 #     warning, which keeps that path covered
@@ -26,3 +27,8 @@ sensor:
     adc_attenuation: 12db
     r0: 0.29
     voltage_multiplier: 1.5
+    log_sensor: mq_no_id_logs
+text_sensor:
+  - platform: template
+    id: mq_no_id_logs
+    name: "H2 without id logs"

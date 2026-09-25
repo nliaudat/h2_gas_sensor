@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/voltage_sampler/voltage_sampler.h"
 
 #include "mq_math.h"
@@ -63,9 +65,24 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void set_rs_sensor(sensor::Sensor *sensor) { this->rs_sensor_ = sensor; }
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
   void set_correction_sensor(sensor::Sensor *sensor) { this->correction_sensor_ = sensor; }
+  void set_log_sensor(text_sensor::TextSensor *sensor) { this->log_sensor_ = sensor; }
+
+  /// Console level of a `log_message_()` call.  The order mirrors the verbosity
+  /// of ESP-IDF's `esp_log_level_t`: `LOG_ERROR` is always printed, `LOG_DEBUG`
+  /// only with `logger: level: DEBUG`.  The message is mirrored to `log_sensor:`
+  /// either way, so the measurement chain stays readable from Home Assistant.
+  enum LogLevel : uint8_t {
+    LOG_DEBUG = 0,
+    LOG_INFO = 1,
+    LOG_WARN = 2,
+    LOG_ERROR = 3,
+  };
+
+  /// Size of the message buffer of `log_message_()` (also the text sensor limit).
+  static constexpr size_t LOG_BUFFER_SIZE = 160;
 
   // ----------------------------------------------------------------- runtime
-  /// (Re)start an R0 calibration in clean air.
+  /// (Re)start an R0 calibration in clean air (deferred until `warmup_time` ended).
   void request_calibration();
   bool is_calibrating() const { return this->calibrating_; }
   bool has_r0() const { return this->r0_ > 0.0f; }
@@ -95,6 +112,12 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   void save_r0_();
   bool load_r0_();
   void log_config_();
+  /// Publish a message to `log_sensor_` (no-op when it is not configured).
+  void publish_log_(const char *message);
+  /// Log a message on the console and mirror it to `log_sensor_`; it is prefixed
+  /// with the sensor type and the gas (`'MQ-8 H2': ...`) so several sensors stay
+  /// readable.
+  void log_message_(LogLevel level, const char *format, ...);
 
   // ------------------------------------------------------------- configuration
   std::string type_{"MQ"};
@@ -153,6 +176,7 @@ class MQGasSensor : public sensor::Sensor, public PollingComponent {
   sensor::Sensor *rs_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *correction_sensor_{nullptr};
+  text_sensor::TextSensor *log_sensor_{nullptr};
 
   ESPPreferenceObject r0_pref_{};
 };

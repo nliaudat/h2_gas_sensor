@@ -121,20 +121,26 @@ esphome run config.yaml           # flash over USB, later over OTA
    stored in flash (`persist: true`) and reused after every reboot:
    * MQ-8: `ratio_in_clean_air: 70` (RS/R0 in clean air), 50 samples;
    * MiCS-5524: the vendor clean-air reference (`x_air = VCC - V_AO`), 10 samples.
-4. **Force a re-calibration** with an `on_boot` action in your own YAML:
+4. **Force a re-calibration** with the `MQ-8 recalibrate` /
+   `MiCS-5524 recalibrate` button in Home Assistant, or with an `on_boot` action
+   in your own YAML:
 
    ```yaml
    esphome:
      on_boot:
        - delay: 5min
-       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration();
+       - lambda: id(mq8).request_calibration();   # or id(mics).request_calibration()
    ```
+
+   A request is deferred until `warmup_time` has elapsed and the value stays
+   `unknown` while the calibration is pending or running - do not press the
+   button while hydrogen (or alcohol) may be present.
 
 5. **Pin the result** once you trust it: `r0: 0.2899` for the MQ-8 or
    `air_reference: <value>` for the MiCS, using the value printed in the log
-   (`R0 = ... kOhm`, `air reference = ...`). A pinned value with no
-   `calibration:` block is the deterministic setup for a room that is not always
-   clean.
+   (`R0 = ... kOhm`, `air reference = ...`) and mirrored to the `MQ-8 logs` /
+   `MiCS-5524 logs` text sensor. A pinned value with no `calibration:` block is
+   the deterministic setup for a room that is not always clean.
 6. **Re-calibrate** after changing the wiring, the divider or `rl:`, and every
    few months - metal-oxide sensors drift.
 

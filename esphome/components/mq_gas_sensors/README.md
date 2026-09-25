@@ -48,7 +48,9 @@ averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
   automatic **clean-air calibration** after a configurable delay.
 * Warm-up/burn-in suppression, PPM range clamps, `correction_factor`, ratio
   direction switch for bit-exact `MQUnifiedsensor::readSensorR0Rs()` parity.
-* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage.
+* Optional diagnostic entities: RS, RS/R0 ratio, AO voltage, and a `log_sensor:`
+  `text_sensor` that mirrors the component log (chain, calibration, warnings)
+  into Home Assistant.
 * Host-testable math (`tests/mq_math_test.cpp`, no ESPHome needed).
 
 ## Minimal configuration
@@ -117,6 +119,7 @@ sensor:
 | `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
+| `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. |
 | `update_interval` | `60s` | Normal sensor polling interval. |
 
 With `pin:`, the generated `adc` entry is validated by the ADC platform's own
@@ -154,7 +157,7 @@ provide it, in order of precedence:
    `persist: false`). Once a valid `R0` is stored it is restored at boot and the
    calibration is skipped - important for a battery room, where the air is *not*
    clean when hydrogen is present.
-3. **On demand** - force a new calibration from an automation:
+3. **On demand** - force a new calibration from an automation or a button:
    ```yaml
    esphome:
      on_boot:
@@ -163,6 +166,12 @@ provide it, in order of precedence:
    ```
    The calibrated value is logged (`R0 = ... kOhm`), so it can be pinned with
    `r0:` afterwards if you prefer a static configuration.
+
+   A request is **deferred until `warmup_time` has elapsed** (the calibration
+   needs a settled sensor) and the state stays `unknown` while the calibration is
+   pending or running - a calibration *changes* `R0`, so the previous value must
+   not stay visible. A request while one is already pending/running is ignored
+   with a warning. `packages/mq8.yaml` wires the *MQ-8 recalibrate* button to it.
 
 Other calibration facts:
 
@@ -310,7 +319,12 @@ your own coefficients fitted to the port's convention.
   are averaged (with `sample_interval` between them, like the library's
   `retries`/`retry_interval`), then `RS`, the ratio and the PPM are computed.
 * Nothing is published (state stays `unknown`) during the warm-up window, while
-  a calibration is pending/running, or while `R0` is unknown.
+  a calibration is pending/running (the previous value was computed with the old
+  `R0`), or while `R0` is unknown.
+* With `log_sensor:` the same messages the component logs are published to a
+  `text_sensor` (`V=... RS=... ratio=... -> ... ppm`, calibration results,
+  warnings), so the chain can be read from Home Assistant without changing the
+  logger level.  The entity state is the *last* message.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
   broken sensor cannot look like clean air.

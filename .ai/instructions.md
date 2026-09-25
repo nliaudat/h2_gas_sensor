@@ -228,6 +228,11 @@ lines allowed.
   (`warmup_time`).
 * Only calibrate when `R0` is unknown (first boot, cleared flash or
   `persist: false`). Never recalibrate automatically while hydrogen may be present.
+* A manual request (`request_calibration()`, wired to the *recalibrate* buttons of
+  the packages) is **deferred until `warmup_time` has elapsed** - a cold sensor
+  would capture a wrong reference. The state stays `unknown` while a calibration
+  is pending or running, because the calibration changes the reference: a value
+  computed with the previous `R0`/`x_air` must never stay visible.
 * The calibration path is *uncorrected*: the T/RH correction is applied to later
   readings, exactly like MQDataScience.
 

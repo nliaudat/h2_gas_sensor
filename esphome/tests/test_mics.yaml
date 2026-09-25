@@ -1,8 +1,8 @@
 # Validation-only regression config for the mics_5524_gas_sensor platform
 # (run: esphome config tests/test_mics.yaml)
 #
-#   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin and
-#     automatic calibration in clean air
+#   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin,
+#     automatic calibration in clean air and a `log_sensor:` mirror
 #   * datasheet model (`conversion: datasheet`) with explicit a/b, a fixed r0 and
 #     a shared external voltage source
 #   * diagnostics for both models
@@ -46,6 +46,7 @@ sensor:
       persist: false
     ratio_sensor: mics_ratio
     voltage_sensor: mics_voltage
+    log_sensor: mics_logs
 
   - platform: mics_5524_gas_sensor
     id: mics_co
@@ -93,3 +94,7 @@ sensor:
     name: "MiCS RS"
     unit_of_measurement: kOhm
     accuracy_decimals: 2
+text_sensor:
+  - platform: template
+    id: mics_logs
+    name: "MiCS logs"

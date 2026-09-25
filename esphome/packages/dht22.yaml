@@ -1,0 +1,11 @@
+sensor:
+  - platform: dht
+    model: AUTO_DETECT
+    pin: GPIO32
+    temperature:
+      name: "${name} Temperature"
+      id: dht22_temperature
+    humidity:
+      name: "${name} Humidity"
+      id: dht22_humidity
+    update_interval: 60s

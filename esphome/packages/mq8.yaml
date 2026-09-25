@@ -27,10 +27,14 @@
 # Calibration
 #   The first boot calibrates R0 in clean air after `calibration.delay` and stores
 #   it in flash (restored on the next boots, so the calibration is not repeated
-#   while hydrogen is present). To force a new calibration:
-#       esphome: on_boot: - lambda: id(mq8).request_calibration();
-#   The calibrated value is logged as "R0 = ... kOhm" - it can also be pinned in
-#   the YAML with `r0: <value>`.
+#   while hydrogen is present). To force a new calibration, press the
+#   "MQ-8 recalibrate" button in Home Assistant (or use the `button:` block at the
+#   end of this file / `esphome: on_boot: - lambda: id(mq8).request_calibration();`).
+#   A request is deferred until `warmup_time` has elapsed and the value stays
+#   `unknown` while the calibration is pending or running.
+#   The calibrated value is logged as "R0 = ... kOhm" and mirrored to the
+#   "${friendly_name} MQ-8 logs" text sensor (`log_sensor:` below) - it can also
+#   be pinned in the YAML with `r0: <value>`.
 
 substitutions:
   mq8_pin: GPIO36  # (input only pin), change to match your wiring
@@ -108,6 +112,7 @@ sensor:
     # correction_sensor: ${name}_mq8_correction
     ratio_sensor: ${name}_mq8_ratio
     rs_sensor: ${name}_mq8_rs
+    log_sensor: ${name}_mq8_logs
 
   # --- optional ambient T/RH sensor: uncomment ONE of the two blocks ----------
   # Only used by the compensation block of the MQ-8 entry above. The correction
@@ -157,7 +162,9 @@ sensor:
   #   entity_category: diagnostic
 
   # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
-  # (remove all four keys/entities together if these entities are not wanted):
+  # (remove all four keys/entities together if these entities are not wanted; the
+  # `log_sensor:` key and its `text_sensor` block further down are a separate
+  # pair and can be dropped on their own):
   - platform: template
     id: ${name}_mq8_ratio
     name: "${friendly_name} MQ-8 RS-R0 ratio"
@@ -172,6 +179,33 @@ sensor:
     accuracy_decimals: 3
     icon: mdi:omega
     entity_category: diagnostic
+
+# Mirror of the MQ-8 log (the id given by `log_sensor:` above): per-update chain
+# (`V=... RS=... ratio=... -> ... ppm`), calibration messages and warnings - the
+# same text the serial console shows, so the chain can be read from Home
+# Assistant without setting the `mq_gas_sensors` tag back to DEBUG.  The state is
+# the last message; drop the entity (and the `log_sensor:` key) if the recorded
+# history is not wanted.
+text_sensor:
+  - platform: template
+    id: ${name}_mq8_logs
+    name: "${friendly_name} MQ-8 logs"
+    icon: mdi:text-box-multiple-outline
+    entity_category: diagnostic
+
+# Force a new clean-air calibration of R0.  ONLY press it with the sensor in
+# clean air: the measured value is stored in flash and used from then on.  The
+# component defers the request until the warm-up window (`warmup_time`) has
+# ended and publishes `unknown` while the calibration is pending or running, so
+# a press cannot capture an unstable RS.
+button:
+  - platform: template
+    id: ${name}_mq8_recalibrate
+    name: "${friendly_name} MQ-8 recalibrate"
+    icon: mdi:refresh
+    entity_category: config
+    on_press:
+      - lambda: id(mq8).request_calibration();
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning
