@@ -37,18 +37,18 @@
 #   be pinned in the YAML with `r0: <value>`.
 
 substitutions:
-  mq8_pin: GPIO36  # (input only pin), change to match your wiring
+  mq8_pin: GPIO39  # (input only pin), change to match your wiring
   mq8_divider_r1: "10.0"  # kOhm, in series with AO (top)    -> 10k/20k divider
   mq8_divider_r2: "20.0"  # kOhm, AO node to GND (bottom)    -> multiplier 1.5
   mq8_rl: "10.0"  # load resistor of the module in kOhm
   # Wiring of the commented ambient T/RH sensor examples at the end of the
   # `sensor:` list - only used when one of them (and the compensation block in
   # the MQ-8 entry) is uncommented.
-  mq8_i2c_sda: GPIO21  # SDA of the SHT4x example
-  mq8_i2c_scl: GPIO22  # SCL of the SHT4x example
-  mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
-  mq8_dht_pin: GPIO27  # DATA of the DHT11/DHT22 example (bidirectional GPIO)
-  mq8_dht_model: DHT11  # DHT11 / DHT22 / AM2302 / RHT03 / SI7021 (ESPHome `dht`)
+  # mq8_i2c_sda: GPIO21  # SDA of the SHT4x example
+  # mq8_i2c_scl: GPIO22  # SCL of the SHT4x example
+  # mq8_sht4x_address: 0x44  # SHT4x default address (SHT3x would be 0x44 as well)
+  # mq8_dht_pin: GPIO27  # DATA of the DHT11/DHT22 example (bidirectional GPIO)
+  # mq8_dht_model: AUTO_DETECT  # AUTO_DETECT, DHT11, DHT22, DHT22_TYPE2, AM2302, RHT03, SI7021, AM2120
 
 # I2C bus of the SHT4x example - uncomment together with that sensor block:
 # i2c:
@@ -67,7 +67,7 @@ sensor:
     # Diagnostic only: the gas entry below converts the ADC itself on every poll
     # (`ADCSensor::sample()` takes a fresh reading), so this interval does not limit
     # the ppm refresh rate - it only paces this entity.
-    update_interval: 30s
+    update_interval: 1s
     accuracy_decimals: 3
     entity_category: diagnostic
 
@@ -172,7 +172,7 @@ sensor:
     icon: mdi:thermometer-water
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: 1s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
   # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
   # (remove all four keys/entities together if these entities are not wanted; the
@@ -185,7 +185,7 @@ sensor:
     icon: mdi:chart-line
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: 1s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
   - platform: template
     id: ${name}_mq8_rs
@@ -195,7 +195,7 @@ sensor:
     icon: mdi:omega
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
+      - throttle: 1s  # the MQ-8 entry polls at 1 Hz, this is a diagnostic
 
 # Mirror of the MQ-8 log (the id given by `log_sensor:` above): per-update chain
 # (`V=... RS=... ratio=... -> ... ppm`), calibration messages and warnings - the

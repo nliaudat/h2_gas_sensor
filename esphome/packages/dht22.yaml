@@ -8,8 +8,8 @@
 #
 # Wiring: VCC -> 3.3 V, GND -> GND, DATA -> `dht22_pin` with a 4.7k - 10k pull-up
 # to 3.3 V (bare 3-pin sensors need it).  The pin must be a bidirectional GPIO
-# (never 34-39) and must not collide with `mq8_pin` (GPIO36) or `mics_pin`
-# (GPIO39).  The DHT needs >= 2 s between reads, so it stays at the slow interval
+# (never 34-39) and must not collide with `mq8_pin` (GPIO39) or `mics_pin`
+# (GPIO36).  The DHT needs >= 2 s between reads, so it stays at the slow interval
 # (the T/RH compensation changes slowly - the fast sensors are the gas ones).
 # Never power the module from 5 V.
 substitutions:

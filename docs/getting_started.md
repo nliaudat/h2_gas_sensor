@@ -46,17 +46,17 @@ Wiring, in the package you include:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `mq8_pin` | `GPIO36` | ADC1 pin fed by the divider |
+| `mq8_pin` | `GPIO39` | ADC1 pin fed by the divider - the pin of the PCB in `pcb/` |
 | `mq8_divider_r1` / `mq8_divider_r2` | `10.0` / `20.0` | divider resistors in kΩ (series / to ground) |
 | `mq8_rl` | `10.0` | load resistor of the MQ-8 module in kΩ - measure it |
-| `mics_pin` | `GPIO39` | MiCS-5524 analog input (through the divider) |
+| `mics_pin` | `GPIO36` | MiCS-5524 analog input (through the divider) |
 | `mics_divider_r1` / `mics_divider_r2` | `10.0` / `20.0` | same divider, for the MiCS module |
 | `mics_enable_pin` | `GPIO4` | the module's `EN` pad (LOW = enabled); remove the key if unused |
 | `mics_max_ppm` | `1000` | top of the vendor range for H2 |
 | `mq8_i2c_sda` / `mq8_i2c_scl` | `GPIO21` / `GPIO22` | I2C pins of the optional SHT4x example in `packages/mq8.yaml` |
 | `mq8_sht4x_address` | `0x44` | I2C address of that SHT4x |
 | `mq8_dht_pin` | `GPIO27` | 1-wire `DATA` pin of the optional DHT11/DHT22 example, any bidirectional GPIO |
-| `mq8_dht_model` | `DHT11` | `dht` model of that example (`DHT11` / `DHT22` / `AM2302` / ...) |
+| `mq8_dht_model` | `AUTO_DETECT` | `dht` model of that example (`AUTO_DETECT`, `DHT11`, `DHT22`, `DHT22_TYPE2`, `AM2302`, `RHT03`, `SI7021`, `AM2120`) |
 | `alarm_buzzer_pin` / `alarm_led_pin` | `GPIO33` / `GPIO19` | local pre-alarm (`packages/alarm.yaml`): piezo output and SK6812 data line |
 | `alarm_led_count` / `alarm_led_chipset` / `alarm_led_channel_colors` | `2` / `SK6812` / `GRB` | strip geometry and colour order (`GRBW` for RGBW LEDs) |
 | `alarm_early_ppm` / `alarm_danger_ppm` | `4000` / `10000` | amber LEDs + beeps from 10 % of the LEL, buzzer silent from 25 % - see [`local_alarm.md`](local_alarm.md) |
@@ -86,6 +86,12 @@ explicit opt-out. `mics5524.yaml` can be added on top of it (it uses `id: mics`)
 * Module `VCC` -> the devkit's `5V` pin (the heater needs it, and the whole
   measurement scales with the supply), module `GND` -> ESP32 `GND`.
 * `AO` / `A0` -> divider -> an **ADC1** pin (GPIO32-39). Never straight to a pin.
+* Using the PCB in [`../pcb/`](../pcb/) instead of a breadboard? Its schematic
+  pairs the MQ-8 with `ADC-2` (GPIO39) and the MiCS-5524 with `ADC-1` (GPIO36) -
+  the two defaults above - and its table is in [`hardware.md`](hardware.md). A
+  breadboard on the older pins (MQ-8 on GPIO36, MiCS-5524 on GPIO39) needs the two
+  overrides commented in [`../esphome/config.yaml`](../esphome/config.yaml), and
+  any pin change needs a new clean-air calibration.
 * Recommended divider: **10 kΩ in series, 20 kΩ to ground** -> ×1.5 -> 3.33 V at
   the pin for a 5 V output. To cover the whole range use 10k/10k (2.5 V) or an
   ADS1115 (`voltage_multiplier: 1.0`, `adc_input_max` / `adc_pin_max: 6.144`).

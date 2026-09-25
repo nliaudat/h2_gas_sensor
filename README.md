@@ -15,6 +15,7 @@ cycle.
 | | |
 |---|---|
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
+| PCB | [`pcb/`](pcb/) - EasyEDA schematic, layout, render and Gerber of the carrier board; pin table and caveats in [`docs/hardware.md`](docs/hardware.md) |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
 | Optional | Any temperature/humidity sensor (SHT4x on I2C, DHT11 on 1-wire, ...) for the compensation of the MQ-8 ratio |
 | Firmware | [`esphome/`](esphome/) - entry point [`esphome/config.yaml`](esphome/config.yaml) |
@@ -55,6 +56,16 @@ MQ-8 / MiCS-5524 at 5 V
 * The optional local pre-alarm (`packages/alarm.yaml`) uses its own two pins: a
   **passive** piezo on GPIO33 and 2 x SK6812 on GPIO19 (5 V feed) - see
   [`docs/local_alarm.md`](docs/local_alarm.md).
+
+If you build the **PCB in [`pcb/`](pcb/)** instead of wiring on a breadboard: its
+schematic pairs the MQ-8 with `ADC-2` (**GPIO39**) and the MiCS-5524 with `ADC-1`
+(**GPIO36**), which is exactly what `mq8_pin` / `mics_pin` already default to - so
+no pin override is needed. Calibrate once after the first flash (`R0` and the MiCS
+air reference are stored per measurement chain), and if you *did* wire a
+breadboard on the older pins (MQ-8 on GPIO36, MiCS-5524 on GPIO39), uncomment the
+two overrides in [`esphome/config.yaml`](esphome/config.yaml). The whole
+net-to-GPIO table, the power input and the pre-alarm hardware of the board are in
+[`docs/hardware.md`](docs/hardware.md).
 
 ## Quick start
 
@@ -130,6 +141,7 @@ Assistant `recorder: exclude:` recipe that keeps 1 Hz data out of the database.
 
 * [`docs/README.md`](docs/README.md) - index of every document.
 * Setup: [`docs/getting_started.md`](docs/getting_started.md) - secrets, substitutions, packages, wiring, flashing, calibration.
+* Board: [`docs/hardware.md`](docs/hardware.md) - the PCB in [`pcb/`](pcb/): schematic sheets, the net-to-GPIO table, the analog front ends, power, BOM.
 * Usage: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) - entities, thresholds, automations, operations.
 * Hardware depth: [`docs/mq8_sensor_guide.md`](docs/mq8_sensor_guide.md), [`docs/mics5524_guide.md`](docs/mics5524_guide.md).
 * Problems: [`docs/troubleshooting.md`](docs/troubleshooting.md).

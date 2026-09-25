@@ -49,7 +49,7 @@
 #   also be pinned with `air_reference: <value>` instead of calibrating at boot.
 
 substitutions:
-  mics_pin: GPIO39  # change to match your wiring
+  mics_pin: GPIO36  # change to match your wiring
   mics_divider_r1: "10.0"  # kOhm, in series with A0 (top)  -> 10k/20k divider
   mics_divider_r2: "20.0"  # kOhm, A0 node to GND (bottom)  -> multiplier 1.5
   # mics_enable_pin: GPIO4  # EN of the module (LOW = enabled); remove enable_pin if unused
@@ -72,7 +72,7 @@ sensor:
     # Diagnostic only: the gas entries below convert the ADC themselves on every
     # poll (`ADCSensor::sample()` takes a fresh reading), so this interval does not
     # limit the ppm refresh rate - it only paces this entity.
-    update_interval: 30s
+    update_interval: 1s
     accuracy_decimals: 3
     entity_category: diagnostic
 
@@ -133,7 +133,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 30s
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -155,7 +155,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 30s
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -177,7 +177,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 30s
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -199,7 +199,7 @@ sensor:
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
-    update_interval: 30s
+    update_interval: 1s
     samples: 4
     sample_interval: 20ms
     warmup_time: 3min
@@ -219,7 +219,7 @@ sensor:
     icon: mdi:chart-line
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
+      - throttle: 1s  # the H2 entry polls at 1 Hz, this is a diagnostic
 
   - platform: template
     id: ${name}_mics_voltage
@@ -229,7 +229,7 @@ sensor:
     icon: mdi:flash
     entity_category: diagnostic
     filters:
-      - throttle: 30s  # the H2 entry polls at 1 Hz, this is a diagnostic
+      - throttle: 1s  # the H2 entry polls at 1 Hz, this is a diagnostic
 
 # Mirror of the H2 log (the id given by `log_sensor:` on that entry): per-update
 # chain (`V_AO=... x=... ratio=... -> ... ppm`), calibration messages and

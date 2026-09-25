@@ -12,6 +12,7 @@ the docs and the firmware cannot drift apart silently.
 | Document | Content |
 |---|---|
 | [`../README.md`](../README.md) | Entry point: what the project is, bill of materials, wiring diagram, quick start |
+| [`hardware.md`](hardware.md) | The PCB in [`../pcb/`](../pcb/): the files, the schematic sheet map, the net -> GPIO table (and the crossed analog inputs of the board), analog front ends, power, pre-alarm hardware, BOM |
 | [`getting_started.md`](getting_started.md) | Setup: secrets, substitutions, packages, wiring, first flash, burn-in, calibration |
 | [`home_assistant_alerts.md`](home_assistant_alerts.md) | Entities, thresholds, alert automations, day-to-day operations |
 | [`troubleshooting.md`](troubleshooting.md) | Setup-time and runtime symptoms, and how to read the log line |

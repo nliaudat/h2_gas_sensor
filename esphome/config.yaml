@@ -9,6 +9,15 @@ substitutions:
   ### board
   board_type: az-delivery-devkit-v4  # nodemcu-32s, esp-wrover-kit
 
+  ### The package defaults (mq8_pin: GPIO39, mics_pin: GPIO36) are the two analog
+  ### pins of the PCB in pcb/ (docs/hardware.md), which pairs the MQ-8 with ADC-2
+  ### and the MiCS-5524 with ADC-1.  A hand-wired setup on the older pins - MQ-8 on
+  ### GPIO36, MiCS-5524 on GPIO39 - needs these two overrides instead, followed by
+  ### a new clean-air calibration (the stored R0 / air reference belong to the pin
+  ### that was measured before).
+  # mq8_pin: GPIO36   # MQ-8 A0 on socket pin 3 (SENSOR_VP, ADC1_CH0)
+  # mics_pin: GPIO39  # MiCS A0 on socket pin 4 (SENSOR_VN, ADC1_CH3)
+
   ### time
   TZ: "Europe/Zurich"  # timezone
 

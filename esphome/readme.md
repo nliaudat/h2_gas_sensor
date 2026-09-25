@@ -96,6 +96,11 @@ MQ-8 / MiCS-5524 at 5 V
   `adc_input_max`/`adc_pin_max: 6.144`) instead.
 * Use an ADC1 pin (GPIO32-39); ADC2 is unusable while WiFi is active, and GPIO12
   must not be used.
+* The PCB in [`../pcb/`](../pcb/) uses exactly these two defaults (MQ-8 on
+  `ADC-2`/GPIO39, MiCS-5524 on `ADC-1`/GPIO36), so it needs no pin override; a
+  breadboard wired the older way (MQ-8 on GPIO36, MiCS-5524 on GPIO39) needs the
+  two overrides commented in [`config.yaml`](config.yaml).  The net-to-GPIO table
+  is in [`../docs/hardware.md`](../docs/hardware.md).
 
 * The local pre-alarm of `packages/alarm.yaml` uses two pins of its own - a
   passive piezo on `alarm_buzzer_pin` (GPIO33) and the data line of 2 x SK6812 on

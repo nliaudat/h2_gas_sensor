@@ -93,6 +93,11 @@ GPIO33 -------------+--------|>|----- GND        passive piezo, no series part n
   transistor (and a flyback diode), never straight from the GPIO.
 * `gain:` in the package sets the loudness (leave headroom: a clipped signal
   sounds harsh and heats the piezo).
+* The PCB in [`../pcb/`](../pcb/) drives the piezo through a transistor (Q2 SS8050
+  + 1 kΩ base resistor) instead of directly from the pin, and it does not fit the
+  data-line series resistor or the 10 kΩ pull-down of the LED wiring above - the
+  melody and the pin are unchanged, but the disc is louder (it sees ~5 V) so
+  `gain:` may need a nudge.  See [`hardware.md`](hardware.md).
 
 LEDs (2 x SK6812, `alarm_led_pin` = GPIO19):
 
@@ -113,7 +118,7 @@ GPIO19 --- [ 10 kOhm to GND ]  (pull-down: no random colour while booting)
 * Keep the brightness low (the effects in the package use 10 - 40 %): two LEDs at
   full white are ~120 mA and the 5 V rail is shared with the MQ-8 heater
   (~150 mA) on a 500 mA USB supply.
-* The pins must not collide with `mq8_pin` (GPIO36), `mics_pin` (GPIO39),
+* The pins must not collide with `mq8_pin` (GPIO39), `mics_pin` (GPIO36),
   `dht22_pin` (GPIO32) or the optional example pins of the other packages.
 
 ## Tuning
