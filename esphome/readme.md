@@ -21,7 +21,8 @@ thresholds and automations see
 
 ```yaml
 packages:
-  wifi: !include packages/wifi.yaml
+  wifi: !include packages/wifi.yaml        # networks + the open fallback AP
+  web: !include packages/web.yaml          # offline: captive portal + dashboard web server
   board: !include packages/board.yaml
   time: !include packages/time.yaml
   sensors_others: !include packages/sensors_others.yaml
@@ -34,6 +35,7 @@ packages:
 
 | Package | Sensor | Notes |
 |---|---|---|
+| `web.yaml` | - (HTTP) | captive portal + dashboard web server on the open fallback AP; `local: true` embeds the UI so it renders without internet; drop the include for a build without port 80 |
 | `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
 | `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
@@ -61,13 +63,14 @@ DHT22 (±0.5 °C / ±2 % RH) is better, an SHT4x better still.
 
 | File | Purpose | Usually edited? |
 |---|---|---|
-| `secrets.yaml` | WiFi credentials + fallback AP password (create it - see `packages/wifi.yaml` for the keys) | **Always** |
+| `secrets.yaml` | WiFi credentials (create it - see `packages/wifi.yaml` for the keys; the fallback AP is open, so there is no AP password) | **Always** |
 | `config.yaml` | `substitutions:` (`name`, `friendly_name`, `board_type`, `TZ`) and the package includes | **Always** |
 | `packages/mq8.yaml` | MQ-8 pins/divider (`mq8_pin`, `mq8_divider_r1/r2`, `mq8_rl`) plus the commented T/RH sensor (`mq8_i2c_*`, `mq8_sht4x_address`, `mq8_dht_pin`, `mq8_dht_model`) and compensation blocks | Yes |
 | `packages/dht22.yaml` | DHT22 pin/model (`dht22_pin`, `dht22_model`) + the `!extend mq8` fragment that links `temperature:`/`humidity:` (drop the package include when no T/RH sensor is wired) | Only with a DHT22 |
 | `packages/mics5524.yaml` | MiCS-5524 pins/divider/EN plus one gas entity per vendor curve (H2, CO, NH3, C2H5OH, CH4 - optional hardware) | Only with a MiCS-5524 |
 | `packages/alarm.yaml` | Buzzer/LED pins, chipset and channel order (`alarm_buzzer_pin`, `alarm_led_*`), the two thresholds (`alarm_early_ppm`, `alarm_danger_ppm`), the beep interval and the melody | Only with a buzzer / LED strip |
-| `packages/wifi.yaml` | WiFi networks (`!secret` references) | Almost always |
+| `packages/wifi.yaml` | WiFi networks (`!secret` references) + the open fallback AP (`ap_timeout`) | Almost always |
+| `packages/web.yaml` | Offline HTTP surface: `web_server` (`local`, `version`, `log`, `ota`) + `captive_portal` | Only to change the UI/port or drop the web server |
 | `packages/board.yaml` | ESP-IDF, watchdog/sdkconfig, API/OTA, safe mode | Rarely |
 | `packages/time.yaml` | SNTP + the weekly 06:00 restart | Rarely |
 | `packages/switch.yaml`, `packages/sensors_others.yaml` | Restart switch, WiFi signal diagnostics | Rarely |
@@ -196,6 +199,15 @@ measurement math and every lint command are collected in
 * **Weekly restart** - `packages/time.yaml` restarts the board every Monday at
   06:00 (SNTP must be synced first). Useful to recover from long-run drift; the
   calibration is in flash and survives it.
+* **Offline / open AP** - in a room with no reachable Wi-Fi the board opens the
+  **open** access point `<name> Fallback` (`192.168.4.1`, no password) after
+  `ap_timeout` (90 s) and serves the dashboard and the captive portal from
+  [`packages/web.yaml`](packages/web.yaml) - `local: true` embeds the UI, so it
+  renders without internet.  Stock ESPHome cannot keep the AP up while a station
+  is connected (the AP is a fallback, stops on connect and starts once per boot)
+  and `api: reboot_timeout: 30min` reboots the board every 30 min with no Home
+  Assistant - both, and the security notes, are in
+  [`../docs/offline_mode.md`](../docs/offline_mode.md).
 * **Watchdog / performance** - `packages/board.yaml` sets a 30 s task watchdog,
   240 MHz, `FREERTOS_HZ 1000` and TLS 1.3. `preferences.flash_write_interval:
   60min` keeps the flash writes (the calibration) gentle; `safe_mode:` and

@@ -71,9 +71,9 @@ net-to-GPIO table, the power input and the pre-alarm hardware of the board are i
 
 1. **Install ESPHome** (the Home Assistant add-on or the CLI) and connect the
    board over USB.
-2. **Create `esphome/secrets.yaml`** with your Wi-Fi credentials and the fallback
-   access-point password - the exact keys are listed in
-   [`docs/getting_started.md`](docs/getting_started.md).
+2. **Create `esphome/secrets.yaml`** with your Wi-Fi credentials - the exact keys
+   are listed in [`docs/getting_started.md`](docs/getting_started.md). The
+   fallback access point is **open** (no password) for offline use.
 3. **Set your substitutions** in [`esphome/config.yaml`](esphome/config.yaml)
    (`name`, `friendly_name`, `board_type`, `TZ`) and include the packages you
    need (`mq8`, optionally `mics5524`). An ambient T/RH sensor for the optional
@@ -145,6 +145,7 @@ of the database.
 
 * [`docs/README.md`](docs/README.md) - index of every document.
 * Setup: [`docs/getting_started.md`](docs/getting_started.md) - secrets, substitutions, packages, wiring, flashing, calibration.
+* Offline: [`docs/offline_mode.md`](docs/offline_mode.md) - the open fallback access point and the dashboard web server when there is no network.
 * Board: [`docs/hardware.md`](docs/hardware.md) - the PCB in [`pcb/`](pcb/): schematic sheets, the net-to-GPIO table, the analog front ends, power, BOM.
 * Usage: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) - entities, thresholds, automations, operations.
 * Hardware depth: [`docs/mq8_sensor_guide.md`](docs/mq8_sensor_guide.md), [`docs/mics5524_guide.md`](docs/mics5524_guide.md).

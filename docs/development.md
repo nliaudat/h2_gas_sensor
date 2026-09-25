@@ -27,6 +27,7 @@ esphome config tests/test_tc.yaml              # T/RH correction + curve: mqdata
 esphome config tests/test_mq8_tc_package.yaml      # the MQ-8 package with its compensation enabled
 esphome config tests/test_mics.yaml            # MiCS: both conversion models, divider, ADS1115 case
 esphome config tests/test_mics_package.yaml    # the shipped MiCS package
+esphome config tests/test_web_package.yaml     # the offline webserver package (open AP + dashboard)
 python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
 ```
 

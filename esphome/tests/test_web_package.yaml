@@ -1,0 +1,32 @@
+# Validation-only fixture for packages/web.yaml
+# (run: esphome config tests/test_web_package.yaml)
+#
+# `web_server` (the offline dashboard, `local: true`) and `captive_portal` are
+# only reachable through a WiFi AP, so this fixture pairs the web package with a
+# minimal inline `wifi:` block that mirrors the open fallback AP of
+# packages/wifi.yaml.  The credentials are plain strings on purpose: including
+# the real packages/wifi.yaml would pull in `!secret` keys and the fixture would
+# fail on a fresh clone that has no secrets.yaml.
+substitutions:
+  name: web_pkg
+  friendly_name: "Web package test"
+
+esphome:
+  name: ${name}
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+logger:
+  level: INFO
+
+wifi:
+  networks:
+    - ssid: "test-network"
+      password: "test-password"
+  # Open fallback AP: no `password:` (WIFI_AUTH_OPEN), like packages/wifi.yaml.
+  ap:
+    ssid: "${name} Fallback"
+
+packages:
+  web: !include ../packages/web.yaml

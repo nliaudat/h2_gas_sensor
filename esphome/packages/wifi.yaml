@@ -14,13 +14,18 @@ wifi:
       password: !secret wifi_password_3
       priority: 0
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  # Open fallback hotspot (see ../../docs/offline_mode.md).  `password:` is
+  # intentionally absent: ESPHome then starts the SoftAP with WIFI_AUTH_OPEN, so
+  # a phone or laptop in the battery room can connect without a key.
+  #
+  # It is a *fallback*: stock ESPHome brings it up only after `ap_timeout`
+  # (90 s default) with no station connected, and switches it off the moment one
+  # of the networks above connects - the AP and the station never run together.
+  # It also starts at most once per boot; a reboot re-arms it.
   ap:
     ssid: "${name} Fallback"
-    password: !secret fallback_hotspot_password
+    # ap_timeout: 90s  # wait before the AP appears when no network is reachable
 
   # low wifi signal = increase power transmission and no sleep
   power_save_mode: NONE
   output_power: 20.5dB
-
-captive_portal:

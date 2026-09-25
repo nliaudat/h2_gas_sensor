@@ -1,0 +1,34 @@
+# Optional HTTP surface for offline operation (../../docs/offline_mode.md): the
+# captive portal (WiFi credentials over the open fallback AP) and the dashboard
+# web server.
+#
+# Roles
+#   `web_server` - the device's own dashboard.  `local: true` embeds the whole
+#   UI (HTML + JS, gzipped) in the firmware, so the page renders on the *offline*
+#   AP where the browser has no internet to fetch https://oi.esphome.io; without
+#   it the default `js_url` points at that CDN and the page stays blank without
+#   internet.  It listens on port 80.
+#   `captive_portal:` - answers the phone/laptop captive-portal probe on the AP
+#   and serves the WiFi-credentials form, so a new site can be configured without
+#   a serial cable.  It shares the port-80 server of `web_server` and also keeps
+#   the web OTA platform alive (see the security note below).
+#
+# Remove the `web: !include` line in ../config.yaml to drop both (smaller
+# firmware, no HTTP server): the monitor itself - MQ-8 / MiCS-5524, the Home
+# Assistant API and the local pre-alarm - does not need them.
+#
+# Security
+#   The fallback AP is open (packages/wifi.yaml) and the dashboard has no
+#   `auth:` here, so anyone in radio range can read the values and rewrite the
+#   WiFi credentials.  `ota: false` keeps the *web_server* OTA path closed, but
+#   the captive portal can still flash and the unauthenticated `esphome` OTA
+#   platform in packages/board.yaml is unaffected - see ../../docs/offline_mode.md.
+
+web_server:
+  port: 80
+  version: 3
+  local: true  # embed the UI in the firmware - renders without internet
+  log: false  # the 1 Hz gas entities do not need a log stream
+  ota: false  # no OTA through the open AP (the captive portal path stays open)
+
+captive_portal:
