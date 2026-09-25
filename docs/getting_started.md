@@ -24,12 +24,13 @@ wifi_ssid_2: "your-main-ssid"
 wifi_password_2: "your-main-password"
 wifi_ssid_3: "your-guest-ssid"
 wifi_password_3: "your-guest-password"
-fallback_hotspot_password: "the-ap-password"
 ```
 
-If no network is reachable the board opens the access point `<name> Fallback`
-(`name` comes from the substitutions below) with `fallback_hotspot_password`, so
-you can always reconnect and fix the credentials.
+If no network is reachable the board opens its **open** access point
+`<name> Fallback` (`name` comes from the substitutions below) with **no
+password**, so you can always connect and fix the credentials - there is no
+`fallback_hotspot_password` key any more, the AP is unprotected on purpose (see
+[`offline_mode.md`](offline_mode.md)).
 
 ## 3. Set the substitutions
 
@@ -81,10 +82,11 @@ the ADC itself).  The per-entity refresh table is in
 ## 4. Pick the packages
 
 [`../esphome/config.yaml`](../esphome/config.yaml) already includes `wifi`,
-`board`, `time`, `sensors_others`, `switch` and one MQ-8 package:
+`web`, `board`, `time`, `sensors_others`, `switch` and one MQ-8 package:
 
 | Package | Sensor | When to use |
 |---|---|---|
+| `packages/web.yaml` | - (HTTP) | always for the offline mode: the captive portal + the dashboard web server on the open fallback AP (`local: true`, renders without internet); comment the include out to build without port 80 - see [`offline_mode.md`](offline_mode.md) |
 | `packages/mq8.yaml` | MQ-8 | always; the ambient T/RH sensor examples and the comment-only compensation keys are inside |
 | `packages/dht22.yaml` | DHT22 (ambient T/RH) | when a DHT22 is wired: it links `temperature:`/`humidity:` into `id: mq8`, which selects the compensation |
 | `packages/alarm.yaml` | Buzzer + 2 x SK6812 | when the local pre-alarm is wired: it merges into `id: mq8`, so it must stay *after* `mq8`; remove the include when there is no buzzer/LED strip |

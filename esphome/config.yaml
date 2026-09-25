@@ -56,6 +56,11 @@ logger:
 
 packages:
   wifi: !include packages/wifi.yaml
+  # Offline HTTP surface: the captive portal and the dashboard web server of the
+  # open fallback AP (packages/web.yaml, ../docs/offline_mode.md).  Comment the
+  # line out to build without any HTTP server - the monitor itself does not need
+  # it.
+  web: !include packages/web.yaml
   board: !include packages/board.yaml
   time: !include packages/time.yaml
   sensors_others: !include packages/sensors_others.yaml
@@ -73,7 +78,3 @@ packages:
   # MiCS-5524 trace sensor (100 - 1000 ppm H2, optional hardware):
   mics5524: !include packages/mics5524.yaml
   dht22: !include packages/dht22.yaml
-
-# web_server:
-#   port: 80
-#   log: false
