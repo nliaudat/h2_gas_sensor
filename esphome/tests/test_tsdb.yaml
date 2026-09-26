@@ -1,10 +1,11 @@
 # Validation-only fixture: packages/tsdb.yaml with stand-ins for the sensors of
 # the shipped packages (run: esphome config tests/test_tsdb.yaml).
 #
-# The package links its six columns to `mq8`, `mics`, `${name}_mq8_ratio`,
-# `${name}_mics_ratio`, `dht_temperature` and `dht_humidity`; here every one of
-# them is a template sensor, so the config validates and compiles without any
-# gas sensor, ADC, I2C or 1-wire hardware and without secrets.
+# The package links its four columns to `mq8`, `mics`, `dht_temperature` and
+# `dht_humidity`; here every one of them is a template sensor, so the config
+# validates and compiles without any gas sensor, ADC, I2C or 1-wire hardware and
+# without secrets.  (`${name}_mq8_ratio` / `${name}_mics_ratio` are still live
+# entities of the gas packages, they are just not logged to the database.)
 #
 # Negative cases that must keep failing with an explanatory message:
 #   * `scale: 0` on a column               -> "scale must not be 0 ..."
@@ -51,7 +52,7 @@ time:
     i2c_id: ${name}_i2c
 
 sensor:
-  # Stand-ins for the six columns of packages/tsdb.yaml.
+  # Stand-ins for the four columns of packages/tsdb.yaml.
   - platform: template
     id: mq8
     name: "Test H2 (MQ-8)"
@@ -62,16 +63,6 @@ sensor:
     id: mics
     name: "Test H2 trace (MiCS-5524)"
     unit_of_measurement: ppm
-    update_interval: 60s
-
-  - platform: template
-    id: ${name}_mq8_ratio
-    name: "Test MQ-8 ratio"
-    update_interval: 60s
-
-  - platform: template
-    id: ${name}_mics_ratio
-    name: "Test MiCS-5524 ratio"
     update_interval: 60s
 
   - platform: template

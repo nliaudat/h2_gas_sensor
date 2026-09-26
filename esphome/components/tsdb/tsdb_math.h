@@ -123,17 +123,40 @@ constexpr uint64_t history_seconds(uint32_t records, uint32_t interval_seconds) 
   return static_cast<uint64_t>(records) * interval_seconds;
 }
 
-/// Rows the CSV dump has to walk past so that the **newest** `rows` stored
-/// records are the ones printed.
+/// Timestamp a "newest `rows`" CSV dump starts its query from.
 ///
-/// The engine's query iterates the ring buffer oldest first, so a dump of the
-/// last `rows` records consumes `total_records - rows` earlier ones. `total_records`
-/// is the *stored* row count of `tsdb_get_stats_h()` (never the capacity), which
-/// is why the window is selected by count instead of by an estimated
-/// `rows * write_interval` span: gaps in the history (`on_missing: skip`, a
-/// changed write interval) then skip nothing extra, they only move the start.
-constexpr uint32_t dump_skip(uint32_t total_records, uint32_t rows) {
-  return total_records > rows ? total_records - rows : 0;
+/// The engine's query can jump to its start timestamp in O(log n) block reads
+/// (`tsdb_seek_start()`), but only while that start is *later* than the oldest
+/// retained record: a query that begins at `oldest_timestamp` walks the whole
+/// history block by block. Selecting the window by row count (the older
+/// behaviour) therefore read - and discarded - every older record on each press,
+/// which at full capacity meant ~24 000 records in a single `update()`.
+///
+/// This estimates the window from the write cadence instead: `rows` write
+/// intervals back from `newest`, over-provisioned by `margin` so timestamp
+/// jitter and a gap in the history cannot leave the window short of `rows`
+/// records. The result is clamped to `oldest` (a database younger than the
+/// window is dumped from its first row) and to at least 1, so it never
+/// underflows and never leaves the engine's range.
+constexpr uint32_t dump_window_start(uint32_t newest, uint32_t oldest, uint32_t rows, uint32_t interval_seconds,
+                                     uint32_t margin = 2) {
+  const uint64_t span = static_cast<uint64_t>(rows) * interval_seconds * margin;
+  const uint64_t start = span < newest ? static_cast<uint64_t>(newest) - span : 1;
+  const uint32_t floor = oldest != 0 ? oldest : 1;
+  return start > floor ? static_cast<uint32_t>(start) : floor;
+}
+
+/// Rows the CSV dump walks past inside its (time-selected) window so that the
+/// **newest** `rows` of it are the ones printed.
+///
+/// `dump_window_start()` over-provisions the window by a margin, so the query
+/// can land a few records before the newest `rows`; those are skipped here.
+/// `window_records` is the number of records actually *in* the window (from
+/// `tsdb_query_count_h()`), never the capacity: a window holding fewer records
+/// than asked for (a gap longer than the margin, a database younger than the
+/// window) skips nothing and the dump prints what the window holds.
+constexpr uint32_t dump_skip(uint32_t window_records, uint32_t rows) {
+  return window_records > rows ? window_records - rows : 0;
 }
 
 /// Encode an engineering value as the raw int16_t the engine stores:

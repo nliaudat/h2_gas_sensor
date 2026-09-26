@@ -43,6 +43,7 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | `history` reports rows but Home Assistant has no history for the window | the history is a **copy on the device**, not a recorder backend: read it with the `history dump` button or the aggregates | see [`data_logging.md`](data_logging.md) for the export paths |
 | `no data/littlefs partition labelled 'littlefs'` after an OTA update | the partition table changed and OTA cannot move partitions | flash once over USB (`esphome run config.yaml`) |
 | `history write errors` above 0 | a write or `tsdb_sync_h()` failed (flash or filesystem trouble) | check `history free`; see [`data_logging.md`](data_logging.md) |
+| `history records` stays 0 after an update that changed the logged columns; the log says `opening as N columns failed on an existing file` | the stored file was written with a different column count - esp_tsdb refuses that schema (it would mislabel every value) | expected once: the package sets `recreate_on_schema_change: true`, so the component deletes the old file and starts an empty one (`history recreated`) - the previous history is gone by design; see [`data_logging.md`](data_logging.md) |
 
 ## Reading the log
 

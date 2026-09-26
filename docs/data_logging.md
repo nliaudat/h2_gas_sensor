@@ -14,17 +14,31 @@ board.
 
 ## What is stored
 
-One row per write interval (`history_write_interval`, 60 s by default) with six
+One row per write interval (`history_write_interval`, 60 s by default) with four
 columns, all taken from the *last published value* of an existing entity:
 
 | Column | Source entity | `scale` | Stored range |
 |---|---|---|---|
 | `h2_mq8_ppm` | `H2 (MQ-8)` | 1 | 0 - 10 000 ppm |
 | `h2_trace_ppm` | `H2 trace (MiCS-5524)` | 1 | 0 - 1 000 ppm |
-| `mq8_ratio` | `MQ-8 RS-R0 ratio` | 100 | 0 - 327 |
-| `mics_ratio` | `MiCS-5524 ratio` | 1000 | -32.7 - 32.7 |
 | `temperature` | ambient temperature (DHT22) | 10 | -3276.7 - 3276.7 °C |
 | `humidity` | ambient humidity (DHT22) | 10 | -3276.7 - 3276.7 %RH |
+
+The two ratios (`MQ-8 RS-R0 ratio`, `MiCS-5524 ratio`) are **not** in the file.
+They stay live entities - the 1 Hz log and the Home Assistant recorder keep them -
+but a record costs `4 + 2 * columns` bytes, so two fewer columns buy 22.3 days of
+history out of the same `max_file_size` instead of 16.7 (see the capacity
+section); the two ppm values plus the ambient pair are what a later reading of an
+event needs.
+
+Removing or adding a column is a **schema change**, not just a config change: the
+file header stores the column count and esp_tsdb refuses a file whose count
+differs from `columns:` (it would mislabel every value in it).
+`recreate_on_schema_change: true` (set in the package) is what makes the update
+survivable: the first boot of the new firmware deletes that file and starts an
+empty one - the log says `history recreated (the column set changed)`, the old
+history is gone. Without the option the component would stay failed, writing
+nothing and taking the diagnostics and the history buttons down with it.
 
 The engine stores `int16_t`, so a column is quantised: `scale: 10` keeps one
 decimal (0.1 °C), `scale: 100` two (0.01 ratio). Decoding is
@@ -59,8 +73,8 @@ littlefs, data, littlefs, , 0x80000,   # the history
 ```
 
 The 512 KB is split between the two OTA slots, so each of them shrinks from
-1.75 MB to 1.5 MB - the firmware (1 006 259 bytes with the history included) sits
-at 64 % of its slot, which still leaves 566 605 bytes (about 553 KB) of headroom
+1.75 MB to 1.5 MB - the firmware (1 006 819 bytes with the history included) sits
+at 64 % of its slot, which still leaves 566 045 bytes (about 553 KB) of headroom
 for future releases. A
 partition table change cannot be delivered by OTA: **flash once over USB**
 (`esphome run config.yaml`) after enabling the package, then OTA works as before.
@@ -68,17 +82,17 @@ partition table change cannot be delivered by OTA: **flash once over USB**
 ## Capacity and retention
 
 The capacity follows from `max_file_size` (default `384KB`) and the number of
-columns - one record is `4 + 2 * columns` bytes, a block holds 63 of them with 6
+columns - one record is `4 + 2 * columns` bytes, a block holds 84 of them with 4
 columns. The numbers below are asserted by
 [`../esphome/tests/tsdb_math_test.cpp`](../esphome/tests/tsdb_math_test.cpp):
 
 | Columns | Bytes/record | Records/block | `max_file_size` | Records | File at capacity | History at 60 s | History at 5 min |
 |---|---|---|---|---|---|---|---|
-| 6 | 16 | 63 | 384 KB | 24 058 | 392 264 B (383 KB) | 16.7 days | 83.5 days |
+| 4 (shipped) | 12 | 84 | 384 KB | 32 064 | 392 432 B (383 KB) | 22.3 days | 111.3 days |
 
 `capacity_for_bytes()` is deliberately a little more conservative than the
-engine's own `TSDB_CALC_MAX_RECORDS()` (which would allow 24 448 records): the
-file really stays inside `max_file_size` instead of growing ~1.5 % past it.
+engine's own `TSDB_CALC_MAX_RECORDS()` (which would allow 32 597 records): the
+file really stays inside `max_file_size` instead of growing ~1.6 % past it.
 
 The database is a **ring buffer**: once the capacity is reached the oldest row is
 overwritten, so the file never grows beyond `max_file_size` and the history is
@@ -90,16 +104,16 @@ file it asks LittleFS how much space is left, and caps the capacity early if the
 partition runs low - a copy-on-write filesystem needs free blocks even to
 overwrite, and a full partition would break every *other* file on it too.
 
-Other budgets, same six columns (measured by the same host test):
+Other budgets, same four columns (measured by the same host test):
 
 | `max_file_size` | Records | File at capacity | History at 60 s |
 |---|---|---|---|
-| 128 KB | 7 968 | 130 800 B | 5.5 days |
-| 256 KB | 16 005 | 262 048 B | 11.1 days |
-| 384 KB (shipped) | 24 058 | 392 264 B | 16.7 days |
-| 768 KB | 48 218 | 785 984 B | 33.5 days |
+| 128 KB | 10 614 | 130 856 B | 7.4 days |
+| 256 KB | 21 330 | 261 136 B | 14.8 days |
+| 384 KB (shipped) | 32 064 | 392 432 B | 22.3 days |
+| 768 KB | 64 262 | 786 328 B | 44.6 days |
 
-A 1 MB budget is possible in principle (64 324 records) but needs a partition of
+A 1 MB budget is possible in principle (85 727 records) but needs a partition of
 at least ~1.1 MB - and that would leave the two OTA slots below 1.2 MB, i.e. the
 current firmware at more than 80 % of its slot. Not advisable without changing
 the flash size.
@@ -107,7 +121,7 @@ the flash size.
 A bigger `max_file_size` needs a bigger `partition_size`: the partition has to
 hold the file plus `min_free_bytes`, and every KB of it is taken out of **both**
 OTA slots. On this 4 MB flash, with the firmware the history package produces
-(1 006 259 bytes):
+(1 006 819 bytes):
 
 | `partition_size` | Each OTA slot | Firmware share | Verdict |
 |---|---|---|---|
@@ -124,43 +138,48 @@ maximum on this 4 MB flash.
 Measured on 2026-09-26 with ESPHome 2026.9.0 / ESP-IDF 5.5.5: `esphome compile
 config.yaml` prints the summary, and `esp_idf_size --archives` / `--files` on
 `esphome/.esphome/build/h2_sensor/build/h2_sensor.map` breaks it down. Compare a
-future build against these numbers - the 2026-09-25 run of the same firmware
-*without* the two ratio columns and the CSV-dump/mount fixes was 1 006 047 B of
-flash and 53 692 B of static DRAM, i.e. this change costs +212 B and +8 B:
+future build against these numbers. The line of earlier runs of the same
+configuration: 1 006 047 B of flash and 53 692 B of static DRAM (2026-09-25); the
+CSV-dump/mount fixes and logging the two ratios cost +212 B / +8 B; selecting the
+dump window by time instead of walking the history added +192 B of flash and no
+RAM at all. The current build is 1 006 819 B: it drops those two ratio columns
+again - a column is runtime config, it costs no flash - and adds the
+`recreate_on_schema_change` recovery path, +368 B of flash of which 188 B are in
+`tsdb.cpp.obj`, with no RAM or IRAM change at all:
 
 | Memory | Used | Total | Free |
 |---|---|---|---|
-| Flash (image) | 1 006 259 B (64.0 %) | app slot 1 572 864 B | 566 605 B (36 %) |
+| Flash (image) | 1 006 819 B (64.0 %) | app slot 1 572 864 B | 566 045 B (36 %) |
 | IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
 | DRAM (static) | 53 700 B (29.7 %) | 180 736 B | 127 036 B |
 
-(The per-update `INFO` value line of the two gas components, `log_ppm:`, is
-+176 B of flash and +16 B of static DRAM against the numbers recorded before
-it.)
+(The per-update `INFO` value line of the two gas components, `log_ppm:`, added
++176 B of flash and +16 B of static DRAM to the build that came before it.)
 
 The history itself, object by object (`esp_idf_size --files`):
 
 | Object | Flash |
 |---|---|
 | LittleFS - `lfs.c` 17 322, `esp_littlefs.c` 6 466, `littlefs_esp_part.c` 213 | 24 001 B |
-| esp_tsdb - `tsdb_core` 5 375, `tsdb_query` 1 714, `tsdb_write` 1 511, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 354 B |
-| `tsdb.cpp` (this component) | 5 297 B |
+| esp_tsdb - `tsdb_core` 5 371, `tsdb_query` 1 714, `tsdb_write` 1 511, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 350 B |
+| `tsdb.cpp` (this component) | 5 628 B |
 | VFS directory support (`require_vfs_dir()`, part of `vfs.c`) | ~500 B |
 | the entities and automations of `packages/tsdb.yaml` | ~1 000 B |
 | **total** | **~40 KB** |
 
 Static RAM is 53 700 B (29.7 %) - `.bss` 36 456, `.data` 17 084 and 160 B of
 `noinit`. Against the pre-history build that is +2 088 B (`.bss` +1 960, `.data`
-+128), 8 B more than the 2026-09-25 measurement; the component object itself is
-still 700 B of `.bss` and the two extra columns are entries of the heap-allocated
-`columns_` vector, so those 8 B are generated statics, not the component's own
-state. IRAM does not move at all. While the database is mounted roughly
-**6 - 7 KB of heap** are in use (4 KB buffer pool, the LittleFS block caches, the
-esp_tsdb handle with its header copy and mutex); `buffer_pool_size` and
-`min_free_bytes` are the knobs.
++128), 8 B more than the 2026-09-25 measurement. A column is not a static at all:
+the four columns are entries of the heap-allocated `columns_` vector, and the
+component object itself is still 700 B of `.bss` - which is also why the four
+columns (instead of six) and the one `bool` of `recreate_on_schema_change_` did
+not move a single byte of this table. IRAM does not move either. While the
+database is mounted roughly **6 - 7 KB of heap** are in use (4 KB buffer pool, the
+LittleFS block caches, the esp_tsdb handle with its header copy and mutex);
+`buffer_pool_size` and `min_free_bytes` are the knobs.
 
 Reading the two size reports: before the history package the image was
-904 299 B, now 1 006 259 B (+101 960 B, ~40 KB of it the feature's own code). The
+904 299 B, now 1 006 819 B (+102 520 B, ~40 KB of it the feature's own code). The
 remainder sits in objects of the base configuration that this change does not
 touch - the current image carries `esp_timer_impl_lac.c.obj` with 91 777 B of
 `.rodata` (the time/newlib data of the `time:`/SNTP support) and the Wi-Fi and
@@ -168,9 +187,9 @@ TLS data of the IDF components. An exact attribution needs an A/B build (comment
 the `tsdb: !include` line, rebuild, diff `--archives`), because `esphome clean`
 deletes the older map file.
 
-Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 605 bytes
+Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 045 bytes
 of the app slot stay free (~1 - 2 KB per release of headroom), IRAM is untouched
-and the 16.7 days of history are worth the 40 KB.
+and the 22.3 days of history are worth the 40 KB.
 
 ## Durability: what a power cut costs
 
@@ -227,17 +246,20 @@ database slow in earlier engine versions.
    window longer than the (excluded) 1 Hz stream. Without a row in the window
    they are `unknown`, never `0`.
 2. **CSV dump** - the `... history dump (log)` button prints the newest
-   `dump_rows` (60) rows **that are stored** to the log. The window is picked by
-   row count, not as a time span: a gap (a dropped row, a changed write interval)
-   does not shorten the dump, it only makes the component skip more older rows -
-   the last line printed is always the newest record. Read them with
+   `dump_rows` (60) rows **that are stored** to the log. The window is the last
+   `dump_rows` write intervals ending at the newest record, doubled as a margin
+   for timestamp jitter and a single gap, so the engine can **seek** to it in
+   O(log n) block reads: a press reads a bounded window instead of scanning the
+   whole history, and no longer stalls the loop (or the 1 s readings) while it
+   runs. Only a gap longer than the margin can leave the window with fewer rows
+   than asked for, and the log says so. Read them with
    `esphome logs config.yaml` over the network, or over USB; the first line names
    the columns, the values are already decoded:
 
    ```
-   [tsdb] history.tsdb: csv-dump begin (newest 60 records, timestamp,h2_mq8_ppm,... ...)
+   [tsdb] history.tsdb: csv-dump begin (newest 60 records, window [1790353800, 1790361000], timestamp,h2_mq8_ppm,... ...)
    [tsdb] history.tsdb: 1790361000,52.0000,7.0000,68.7000,0.9810,21.4000,45.1000
-   [tsdb] history.tsdb: csv-dump end (60 rows, 23998 older skipped)
+   [tsdb] history.tsdb: csv-dump end (60 rows, 61 older skipped)
    ```
 3. **Diagnostics** - `... history records`, `... history used/free`,
    `... history oldest/newest`, `... history write errors` and the
@@ -254,8 +276,9 @@ database slow in earlier engine versions.
   step - it is not implemented.)
 * **No per-column retention or trimming**: the ring buffer evicts the oldest
   *row*, all columns with it.
-* **16 columns maximum** - the V3 file format limit. A seventh column is a schema
-  migration of the database, not a config change.
+* **16 columns maximum** - the V3 file format limit. A change of the column set
+  is a schema change, not a config change: the file is recreated and the stored
+  rows of the old schema are gone (see [What is stored](#what-is-stored)).
 * **No storage of the reason** for a value (calibration state, correction
   factor): the raw chain is in the live entities and their diagnostics.
 * The history is **not** a replacement for the Home Assistant recorder: it is
@@ -276,7 +299,8 @@ grow by one per write interval until the ring buffer is full.
 | `X has no value - record dropped (N dropped so far)` | That entity published `unknown`/NaN: a pending calibration, a heater warm-up or a broken sensor. Rows are missing for as long as it lasts - that is the intended `on_missing: skip` behaviour. |
 | `capacity is capped early when ... drops below ... bytes` | The free-space guard fired: the partition is nearly full. Raise `partition_size` (and `max_file_size`), or let the ring buffer overwrite. |
 | `write errors` above 0 | Writes or syncs failed (filesystem or flash trouble). Check `free`, and see [`troubleshooting.md`](troubleshooting.md). |
-| The history is empty after a firmware change | A schedule change (write interval, columns, `max_file_size`) is fine and keeps the data; a change of `file:`, `partition_size` or a full flash erase starts a new database. |
+| `opening as 4 columns failed on an existing file (a different column set?)` once after an update that changed `columns:` | the stored file was written with another column count - a schema change, which esp_tsdb refuses to open | expected once: `recreate_on_schema_change: true` (set in the package) deletes that file and starts an empty one, the next line is `history recreated (the column set changed)`. Without the option the component stays failed until the file is deleted (`history clear` deletes the rows but keeps the file). |
+| The history is empty after a firmware change | Adding or removing a column is a schema change: the old file is deleted and a new one starts (`recreate_on_schema_change`). A change of `update_interval`/`sync_interval` keeps the data; a change of `file:`, `partition_size` or a full flash erase also starts a new database. |
 
 ## See also
 

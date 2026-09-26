@@ -41,7 +41,7 @@ packages:
 | `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 | `alarm.yaml` | Buzzer + 2 x SK6812 | local pre-alarm (buzzer + status LEDs); merges its bands into `id: mq8` with `!extend`, so it must stay after `mq8.yaml` |
-| `tsdb.yaml` | - (history) | logs the six readings into a time-series database on its own `littlefs` flash partition (`id: history`); adds a diagnostics/button/aggregate surface and costs each OTA slot half of `partition_size` - see [`../docs/data_logging.md`](../docs/data_logging.md) |
+| `tsdb.yaml` | - (history) | logs the four readings of the two gas sensors and the ambient pair into a time-series database on its own `littlefs` flash partition (`id: history`); adds a diagnostics/button/aggregate surface and costs each OTA slot half of `partition_size` - see [`../docs/data_logging.md`](../docs/data_logging.md) |
 
 `mq8.yaml` is the only MQ-8 package: the ambient sensors are **linked by id**
 (`temperature:`/`humidity:` in the `mq_gas_sensors` entry), so there is no
