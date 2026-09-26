@@ -156,6 +156,59 @@ int main() {
   check_close("dump_skip(37, 60) skips nothing (window holds fewer rows)", dump_skip(37, 60), 0);
   check_close("dump_skip(0, 60) skips nothing", dump_skip(0, 60), 0);
   check_true("dump_skip + rows == the window when the window is full", dump_skip(63, 60) + 60 == 63);
+  // A gap in the history (`on_missing: skip` writes nothing while a sensor is out)
+  // can leave the time-selected window short although older rows exist. The dump
+  // then widens it once to the whole history, so it keeps its promise: the newest
+  // `dump_rows` rows that are *stored*.
+  check_true("a short window with older history is widened", dump_needs_widening(37, 60, now - 7200, long_history));
+  check_true("a window holding 0 records is widened too", dump_needs_widening(0, 60, now - 3600, long_history));
+  check_true("a window one row short is widened", dump_needs_widening(59, 60, now - 3600, long_history));
+  check_true("a full window is not widened", !dump_needs_widening(60, 60, now - 3600, long_history));
+  check_true("an over-provisioned window is not widened", !dump_needs_widening(121, 60, now - 7200, long_history));
+  check_true("a window that already covers the whole history is not widened",
+             !dump_needs_widening(37, 60, long_history, long_history));
+  check_true("a database younger than the window is not widened (its rows all fit)",
+             !dump_needs_widening(37, 60, 1, 0));
+  // The widened range is the whole ring, so its record count is the `total_records`
+  // the statistics already reported - 32064 at the shipped 384KB budget/4 columns:
+  // the skip then trims it to the newest 60 of the *stored* rows.
+  check_true("the widened skip comes from total_records (the shipped capacity)",
+             dump_skip(32064, 60) == 32004 && dump_skip(32064, 60) + 60 == 32064);
+
+  std::printf("\n== stored schema probe (recreate_on_schema_change) ==\n");
+  // A failed open may only delete the history when the file's *own* header proves
+  // a schema change: the first four bytes are TSDB_MAGIC "ETSD" (0x45545344,
+  // little-endian on disk) and the column count is the byte at offset 8 -
+  // offsetof(tsdb_header_t, num_params), which tsdb.cpp static_asserts.
+  check_close("HEADER_COLUMNS_OFFSET is offsetof(tsdb_header_t, num_params)", HEADER_COLUMNS_OFFSET, 8);
+  check_close("FILE_MAGIC is TSDB_MAGIC \"ETSD\"", FILE_MAGIC, 0x45545344);
+  check_close("MAX_COLUMNS is TSDB_MAX_PARAMS", MAX_COLUMNS, 64);
+
+  uint8_t header[HEADER_BYTES] = {};  // exactly sizeof(tsdb_header_t)
+  header[0] = 0x44;                   // "ETSD" as the four bytes on disk
+  header[1] = 0x53;
+  header[2] = 0x54;
+  header[3] = 0x45;
+  header[HEADER_COLUMNS_OFFSET] = 6;
+  check_close("a 6-column header reads as 6", stored_columns(header, HEADER_BYTES), 6);
+  check_close("the probe needs only the first 9 bytes", stored_columns(header, HEADER_COLUMNS_OFFSET + 1), 6);
+  check_close("a truncated header (8 bytes) is not proven", stored_columns(header, HEADER_COLUMNS_OFFSET), 0);
+  check_close("an empty buffer is not proven", stored_columns(header, 0), 0);
+  check_true("a null buffer is not proven", stored_columns(nullptr, HEADER_BYTES) == 0);
+  check_true("stored 6 vs configured 4 is a schema change (the file may be recreated)",
+             stored_columns(header, HEADER_BYTES) != 0 && stored_columns(header, HEADER_BYTES) != 4);
+  header[HEADER_COLUMNS_OFFSET] = 4;
+  check_true("stored 4 vs configured 4 is not (the file is kept)",
+             !(stored_columns(header, HEADER_BYTES) != 0 && stored_columns(header, HEADER_BYTES) != 4));
+  header[HEADER_COLUMNS_OFFSET] = 0;  // an implausible stored count
+  check_close("a stored count of 0 is not proven", stored_columns(header, HEADER_BYTES), 0);
+  header[HEADER_COLUMNS_OFFSET] = 65;  // above TSDB_MAX_PARAMS
+  check_close("a stored count above TSDB_MAX_PARAMS is not proven", stored_columns(header, HEADER_BYTES), 0);
+  header[HEADER_COLUMNS_OFFSET] = 4;
+  header[0] = 0x00;  // some other file format
+  check_close("a wrong magic is not proven (the file is kept)", stored_columns(header, HEADER_BYTES), 0);
+  header[0] = 0xFF;  // an erased flash block
+  check_close("a blank file is not proven (the file is kept)", stored_columns(header, HEADER_BYTES), 0);
 
   std::printf("\n== configuration codes shared with __init__.py ==\n");
   check_close("MISSING_SKIP is 0", MISSING_SKIP, 0);

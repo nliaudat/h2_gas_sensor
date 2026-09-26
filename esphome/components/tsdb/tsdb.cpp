@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <ctime>
 
@@ -28,6 +29,9 @@ static constexpr size_t CSV_LINE_SIZE = 256;
 /// The CSV dump window covers `dump_rows * update_interval * this` seconds: the
 /// extra factor absorbs timestamp jitter and a single gap in the history without
 /// falling back to a scan of the whole database (see `tsdbmath::dump_window_start`).
+/// A window that is short anyway is widened once to the whole history
+/// (`tsdbmath::dump_needs_widening`), so the dump keeps its documented promise -
+/// the newest `dump_rows` rows that are *stored*.
 static constexpr uint32_t DUMP_WINDOW_MARGIN = 2;
 
 /// The esp_tsdb free-space callback takes no context argument, so the label of
@@ -47,6 +51,12 @@ static_assert(tsdbmath::records_per_block(4) == (TSDB_BLOCK_SIZE - TSDB_BLOCK_HE
 static_assert(tsdbmath::max_records_for_bytes(3072, 4) == TSDB_CALC_MAX_RECORDS(3072, 4),
               "esp_tsdb changed TSDB_CALC_MAX_RECORDS()");
 static_assert(sizeof(tsdb_header_t) == tsdbmath::HEADER_BYTES, "esp_tsdb changed sizeof(tsdb_header_t)");
+static_assert(tsdbmath::FILE_MAGIC == static_cast<uint32_t>(TSDB_MAGIC), "esp_tsdb changed TSDB_MAGIC");
+static_assert(tsdbmath::MAX_COLUMNS == static_cast<uint32_t>(TSDB_MAX_PARAMS), "esp_tsdb changed TSDB_MAX_PARAMS");
+static_assert(offsetof(tsdb_header_t, magic) == tsdbmath::HEADER_MAGIC_OFFSET,
+              "esp_tsdb moved tsdb_header_t::magic - the stored schema probe no longer reads the magic");
+static_assert(offsetof(tsdb_header_t, num_params) == tsdbmath::HEADER_COLUMNS_OFFSET,
+              "esp_tsdb moved tsdb_header_t::num_params - the stored schema probe no longer reads the column count");
 static_assert(tsdbmath::capacity_for_bytes(384 * 1024, 4) <= TSDB_CALC_MAX_RECORDS(384 * 1024, 4),
               "the exact capacity solver may never exceed the engine's own formula");
 static_assert(static_cast<int>(tsdbmath::MEMORY_INTERNAL) == static_cast<int>(TSDB_ALLOC_INTERNAL_RAM),
@@ -198,6 +208,26 @@ static void remove_database_files(const std::string &path) {
   }
 }
 
+/// The column count the database file at `path` was written with, or 0 when it is
+/// absent, unreadable or does not carry a header this build understands.
+///
+/// This is the *only* thing that may authorise deleting history, and only when it
+/// differs from the configured count: an open failure can also come from a heap,
+/// filesystem or I/O problem (esp_tsdb allocates its buffer pool before it even
+/// touches the file), and those leave a healthy database that the next boot has to
+/// be able to open. Missing-here (0) or matches-the-config means "keep it".
+/// The whole 584-byte header is read because it is one small buffered read; the
+/// probe itself only needs the first nine bytes.
+static uint32_t read_stored_columns(const std::string &path) {
+  FILE *file = fopen(path.c_str(), "rb");
+  if (file == nullptr)
+    return 0;
+  uint8_t header[tsdbmath::HEADER_BYTES] = {};
+  const size_t read = fread(header, 1, sizeof(header), file);
+  fclose(file);
+  return tsdbmath::stored_columns(header, read);
+}
+
 bool TsdbComponent::open_database_() {
   std::vector<const char *> names;
   names.reserve(this->columns_.size());
@@ -229,23 +259,38 @@ bool TsdbComponent::open_database_() {
   config.free_space_cb = this->min_free_bytes_ > 0 ? free_space_probe_ : nullptr;
 
   this->db_ = tsdb_open(&config);
-  if (this->db_ == nullptr && this->recreate_on_schema_change_ && database_file_exists(path)) {
-    // The engine refuses a file whose stored column count differs from `columns`
-    // (it would mislabel every value in it) and returns NULL. Such a column
-    // change is a schema change that no config value can absorb: either the old
-    // rows go or the component stays failed forever (which would also take the
-    // diagnostics and the buttons down with it). With
-    // `recreate_on_schema_change` the file is therefore deleted and created anew
-    // with the schema below - once, because the new file then matches.
-    ESP_LOGW(TAG,
-             "%s: opening as %" PRIu32
-             " columns failed on an existing file (a different column set?) - deleting it and "
-             "starting a new database (the stored history is lost)",
-             this->file_.c_str(), static_cast<uint32_t>(names.size()));
-    remove_database_files(path);
-    this->db_ = tsdb_open(&config);
-    if (this->db_ != nullptr)
-      this->publish_log_("history recreated (the column set changed)");
+  if (this->db_ == nullptr && this->recreate_on_schema_change_) {
+    // A stored row carries its values, but not their names: the file's header
+    // does. When it says the file was written with another column count, esp_tsdb
+    // refuses to open it (it would mislabel every value) and returns NULL. Such a
+    // column change is a schema change that no config value can absorb: either the
+    // old rows go or the component stays failed forever (which would also take the
+    // diagnostics and the buttons down with it). With `recreate_on_schema_change`
+    // the file is therefore deleted and created anew with the schema below - once,
+    // because the new file then matches.
+    //
+    // The deletion is gated on the file's *own* header saying so: an open failure
+    // with an unreadable or matching schema is not a schema change, and wiping the
+    // history for it (a transient out-of-memory at boot, a filesystem or flash
+    // problem) would be worse than a boot without a database.
+    const uint32_t stored = read_stored_columns(path);
+    const uint32_t configured = static_cast<uint32_t>(names.size());
+    if (stored != 0 && stored != configured) {
+      ESP_LOGW(TAG,
+               "%s: opening as %" PRIu32 " columns failed and the file stores %" PRIu32
+               " - deleting it and starting a new database (the stored history is lost)",
+               this->file_.c_str(), configured, stored);
+      remove_database_files(path);
+      this->db_ = tsdb_open(&config);
+      if (this->db_ != nullptr)
+        this->publish_log_("history recreated (the column set changed)");
+    } else if (database_file_exists(path)) {
+      ESP_LOGW(TAG,
+               "%s: opening failed but the stored schema is %s - keeping the file (only a different column set "
+               "is a reason to delete history)",
+               this->file_.c_str(),
+               stored == 0 ? LOG_STR_LITERAL("unreadable") : LOG_STR_LITERAL("the configured one"));
+    }
   }
   if (this->db_ == nullptr) {
     ESP_LOGE(TAG, "%s: esp_tsdb could not open %s (buffer %" PRIu32 " bytes, memory mode %u)", this->file_.c_str(),
@@ -524,7 +569,8 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
   // and discard - the whole history, stalling the loop (and the 1 s readings)
   // for the duration. The window is `rows` write intervals back from the newest
   // record, times DUMP_WINDOW_MARGIN so timestamp jitter and a single gap do not
-  // leave it short; the dump prints the newest `rows` of whatever it holds.
+  // leave it short. A window that is short anyway is widened once to the whole
+  // history below, so the dump still prints the newest `rows` *stored* rows.
   const uint32_t end = stats.newest_timestamp;
   const uint32_t oldest = stats.oldest_timestamp != 0 ? stats.oldest_timestamp : 1;
   const uint32_t interval_ms = this->get_update_interval();
@@ -532,13 +578,30 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
   const uint32_t start = tsdbmath::dump_window_start(end, oldest, rows, interval_s, DUMP_WINDOW_MARGIN);
 
   // The margin over-provisions the window, so it can hold a few rows more than
-  // asked for; `skip` trims those to the newest `rows`. A window with fewer rows
-  // than `rows` (a gap longer than the margin, a database younger than the
-  // window) skips nothing.
+  // asked for; `skip` trims those to the newest `rows`.
   uint32_t available = 0;
-  if (tsdb_query_count_h(db, start, end, &available) != ESP_OK)
-    available = 0;
-  const uint32_t skip = tsdbmath::dump_skip(available, rows);
+  if (tsdb_query_count_h(db, start, end, &available) != ESP_OK) {
+    // Without the count the newest rows cannot be told from the oldest ones of
+    // the over-provisioned window: dumping anyway would print old rows as the
+    // newest ones, so the dump fails instead.
+    ESP_LOGE(TAG, "%s: csv-dump count failed - not dumping (the window cannot be trimmed to the newest rows)",
+             this->file_.c_str());
+    return;
+  }
+  uint32_t window_start = start;
+  uint32_t skip = tsdbmath::dump_skip(available, rows);
+  if (tsdbmath::dump_needs_widening(available, rows, window_start, oldest)) {
+    // A gap wider than the margin left the time-selected window with fewer rows
+    // than asked for although older rows exist (`on_missing: skip` writes nothing
+    // while a sensor is out). Widening once to the oldest record makes the dump
+    // exact; the range then *is* the whole ring, so its row count is the
+    // `total_records` of the statistics above - no second count pass is needed.
+    ESP_LOGW(TAG,
+             "%s: csv-dump window holds %" PRIu32 " of %" PRIu32 " rows (a gap) - widening it to the whole history",
+             this->file_.c_str(), available, rows);
+    window_start = oldest;
+    skip = tsdbmath::dump_skip(stats.total_records, rows);
+  }
 
   std::string header = "timestamp";
   for (const TsdbColumn &column : this->columns_) {
@@ -546,12 +609,12 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
     header += column.name;
   }
   ESP_LOGI(TAG, "%s: csv-dump begin (newest %" PRIu32 " records, window [%" PRIu32 ", %" PRIu32 "], %s ...)",
-           this->file_.c_str(), rows, start, end, header.c_str());
+           this->file_.c_str(), rows, window_start, end, header.c_str());
 
   // The query state is ~700 bytes; a function local static keeps it out of the
   // (small) loop task stack - the dump runs there, on request only.
   static tsdb_query_t query = {};
-  if (tsdb_query_init_h(db, &query, start, end, nullptr, 0) != ESP_OK) {
+  if (tsdb_query_init_h(db, &query, window_start, end, nullptr, 0) != ESP_OK) {
     ESP_LOGE(TAG, "%s: csv-dump query failed", this->file_.c_str());
     return;
   }
@@ -576,9 +639,11 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
   }
   tsdb_query_close(&query);
   if (count < rows) {
-    // A window shorter than asked for can only come from a gap wider than the
-    // margin (the begin line above names the window it covered).
-    ESP_LOGW(TAG, "%s: csv-dump got %" PRIu32 " of %" PRIu32 " rows (a gap)", this->file_.c_str(), count, rows);
+    // The window can only be short now when the database itself holds fewer rows
+    // than asked for (a young database): every gap that older rows could cover
+    // was widened above.
+    ESP_LOGW(TAG, "%s: csv-dump got %" PRIu32 " of %" PRIu32 " rows (the database holds %" PRIu32 ")",
+             this->file_.c_str(), count, rows, stats.total_records);
   }
   ESP_LOGI(TAG, "%s: csv-dump end (%" PRIu32 " rows, %" PRIu32 " older skipped)", this->file_.c_str(), count, skip);
 }

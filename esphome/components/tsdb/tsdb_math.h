@@ -58,6 +58,39 @@ static constexpr uint32_t INDEX_DEFAULT_STRIDE = 380;
 /// What TSDB_CALC_MAX_RECORDS() keeps for the header and the sparse index.
 static constexpr uint32_t MAX_RECORDS_RESERVE = 2048;
 
+/// What an existing esp_tsdb file says about the schema it was written with. The
+/// engine keeps that in the first bytes of the file, so it can be read without
+/// the engine - and without laying out `tsdb_header_t` on the host. `tsdb.cpp`
+/// static_asserts the offsets against `offsetof(tsdb_header_t, ...)`, so an
+/// engine release that reorders the header breaks the build.
+static constexpr uint32_t FILE_MAGIC = 0x45545344u;   ///< TSDB_MAGIC, "ETSD"
+static constexpr uint32_t HEADER_MAGIC_OFFSET = 0;    ///< offsetof(tsdb_header_t, magic)
+static constexpr uint32_t HEADER_COLUMNS_OFFSET = 8;  ///< offsetof(tsdb_header_t, num_params)
+/// TSDB_MAX_PARAMS, the engine's own upper bound for a stored column count.
+static constexpr uint32_t MAX_COLUMNS = 64;
+
+/// The column count an esp_tsdb header was written with, or 0 when `buffer` is
+/// not a header this component may act on (too short, wrong magic, a count
+/// outside `1..MAX_COLUMNS`).
+///
+/// `0` means *not proven to be a schema mismatch*, and a caller must not delete
+/// anything for it: esp_tsdb allocates its buffer pool **before** it touches the
+/// file, so an open failure can be an out-of-memory, filesystem or I/O problem on
+/// a perfectly healthy database - and deleting that history would be worse than a
+/// boot without a database. The bytes are read explicitly little-endian, so the
+/// probe depends on neither struct layout, padding, aliasing nor the host's
+/// endianness.
+constexpr uint32_t stored_columns(const uint8_t *buffer, size_t length) {
+  if (buffer == nullptr || length < HEADER_COLUMNS_OFFSET + 1)
+    return 0;
+  const uint32_t magic = static_cast<uint32_t>(buffer[0]) | (static_cast<uint32_t>(buffer[1]) << 8) |
+                         (static_cast<uint32_t>(buffer[2]) << 16) | (static_cast<uint32_t>(buffer[3]) << 24);
+  if (magic != FILE_MAGIC)
+    return 0;
+  const uint32_t columns = buffer[HEADER_COLUMNS_OFFSET];
+  return columns >= 1 && columns <= MAX_COLUMNS ? columns : 0;
+}
+
 /// Timestamps below this are a boot counter, not a clock: 2001-09-09T01:46:40Z.
 static constexpr uint32_t MIN_VALID_TIMESTAMP = 1000000000;
 
@@ -152,11 +185,32 @@ constexpr uint32_t dump_window_start(uint32_t newest, uint32_t oldest, uint32_t 
 /// `dump_window_start()` over-provisions the window by a margin, so the query
 /// can land a few records before the newest `rows`; those are skipped here.
 /// `window_records` is the number of records actually *in* the window (from
-/// `tsdb_query_count_h()`), never the capacity: a window holding fewer records
-/// than asked for (a gap longer than the margin, a database younger than the
-/// window) skips nothing and the dump prints what the window holds.
+/// `tsdb_query_count_h()`), never the capacity. A window holding fewer records
+/// than asked for skips nothing and the dump prints all of them - but only after
+/// `dump_needs_widening()` had its say: a short window is normally widened to the
+/// whole history first, and the remaining short case is a database that really
+/// holds fewer rows (its rows all fit).
 constexpr uint32_t dump_skip(uint32_t window_records, uint32_t rows) {
   return window_records > rows ? window_records - rows : 0;
+}
+
+/// Whether a short time-selected dump window has to be widened to the whole
+/// history to keep the documented "the newest `dump_rows` rows **that are
+/// stored**".
+///
+/// `dump_window_start()` estimates the window from the write cadence, so a gap in
+/// the history that is longer than the margin leaves the window with fewer
+/// records than asked for *although older records exist* (`on_missing: skip`
+/// writes nothing while a sensor is out - that is what the gaps in the history
+/// are). Widening once to `oldest` is exact, it can hold every retained record;
+/// it does cost the block-by-block walk the time-selected window was introduced
+/// to avoid, but only in that gap case. And it costs no second count pass: the
+/// widened range is the whole ring, so its record count is the `total_records`
+/// the statistics of the caller already reported. A file that holds fewer than
+/// `rows` records cannot be satisfied by any window, so this reports `false`
+/// there.
+constexpr bool dump_needs_widening(uint32_t window_records, uint32_t rows, uint32_t start, uint32_t oldest) {
+  return window_records < rows && start > (oldest != 0 ? oldest : 1);
 }
 
 /// Encode an engineering value as the raw int16_t the engine stores:
