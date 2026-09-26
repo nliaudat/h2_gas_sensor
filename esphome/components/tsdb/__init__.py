@@ -68,6 +68,7 @@ CONF_MOUNT_POINT = "mount_point"
 CONF_PARTITION = "partition"
 CONF_PARTITION_SIZE = "partition_size"
 CONF_FORMAT_ON_FIRST_BOOT = "format_on_first_boot"
+CONF_RECREATE_ON_SCHEMA_CHANGE = "recreate_on_schema_change"
 CONF_MAX_FILE_SIZE = "max_file_size"
 CONF_INDEX_STRIDE = "index_stride"
 CONF_BUFFER_POOL_SIZE = "buffer_pool_size"
@@ -269,6 +270,7 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_PARTITION_SIZE, default="512KB"): _validate_partition_size,
             cv.Optional(CONF_FORMAT_ON_FIRST_BOOT, default=True): cv.boolean,
+            cv.Optional(CONF_RECREATE_ON_SCHEMA_CHANGE, default=False): cv.boolean,
             cv.Optional(CONF_MAX_FILE_SIZE, default="384KB"): _validate_size,
             cv.Optional(CONF_INDEX_STRIDE, default=380): cv.int_range(
                 min=1, max=100000
@@ -340,6 +342,7 @@ async def to_code(config: ConfigType) -> None:
     cg.add(var.set_partition_label(config[CONF_PARTITION]))
     cg.add(var.set_partition_size(config[CONF_PARTITION_SIZE]))
     cg.add(var.set_format_on_first_boot(config[CONF_FORMAT_ON_FIRST_BOOT]))
+    cg.add(var.set_recreate_on_schema_change(config[CONF_RECREATE_ON_SCHEMA_CHANGE]))
     cg.add(var.set_max_file_size(config[CONF_MAX_FILE_SIZE]))
     cg.add(var.set_index_stride(config[CONF_INDEX_STRIDE]))
     cg.add(var.set_buffer_pool_size(config[CONF_BUFFER_POOL_SIZE]))

@@ -113,9 +113,10 @@ and an `alarm test` button: amber LEDs plus a beep every 5 s from 4 000 ppm
 50 % of the LEL.  It is a local indicator, not a certified detector - see
 [`docs/local_alarm.md`](docs/local_alarm.md).
 
-The history package (`packages/tsdb.yaml`) keeps the board's own copy of the six
-readings in a time-series database on a 512 KB LittleFS partition: one row every
-60 s, ~16.7 days of rolling history, and at most one row lost to a power cut.
+The history package (`packages/tsdb.yaml`) keeps the board's own copy of the four
+readings (the two ppm values plus ambient temperature and humidity) in a
+time-series database on a 512 KB LittleFS partition: one row every 60 s, ~22.3
+days of rolling history, and at most one row lost to a power cut.
 It is what is left to look at when the battery room has no network and Home
 Assistant never saw the event - entities, calibration and alarm logic are
 untouched by it.  It costs each OTA slot half of the partition size and needs one

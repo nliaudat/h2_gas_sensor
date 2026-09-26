@@ -14,12 +14,13 @@ and both are only *build* dependencies - this repository ships no third-party
 code.
 
 Role in this project: [`packages/tsdb.yaml`](../../packages/tsdb.yaml) logs the
-six readings that explain a hydrogen event (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`,
-both ratios, ambient temperature and humidity). The entities, the calibration and
-the alarm logic stay exactly as they are - the component only reads the last
-published value of each configured sensor. See
+four readings that explain a hydrogen event (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`,
+ambient temperature and humidity; the two RS/R0 ratios stay live entities of the
+gas packages, they are just not stored - see
 [`docs/data_logging.md`](../../../docs/data_logging.md) for the user-facing
-description.
+description). The entities, the calibration and the alarm logic stay exactly as
+they are - the component only reads the last published value of each configured
+sensor.
 
 > The history is a **local** copy of the measurement, not a substitute for it.
 > The gas values in it have the same accuracy, drift and cross-sensitivity as the
@@ -69,6 +70,7 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | `partition` | `littlefs` | Partition label; the component registers it with ESPHome (`esp32.add_partition()`), so it appears in `partitions.csv`. |
 | `partition_size` | `512KB` | Size of that partition, 4 KB aligned. It is taken out of the two OTA slots (each shrinks by half of it). See the sizing table below. |
 | `format_on_first_boot` | `true` | Format the partition when it is *blank* (never formatted). Blank means **every byte is `0xFF`** - the whole partition is scanned before formatting, because a partition that holds data but does not mount (or whose head happens to be erased) must **not** be reformatted: that would throw the history away. |
+| `recreate_on_schema_change` | `false` | Delete a database the engine refuses to open **when the file's own header proves it was written with another column count** (see [Columns](#columns)) and start an empty one. An open failure with an unreadable or matching stored schema - heap, filesystem or flash trouble - keeps the file: only a proven schema change may throw history away. The old rows are lost; that is the point: without the option the component stays failed. Set to `true` where a column change should be deliverable by OTA alone. |
 | `max_file_size` | `384KB` | Data budget of the database file. The capacity (`max_records`) is derived from it; the file never grows beyond it (ring buffer). |
 | `index_stride` | `380` | Records between two entries of the sparse time index (esp_tsdb default). Smaller = faster lookups, more index bytes. |
 | `buffer_pool_size` | `4KB` | Buffer pool for block I/O (esp_tsdb). Internal RAM on a WROOM board; raise it (with `memory: psram`) on a WROVER. |
@@ -84,7 +86,7 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | `aggregate_window` | `1h` | Time window of the per-column aggregates. |
 | `aggregate_interval` | `5min` | How often the aggregates are computed and published. `0s` disables them. |
 | `columns` | – | 1..16 columns (see below). |
-| `dump_rows` | `60` | Rows printed by the CSV dump: the newest `dump_rows` records that are *stored*. The window is picked by row count, so gaps in the history do not shorten the dump. |
+| `dump_rows` | `60` | Rows printed by the CSV dump: the newest `dump_rows` records that are *stored*. The window is the last `dump_rows` write intervals ending at the newest record (over-provisioned 2x), which the engine seeks to directly - a dump reads a bounded window (~2x `dump_rows` rows), never the whole history, so it cannot stall the loop. A gap wider than the margin makes the dump widen the window to the whole history once (logged), so the newest `dump_rows` *stored* rows are still printed; only a database holding fewer rows than `dump_rows` prints fewer. A failed count aborts the dump instead of printing old rows as the newest. |
 | `records_sensor`, `used_sensor`, `free_sensor`, `oldest_sensor`, `newest_sensor`, `errors_sensor` | – | Optional diagnostic sensors: rows stored, bytes used/free on the partition, oldest/newest timestamp, write+sync errors. |
 | `log_sensor` | – | Optional `text_sensor` that mirrors the important log lines (open, clear, flush, dropped rows, errors). |
 
@@ -110,8 +112,15 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
   column that has not published since boot has nothing to repeat and drops the row
   exactly like `skip`.
 * At most **16** columns: that is the base-parameter limit of the V3 file format.
-  A seventeenth column is a schema migration (`tsdb_migrate_schema_h()`), not a
-  config change - deliberately not implemented here.
+  The column count is part of the file schema: esp_tsdb refuses to open a file
+  that was written with another count, so adding or removing a column makes the
+  component delete that file and start a new one
+  (`recreate_on_schema_change: true`; the old rows are lost). It deletes on that
+  proof only: the count is read from the file's own header (magic `ETSD` at
+  offset 0, the count at offset 8), so an open failure for any other reason
+  (heap, filesystem, I/O) keeps the file for the next boot.
+  `tsdb_migrate_schema_h()` could convert it in place instead - deliberately not
+  implemented here.
 * `average_sensor`, `min_sensor` and `max_sensor` are ordinary `sensor:`s (e.g.
   `platform: template`) that the component publishes to; with no row in
   `aggregate_window` they get `unknown` (never a `0`).
@@ -121,7 +130,7 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | Call | What it does |
 |---|---|
 | `id(history).request_flush()` | Commit immediately (`tsdb_sync_h()`) - for "I am about to cut the power". |
-| `id(history).request_dump()` | Print the newest `dump_rows` *stored* rows as CSV to the log (header line with the column names, then one line per row, engineering values decoded). Missing rows are skipped over, so a gap does not shorten the export. |
+| `id(history).request_dump()` | Print the newest `dump_rows` *stored* rows as CSV to the log (header line with the column names, then one line per row, engineering values decoded). The window is the last `dump_rows` write intervals, so the engine seeks to it instead of scanning the history; a gap wider than the 2x margin widens it once to the whole history (the log says so), so the request still returns the newest `dump_rows` stored rows. A failed count aborts the dump rather than print old rows as the newest. |
 | `id(history).request_clear()` | Delete every stored row (`tsdb_clear_h()`); the file, the partition and the calibration stay. |
 | `id(history).is_ready()` | `true` once the partition is mounted and the database is open. |
 | `id(history).get_records()` | Rows currently stored (0 until the first statistics pass). |

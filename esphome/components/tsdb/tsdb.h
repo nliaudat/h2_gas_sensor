@@ -50,6 +50,10 @@ class TsdbComponent : public PollingComponent {
   void set_partition_label(const std::string &label) { this->partition_label_ = label; }
   void set_partition_size(uint32_t bytes) { this->partition_size_ = bytes; }
   void set_format_on_first_boot(bool format) { this->format_on_first_boot_ = format; }
+  /// Delete a database the engine refuses to open because its stored column set
+  /// differs from `columns`, and start a fresh one instead of failing (see the
+  /// README - the stored rows of the old schema are lost, that is the point).
+  void set_recreate_on_schema_change(bool recreate) { this->recreate_on_schema_change_ = recreate; }
   void set_max_file_size(uint32_t bytes) { this->max_file_size_ = bytes; }
   void set_index_stride(uint32_t stride) { this->index_stride_ = stride; }
   void set_buffer_pool_size(uint32_t bytes) { this->buffer_pool_size_ = bytes; }
@@ -85,7 +89,9 @@ class TsdbComponent : public PollingComponent {
   /// Ask for a `tsdb_sync_h()` on the next `update()` (the "flush" button).
   void request_flush() { this->flush_requested_ = true; }
   /// Ask for a CSV dump of the newest `rows` records on the next `update()`
-  /// (the "dump" button; `rows == 0` uses `dump_rows`).
+  /// (the "dump" button; `rows == 0` uses `dump_rows`). The window is `rows`
+  /// write intervals up to the newest record, so the engine seeks to it instead
+  /// of scanning the whole history.
   void request_dump(uint32_t rows = 0) { this->dump_requested_ = rows == 0 ? this->dump_rows_ : rows; }
   /// Ask for `tsdb_clear_h()` on the next `update()` (the "clear" button).
   void request_clear() { this->clear_requested_ = true; }
@@ -115,6 +121,7 @@ class TsdbComponent : public PollingComponent {
   std::string partition_label_{"littlefs"};
   uint32_t partition_size_{512 * 1024};
   bool format_on_first_boot_{true};
+  bool recreate_on_schema_change_{false};
   uint32_t max_file_size_{384 * 1024};
   uint32_t index_stride_{tsdbmath::INDEX_DEFAULT_STRIDE};
   uint32_t buffer_pool_size_{4096};

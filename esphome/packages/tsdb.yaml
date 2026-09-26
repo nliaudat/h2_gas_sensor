@@ -18,17 +18,19 @@
 # The partition (read this once)
 #   `partition_size: 512KB` adds a `littlefs` data partition to partitions.csv
 #   and takes the space out of the two OTA slots, so each of them shrinks from
-#   1.75MB to 1.5MB (the firmware, 1 006 259 bytes, is then at 64% of its slot).
+#   1.75MB to 1.5MB (the firmware, 1 007 371 bytes, is then at 64% of its slot).
 #   A partition table
 #   change only takes effect with a **full flash over USB** (`esphome run` with
 #   a cable): OTA cannot move partitions.  Everything else keeps working.
 #
 # Sizing
-#   6 columns = 4 + 6*2 = 16 bytes per record, 63 records per 1KB block.
-#   `max_file_size: 384KB` -> 24 058 records = ~16.7 days at 60s (ring buffer:
+#   4 columns = 4 + 4*2 = 12 bytes per record, 84 records per 1KB block.
+#   `max_file_size: 384KB` -> 32 064 records = ~22.3 days at 60s (ring buffer:
 #   the oldest row is overwritten when the capacity is reached, the file never
-#   grows beyond `max_file_size`).  The numbers are asserted by
-#   ../tests/tsdb_math_test.cpp and explained in ../../docs/data_logging.md.
+#   grows beyond `max_file_size`).  Leaving a column out of the file is what buys
+#   the extra days - the byte count, not the config, decides.  The numbers are
+#   asserted by ../tests/tsdb_math_test.cpp and explained in
+#   ../../docs/data_logging.md.
 #
 # Durability
 #   LittleFS only publishes a file to disk when it is closed, so the component
@@ -45,8 +47,10 @@
 #     history without any extra network surface.
 #   * The "history dump" button prints the newest `dump_rows` *stored* records as
 #     CSV to the log (`esphome logs config.yaml`, or the USB console) - the one
-#     export path that needs no Home Assistant at all.  Rows are counted, not a
-#     time window: a gap in the history does not shorten the dump.
+#     export path that needs no Home Assistant at all.  The window is the last
+#     `dump_rows` write intervals ending at the newest row, so the engine seeks
+#     straight to it: a press reads a bounded window (about 2 x `dump_rows` rows)
+#     instead of scanning the whole history, and the 1 s readings keep running.
 #   * `... history clear` deletes every stored row (it does not touch the
 #     configuration); press it deliberately.
 #
@@ -56,7 +60,7 @@ substitutions:
   history_write_interval: 60s  # one row per interval; also the CSV/decode stride
   history_sync_interval: 60s  # tsdb_sync_h() cadence: the data at risk on a power cut
   history_partition_size: 512KB  # littlefs partition; each OTA slot shrinks by half
-  history_max_file_size: 384KB  # data budget -> ~24 058 records ~ 16.7 days at 60s
+  history_max_file_size: 384KB  # data budget -> ~32 064 records ~ 22.3 days at 60s
   history_aggregate_interval: 5min  # how often the 1h averages below refresh
   history_dump_rows: 60  # records printed by the "history dump" button
 
@@ -66,6 +70,13 @@ tsdb:
   partition: littlefs
   partition_size: ${history_partition_size}
   max_file_size: ${history_max_file_size}
+  # A column change is a schema change: esp_tsdb refuses a file whose stored
+  # column count differs from `columns:` (it would mislabel every value in it),
+  # and the component would stay failed - no writes, no diagnostics, no buttons.
+  # With this on, the first boot of the new firmware deletes that file and starts
+  # an empty one (the old history is lost, which a column change means anyway),
+  # so a future column change is a single OTA: no cable, no partition erase.
+  recreate_on_schema_change: true
   update_interval: ${history_write_interval}
   sync_interval: ${history_sync_interval}
   aggregate_interval: ${history_aggregate_interval}
@@ -80,6 +91,12 @@ tsdb:
   # a board that boots offline starts at that sync instead of at power-up.
   require_time: true
   time_id: ${name}_time
+  # Four columns: one record is `4 + 2 * columns` bytes, so leaving the two
+  # ratios out of the file buys 22.3 days of history instead of 16.7 out of the
+  # same 384KB (they are still live entities, still in the 1 Hz log and still in
+  # the Home Assistant recorder - a saturated RS/R0 explains *why* a ppm value
+  # moved, it is just not needed for the record of the event itself).  The two
+  # ppm values plus the ambient pair are what a later reading of it needs.
   columns:
     # The two alarm entities: the reason this database exists.
     - sensor: mq8
@@ -88,15 +105,6 @@ tsdb:
     - sensor: mics
       name: h2_trace_ppm
       average_sensor: ${name}_history_trace_average
-    # The two ratios: they are what explains *why* a ppm value moved (a
-    # saturated RS/R0 means "the sensor is at the end of its range", not
-    # "clean air").  Both are plain published sensors of the gas packages.
-    - sensor: ${name}_mq8_ratio
-      name: mq8_ratio
-      scale: 100
-    - sensor: ${name}_mics_ratio
-      name: mics_ratio
-      scale: 1000
     - sensor: dht_temperature
       name: temperature
       scale: 10
