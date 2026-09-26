@@ -44,6 +44,7 @@ from . import (
     CONF_DIVIDER,
     CONF_ENABLE_PIN,
     CONF_GAS,
+    CONF_LOG_PPM,
     CONF_LOG_SENSOR,
     CONF_MAX_PPM,
     CONF_MIN_PPM,
@@ -303,6 +304,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_RS_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_LOG_SENSOR): cv.use_id(text_sensor.TextSensor),
+            cv.Optional(CONF_LOG_PPM, default=False): cv.boolean,
         }
     )
     .extend(cv.polling_component_schema("30s")),
@@ -395,6 +397,8 @@ async def to_code(config: ConfigType) -> None:
     ):
         if (target := config.get(key)) is not None:
             cg.add(setter(await cg.get_variable(target)))
+
+    cg.add(var.set_log_ppm(config[CONF_LOG_PPM]))
 
     _LOGGER.debug(
         "%s: conversion=%s threshold=%s gain=%s a=%s b=%s rl=%s vcc=%s range=%s..%s ppm",

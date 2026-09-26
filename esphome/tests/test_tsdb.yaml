@@ -1,0 +1,90 @@
+# Validation-only fixture: packages/tsdb.yaml with stand-ins for the sensors of
+# the shipped packages (run: esphome config tests/test_tsdb.yaml).
+#
+# The package links its six columns to `mq8`, `mics`, `${name}_mq8_ratio`,
+# `${name}_mics_ratio`, `dht_temperature` and `dht_humidity`; here every one of
+# them is a template sensor, so the config validates and compiles without any
+# gas sensor, ADC, I2C or 1-wire hardware and without secrets.
+#
+# Negative cases that must keep failing with an explanatory message:
+#   * `scale: 0` on a column               -> "scale must not be 0 ..."
+#   * a duplicate column `name:`           -> "duplicate column name(s): ..."
+#   * `max_file_size: 512KB` with the      -> "max_file_size + min_free_bytes = ...
+#     default `partition_size: 512KB`         do not fit into partition_size"
+#   * `require_time: true` without         -> "`require_time: true` needs a `time_id:`"
+#     `time_id:`
+#   * `partition_size: 500KB`              -> "partition_size must be a multiple of 4KB"
+#   * `memory: psram` without `psram:`     -> "Component psram is required ..."
+#
+# The full list of options is in ../components/tsdb/README.md.
+substitutions:
+  name: tsdbtest
+  friendly_name: "tsdb test"
+
+esphome:
+  name: ${name}
+
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+# Stand-in for the SNTP clock of packages/time.yaml: an I2C RTC validates and
+# compiles without a network, without secrets and without the `network`
+# component (which `sntp` would pull in).
+i2c:
+  id: ${name}_i2c
+  sda: GPIO21
+  scl: GPIO22
+
+time:
+  - platform: pcf85063
+    id: ${name}_time
+    i2c_id: ${name}_i2c
+
+sensor:
+  # Stand-ins for the six columns of packages/tsdb.yaml.
+  - platform: template
+    id: mq8
+    name: "Test H2 (MQ-8)"
+    unit_of_measurement: ppm
+    update_interval: 60s
+
+  - platform: template
+    id: mics
+    name: "Test H2 trace (MiCS-5524)"
+    unit_of_measurement: ppm
+    update_interval: 60s
+
+  - platform: template
+    id: ${name}_mq8_ratio
+    name: "Test MQ-8 ratio"
+    update_interval: 60s
+
+  - platform: template
+    id: ${name}_mics_ratio
+    name: "Test MiCS-5524 ratio"
+    update_interval: 60s
+
+  - platform: template
+    id: dht_temperature
+    name: "Test ambient temperature"
+    unit_of_measurement: "°C"
+    update_interval: 60s
+
+  - platform: template
+    id: dht_humidity
+    name: "Test ambient humidity"
+    unit_of_measurement: "%"
+    update_interval: 60s
+
+packages:
+  tsdb: !include ../packages/tsdb.yaml

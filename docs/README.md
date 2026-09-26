@@ -4,7 +4,8 @@ Hydrogen monitoring for a battery room (nickel-iron / Edison cells) with an
 ESP32, an **MQ-8** sensor and ESPHome. This folder is the versioned, user-facing
 documentation; the numbers quoted here are asserted by the host tests
 ([`../esphome/tests/mq_math_test.cpp`](../esphome/tests/mq_math_test.cpp),
-[`../esphome/tests/mics_math_test.cpp`](../esphome/tests/mics_math_test.cpp)), so
+[`../esphome/tests/mics_math_test.cpp`](../esphome/tests/mics_math_test.cpp),
+[`../esphome/tests/tsdb_math_test.cpp`](../esphome/tests/tsdb_math_test.cpp)), so
 the docs and the firmware cannot drift apart silently.
 
 ## Documents
@@ -15,6 +16,7 @@ the docs and the firmware cannot drift apart silently.
 | [`hardware.md`](hardware.md) | The PCB in [`../pcb/`](../pcb/): the files, the schematic sheet map, the net -> GPIO table (and the crossed analog inputs of the board), analog front ends, power, pre-alarm hardware, BOM |
 | [`getting_started.md`](getting_started.md) | Setup: secrets, substitutions, packages, wiring, first flash, burn-in, calibration |
 | [`offline_mode.md`](offline_mode.md) | The open fallback access point and the dashboard web server: the two network modes, `local: true` offline UI, the captive portal, why AP and station cannot run together, offline timeouts and security |
+| [`data_logging.md`](data_logging.md) | The board's own history (`packages/tsdb.yaml`): what is stored and how it is encoded, the LittleFS partition and its cost in the OTA slots, capacity/retention, what a power cut costs, flash wear, how to read the data out |
 | [`home_assistant_alerts.md`](home_assistant_alerts.md) | Entities, thresholds, alert automations, day-to-day operations |
 | [`troubleshooting.md`](troubleshooting.md) | Setup-time and runtime symptoms, and how to read the log line |
 | [`development.md`](development.md) | Validate, build, test and lint commands for contributors |
@@ -37,6 +39,8 @@ the docs and the firmware cannot drift apart silently.
 | [miguel5612/MQSensorsLib](https://github.com/miguel5612/MQSensorsLib) | original MQUnifiedsensor PPM model (`mq_math.h`) |
 | [RapportTecnologia esp-iot-solution MQSensorLIB](https://github.com/RapportTecnologia/esp-iot-solution/tree/MQSensorLib/components/sensors/gas/MQSensorLIB) | ESP-IDF port + ratio discussion |
 | [abcdaaaaaaaaa/MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience) (MIT, v6.0.0 "MQSpaceData") | T/RH correction model, alternative MQ-8 H2 curve, reference tables |
+| [zakery292/esp_tsdb](https://github.com/zakery292/esp_tsdb) (MIT, v2.4.3) | the time-series engine behind [`data_logging.md`](data_logging.md) (`components/tsdb/`), fetched at build time from the ESP-IDF component registry - not vendored |
+| [joltwallet/esp_littlefs](https://github.com/joltwallet/esp_littlefs) (MIT) and [littlefs](https://github.com/littlefs-project/littlefs) (BSD-3-Clause) | the LittleFS filesystem the history lives on; also a build-time dependency, not vendored |
 | NFPA 855 (stationary energy storage installation) and the physical LEL of hydrogen (4 % vol = 40 000 ppm) | the threshold tables in [`h2_thresholds.md`](h2_thresholds.md) and the bands of [`local_alarm.md`](local_alarm.md) |
 
 The MQ-8 datasheet and the MQUnifiedsensor/MQDataScience fits describe the
@@ -50,5 +54,5 @@ License**, at your option ([`../LICENSE`](../LICENSE),
 [`../LICENSE-APACHE`](../LICENSE-APACHE),
 [`../LICENSE-MIT`](../LICENSE-MIT)). The third-party material used by the firmware
 (MQUnifiedsensor, SolderedElectronics, MQDataScience, DFRobot_MICS, the vendored
-ESPHome CI script) is listed with its own licence in
+ESPHome CI script, esp_tsdb and LittleFS) is listed with its own licence in
 [`../esphome/readme.md#licence`](../esphome/readme.md#licence).

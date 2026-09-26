@@ -1,0 +1,217 @@
+# Persistent history of the board's own readings: the tsdb component logs one
+# row per `update_interval` to a time-series database on a LittleFS partition,
+# so a hydrogen event that happens while Home Assistant (or the network) is
+# unreachable is still there afterwards.  That coverage starts with the first
+# SNTP sync: while the clock is still at its boot counter nothing is written
+# (`require_time: true`, a record with a boot-counter timestamp would be worse
+# than a gap), so a board that is powered up *without* a network begins its
+# history at that first sync, not at boot.  Optional - remove the
+# `tsdb: !include` line in ../config.yaml for a firmware without the partition.
+#
+# What it does NOT change
+#   The gas entities, their calibration, the alarm logic and the Home Assistant
+#   API are untouched: this package only reads the *last published value* of the
+#   sensors below once per interval (a sensor that has never published leaves the
+#   column empty, and `on_missing: skip` drops that row instead of writing a
+#   wrong one - a gap is honest, a zero is not).
+#
+# The partition (read this once)
+#   `partition_size: 512KB` adds a `littlefs` data partition to partitions.csv
+#   and takes the space out of the two OTA slots, so each of them shrinks from
+#   1.75MB to 1.5MB (the firmware, 1 006 259 bytes, is then at 64% of its slot).
+#   A partition table
+#   change only takes effect with a **full flash over USB** (`esphome run` with
+#   a cable): OTA cannot move partitions.  Everything else keeps working.
+#
+# Sizing
+#   6 columns = 4 + 6*2 = 16 bytes per record, 63 records per 1KB block.
+#   `max_file_size: 384KB` -> 24 058 records = ~16.7 days at 60s (ring buffer:
+#   the oldest row is overwritten when the capacity is reached, the file never
+#   grows beyond `max_file_size`).  The numbers are asserted by
+#   ../tests/tsdb_math_test.cpp and explained in ../../docs/data_logging.md.
+#
+# Durability
+#   LittleFS only publishes a file to disk when it is closed, so the component
+#   calls tsdb_sync_h() (close + reopen) every `sync_interval`.  With the
+#   default `sync_interval: 60s` == `write_interval` at most **one** record is at
+#   risk on a power cut; a longer interval trades that for fewer flash commits
+#   (see the flash-wear section of ../../docs/data_logging.md).  The deadline is
+#   checked after every interval, also after an interval that dropped a row, so a
+#   gap never postpones the commit of the rows that are stored.
+#
+# Reading the data
+#   * `... history H2 average 1h` - the aggregate of the last hour, refreshed
+#     every `aggregate_interval` (5min): it shows up in the Home Assistant
+#     history without any extra network surface.
+#   * The "history dump" button prints the newest `dump_rows` *stored* records as
+#     CSV to the log (`esphome logs config.yaml`, or the USB console) - the one
+#     export path that needs no Home Assistant at all.  Rows are counted, not a
+#     time window: a gap in the history does not shorten the dump.
+#   * `... history clear` deletes every stored row (it does not touch the
+#     configuration); press it deliberately.
+#
+# Documentation: ../../docs/data_logging.md and ../components/tsdb/README.md
+
+substitutions:
+  history_write_interval: 60s  # one row per interval; also the CSV/decode stride
+  history_sync_interval: 60s  # tsdb_sync_h() cadence: the data at risk on a power cut
+  history_partition_size: 512KB  # littlefs partition; each OTA slot shrinks by half
+  history_max_file_size: 384KB  # data budget -> ~24 058 records ~ 16.7 days at 60s
+  history_aggregate_interval: 5min  # how often the 1h averages below refresh
+  history_dump_rows: 60  # records printed by the "history dump" button
+
+tsdb:
+  id: history
+  file: history.tsdb
+  partition: littlefs
+  partition_size: ${history_partition_size}
+  max_file_size: ${history_max_file_size}
+  update_interval: ${history_write_interval}
+  sync_interval: ${history_sync_interval}
+  aggregate_interval: ${history_aggregate_interval}
+  dump_rows: ${history_dump_rows}
+  # No PSRAM on an ESP32-WROOM-32 board: `auto` keeps the 4KB buffer pool and the
+  # block cache in internal RAM.  A WROVER board can use `memory: psram` (plus
+  # `psram:` and a larger `buffer_pool_size`) instead.
+  memory: auto
+  # The clock comes from packages/time.yaml (sntp).  Without a valid time the
+  # records would carry a boot counter as their timestamp, so nothing is written
+  # until the first SNTP sync - the log says so once per boot, and the history of
+  # a board that boots offline starts at that sync instead of at power-up.
+  require_time: true
+  time_id: ${name}_time
+  columns:
+    # The two alarm entities: the reason this database exists.
+    - sensor: mq8
+      name: h2_mq8_ppm
+      average_sensor: ${name}_history_h2_average
+    - sensor: mics
+      name: h2_trace_ppm
+      average_sensor: ${name}_history_trace_average
+    # The two ratios: they are what explains *why* a ppm value moved (a
+    # saturated RS/R0 means "the sensor is at the end of its range", not
+    # "clean air").  Both are plain published sensors of the gas packages.
+    - sensor: ${name}_mq8_ratio
+      name: mq8_ratio
+      scale: 100
+    - sensor: ${name}_mics_ratio
+      name: mics_ratio
+      scale: 1000
+    - sensor: dht_temperature
+      name: temperature
+      scale: 10
+    - sensor: dht_humidity
+      name: humidity
+      scale: 10
+  # Diagnostics of the logger itself (drop the ones you do not want, together
+  # with their sensor block below).
+  records_sensor: ${name}_history_records
+  used_sensor: ${name}_history_used
+  free_sensor: ${name}_history_free
+  oldest_sensor: ${name}_history_oldest
+  newest_sensor: ${name}_history_newest
+  errors_sensor: ${name}_history_errors
+  log_sensor: ${name}_history_logs
+
+sensor:
+  - platform: template
+    id: ${name}_history_records
+    name: "${friendly_name} history records"
+    icon: mdi:database
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_used
+    name: "${friendly_name} history used"
+    unit_of_measurement: B
+    icon: mdi:micro-sd
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_free
+    name: "${friendly_name} history free"
+    unit_of_measurement: B
+    icon: mdi:micro-sd
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_oldest
+    name: "${friendly_name} history oldest"
+    device_class: timestamp
+    icon: mdi:clock-start
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_newest
+    name: "${friendly_name} history newest"
+    device_class: timestamp
+    icon: mdi:clock-end
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_errors
+    name: "${friendly_name} history write errors"
+    icon: mdi:alert-circle-outline
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  # Aggregates of the last hour: what a chart needs for a window longer than the
+  # (excluded) 1 Hz stream - see ../../docs/home_assistant_alerts.md.
+  - platform: template
+    id: ${name}_history_h2_average
+    name: "${friendly_name} history H2 average 1h"
+    unit_of_measurement: ppm
+    icon: mdi:chart-timeline-variant
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+  - platform: template
+    id: ${name}_history_trace_average
+    name: "${friendly_name} history H2 trace average 1h"
+    unit_of_measurement: ppm
+    icon: mdi:chart-timeline-variant
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+text_sensor:
+  - platform: template
+    id: ${name}_history_logs
+    name: "${friendly_name} history logs"
+    icon: mdi:text-box-multiple-outline
+    entity_category: diagnostic
+
+button:
+  # Commit the buffered rows now (the next sync is at most `sync_interval` away
+  # anyway - this is for "I am about to cut the power").
+  - platform: template
+    id: ${name}_history_flush
+    name: "${friendly_name} history flush"
+    icon: mdi:content-save
+    entity_category: config
+    on_press:
+      - lambda: id(history).request_flush();
+
+  # Print the newest rows as CSV to the log - read them with
+  # `esphome logs config.yaml` while the board is reachable, or over USB.
+  - platform: template
+    id: ${name}_history_dump
+    name: "${friendly_name} history dump (log)"
+    icon: mdi:file-delimited-outline
+    entity_category: config
+    on_press:
+      - lambda: id(history).request_dump();
+
+  # Deletes every stored row.  The calibration of the sensors is NOT touched, but
+  # the history is gone - there is no confirmation dialog.
+  - platform: template
+    id: ${name}_history_clear
+    name: "${friendly_name} history clear"
+    icon: mdi:delete-forever
+    entity_category: config
+    on_press:
+      - lambda: id(history).request_clear();

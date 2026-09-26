@@ -70,6 +70,14 @@ void MiCS5524GasSensor::log_message_(LogLevel level, const char *format, ...) {
   this->publish_log_(level, message);
 }
 
+void MiCS5524GasSensor::log_reading_(float ppm) {
+  if (!this->log_ppm_ || !std::isfinite(ppm))
+    return;
+  // Console only: the detailed chain is what reaches `log_sensor_` (rate
+  // limited there), and a text state per second would flood the recorder.
+  ESP_LOGI(TAG, "'%s': %.1f ppm", this->gas_.c_str(), ppm);
+}
+
 void MiCS5524GasSensor::setup() {
   this->reference_pref_ = this->make_entity_preference<float>(REFERENCE_PREFERENCE_VERSION + this->conversion_);
 
@@ -125,7 +133,8 @@ void MiCS5524GasSensor::setup() {
 void MiCS5524GasSensor::log_config_() {
   ESP_LOGCONFIG(TAG, "  Gas: %s", this->gas_.c_str());
   ESP_LOGCONFIG(TAG, "  Conversion: %s%s", conversion_name(this->conversion_),
-                this->is_vendor_model_() ? " (DFRobot_MICS vendor model, no RL needed)" : " (a * (RS/R0)^b)");
+                this->is_vendor_model_() ? LOG_STR_LITERAL(" (DFRobot_MICS vendor model, no RL needed)")
+                                         : LOG_STR_LITERAL(" (a * (RS/R0)^b)"));
   if (this->is_vendor_model_()) {
     ESP_LOGCONFIG(TAG, "  Vendor curve: threshold %.4f, gain %.8f, range %.1f - %.1f ppm", this->threshold_,
                   this->gain_, this->vendor_min_ppm_, this->vendor_max_ppm_);
@@ -138,13 +147,13 @@ void MiCS5524GasSensor::log_config_() {
                 static_cast<unsigned>(this->samples_), this->sample_interval_);
   if (this->has_reference()) {
     ESP_LOGCONFIG(TAG, "  %s: %.4f (%s)", reference_name(this->conversion_), this->reference_,
-                  this->reference_configured_ ? "configured" : "calibrated/restored");
+                  this->reference_configured_ ? LOG_STR_LITERAL("configured") : LOG_STR_LITERAL("calibrated/restored"));
   } else {
     ESP_LOGCONFIG(TAG, "  %s: not available yet", reference_name(this->conversion_));
   }
   ESP_LOGCONFIG(TAG, "  Warm-up: %" PRIu32 " s, auto calibration: %s, EN pin: %s", this->warmup_time_ / 1000,
-                this->calibration_enabled_ ? "enabled" : "disabled",
-                this->enable_pin_ != nullptr ? "driven" : "not used");
+                this->calibration_enabled_ ? LOG_STR_LITERAL("enabled") : LOG_STR_LITERAL("disabled"),
+                this->enable_pin_ != nullptr ? LOG_STR_LITERAL("driven") : LOG_STR_LITERAL("not used"));
 }
 
 void MiCS5524GasSensor::dump_config() {
@@ -254,6 +263,8 @@ void MiCS5524GasSensor::update() {
 
   this->ratio_ = this->current_ratio_();
   const float ppm = this->read_ppm_();
+
+  this->log_reading_(ppm);
 
   // The vendor model has no RS, the datasheet model has no x - log the quantity
   // the active model actually uses.

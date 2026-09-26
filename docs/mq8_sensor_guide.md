@@ -113,11 +113,16 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | values drift over weeks | normal sensor drift — re-calibrate in clean air |
 | correction factor stuck at 1.0000 | no T/RH sensor is linked (`temperature:`/`humidity:` on the MQ-8 entry), the T/RH sensor has no state yet (see the logs), or `correction_mode: none` was written |
 
-`esphome logs config.yaml` (or the web log) prints every reading as
-`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm` at `DEBUG` level; the
+`esphome logs config.yaml` (or the web log) prints the published value of every
+update at `INFO` - the "normal mode", e.g. `[I][mq_gas_sensors]: 'MQ-8 H2': 93.7
+ppm` (`log_ppm: true` in `packages/mq8.yaml`).  The whole chain
+(`V=… V, RS=… kOhm, ratio=… (correction=…) -> … ppm`) is logged at `DEBUG`; the
 `mq_gas_sensors` tag is pinned at `INFO` in
-[`../esphome/config.yaml`](../esphome/config.yaml) (to mute the per-second line),
-put it back to `DEBUG` under `logger.logs` to read the chain again. The same lines
-- plus the calibration messages and warnings - are mirrored to the `MQ-8 logs` text
-sensor (`log_sensor:` in `packages/mq8.yaml`, the per-update line at most every
-30 s), so the chain is also readable from Home Assistant.
+[`../esphome/config.yaml`](../esphome/config.yaml), put it back to `DEBUG` under
+`logger.logs` to read it. The same lines - plus the calibration messages and
+warnings - are mirrored to the `MQ-8 logs` text sensor (`log_sensor:` in
+`packages/mq8.yaml`, the chain at most every 30 s), so it is also readable from
+Home Assistant.  The per-update `[S][sensor]: …` lines that `esphome logs` adds
+for every entity state are a feature of the log *client*; switch them off with
+`esphome logs --no-states config.yaml` (see
+[`troubleshooting.md`](troubleshooting.md#reading-the-log)).

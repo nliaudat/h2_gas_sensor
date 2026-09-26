@@ -31,8 +31,9 @@ PPM    = a * ratio^b                   (MQUnifiedsensor "exponential" regression
 
 Quality bar for any change:
 
-1. Both host tests pass (`esphome/tests/mq_math_test.cpp`,
-   `esphome/tests/mics_math_test.cpp` - no hardware needed).
+1. All three host tests pass (`esphome/tests/mq_math_test.cpp`,
+   `esphome/tests/mics_math_test.cpp`, `esphome/tests/tsdb_math_test.cpp` - no
+   hardware needed).
 2. `esphome config` and `esphome compile` pass for `packages/mq8.yaml` (the
    fixture `tests/test_mq8_tc_package.yaml` enables its commented compensation
    from the outside, so the compensated configuration is covered too) and for
@@ -45,6 +46,16 @@ A second component, `esphome/components/mics_5524_gas_sensor/`, covers the
 (`docs/mics5524_conversion.md`). It follows the same conventions as
 `mq_gas_sensors`: pure math in its own header, host tested, opt-in package, and
 "the numbers in `docs/` are asserted by the host test".
+
+A third component, `esphome/components/tsdb/`, keeps a persistent history of the
+readings in a time-series database on a LittleFS partition
+(`docs/data_logging.md`). It is the only component that adds a *flash partition*
+(the two OTA slots shrink by half of `partition_size`) and the only one that
+pulls third-party code in at build time (esp_tsdb and LittleFS from the ESP-IDF
+component registry, both pinned in `components/tsdb/__init__.py`). Its pure
+arithmetic lives in `tsdb_math.h`, it is host tested the same way, and the
+geometry it prints in the log is static-asserted against the real engine macros
+in `tsdb.cpp`.
 
 ---
 
@@ -67,7 +78,8 @@ h2_gas_sensor/                      git root
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
     ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
     ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
-    ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, ...
+    ├── components/tsdb/                  history component (partition + LittleFS + esp_tsdb)
+    ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, tsdb.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
     └── tests/                      host tests + config fixtures
 ```
@@ -96,30 +108,53 @@ change is considered done.
 
 | Rule | Command | Expected |
 |---|---|---|
-| ESPHome CI checks (LF, trailing whitespace, ASCII, namespace, imports, `#define`, delays, ...) | `cd esphome && python script/ci-custom.py` | **0 findings** |
+| All hooks of the project | `pre-commit run -c esphome/.pre-commit-config.yaml --all-files` (`SKIP=no-commit-to-branch` on `main`/`dev`/`master`) | every hook passes |
+| ESPHome CI checks (UTF-8, LF, trailing whitespace, namespace, imports, `#define`, delays, ...) | `python esphome/script/run_ci_custom.py` (the `ci-custom` hook; from the git root) | **0 findings** |
 | Formatting of C++ | `pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files` (pinned **v13.0.1**; the local `clang-format` 22.x formats differently) | no changes |
 | YAML | `cd esphome && yamllint -c .yamllint .` | no output |
 | Python (flake8) | `cd esphome && flake8 --config .flake8 components tests script` | no output |
 | Python (ruff) | `cd esphome && ruff check . && ruff format --check .` | "All checks passed!" / "already formatted" |
 | Host test | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe` | "All mq_math tests passed." and no compiler warning |
 | Host test (MiCS-5524) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe` | "All mics_math tests passed." and no compiler warning |
+| Host test (tsdb) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe` | "All tsdb_math tests passed." and no compiler warning |
 | Config validation | `cd esphome && esphome config config.yaml` | "Configuration is valid!" |
+| Config validation (history fixture) | `cd esphome && esphome config tests/test_tsdb.yaml` | "Configuration is valid!" (the history package on stand-in sensors; its negative cases are listed in the fixture header) |
 | Build | `cd esphome && esphome compile config.yaml` | "Successfully compiled program." |
+| Size report (after a shift in flash/RAM) | `esphome compile config.yaml` prints the summary; the breakdown is `esp_idf_size --archives` / `--files` on `.esphome/build/h2_sensor/build/h2_sensor.map` (see the ESPHome-installed IDF python) | the flash/RAM table in `docs/data_logging.md` matches the build (refresh it in the same change) |
 
 Notes and gotchas:
 
 * `pre-commit` must be invoked with `-c esphome/.pre-commit-config.yaml` because the
   git root is the parent directory of the ESPHome project. Its
-  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master` - the human's
-  concern only: the AI does not commit at all (section 10).
-* `script/ci-custom.py` and `script/helpers.py` are **vendored verbatim** (MIT) from
-  `esphome/esphome`; `script/run_ci_custom.py` is the local wrapper that runs the
-  linter with `esphome/` as CWD. That CWD matters: upstream only performs the
-  namespace and component-relative-import checks when the paths it receives start
-  with `components/`. Do not "fix" the vendored files - update them from upstream
-  (see `esphome/script/README.md`).
+  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master`; prefix a
+  check run with `SKIP=no-commit-to-branch` there - the hook itself is the human's
+  concern only: the AI does not commit at all (section 10). The hooks are
+  deliberately **not installed** as git hooks (`pre-commit install` would refuse
+  every commit on `dev`); they are run explicitly.
+* `esphome/script/ci-custom.py` and `esphome/script/helpers.py` are **vendored
+  verbatim** (MIT) from `esphome/esphome`; `run_ci_custom.py` is the local wrapper
+  - never edit the two vendored files, update them from upstream (see
+  `esphome/script/README.md`). The wrapper runs the linter **from the git root**,
+  because upstream derives the expected namespace and the component-relative
+  import rules from the paths it receives (they must look like
+  `esphome/components/...`). It also hands the linter an empty `esphome/const.py`
+  (this repository ships none, so the "constant already defined in `const.py`" and
+  the frozen `CONST_PY_MAX_CONF` checks are inactive) and keeps `esphome/script/`
+  and `pcb/` out of the file list: the vendored files are not project code
+  (upstream excludes its own `script/`) and `pcb/` holds binary archives, a file
+  type the vendored checks do not cover.
+* The `flake8` and `yamllint` hooks pass `--config=esphome/.flake8` /
+  `--config-file=esphome/.yamllint` explicitly: both tools read their
+  configuration from the working directory, which pre-commit sets to the git root,
+  and would otherwise fall back to their defaults (79/80 columns, `D103`,
+  `document-start`) and flag the whole tree.
 * The `mixed-line-ending --fix=lf`, `end-of-file-fixer` and `trailing-whitespace`
   hooks from `.pre-commit-config.yaml` overlap with `ci-custom`; both must pass.
+* Refreshing a board drawing hits the 500 kB default of
+  `check-added-large-files`: it only inspects files newly **added** to the index,
+  and `pcb/PCB_PCB1_2026-09-25.pdf` / `.png` are 0.9-1.7 MB (only the Gerber
+  `*.zip`, 141 kB, is below the limit), so such an update needs `--no-verify` or a
+  raised `--maxkb`.
 * Never commit `esphome/tests/mq_math_test.exe` (ignored) or `secrets.yaml`.
 
 ---
@@ -264,7 +299,28 @@ When adding data or formulas, update the Credits in
 `esphome/components/mq_gas_sensors/README.md` and the sources table in
 `docs/README.md`: MQUnifiedsensor/MQSensorsLib and MQDataScience are MIT, the
 SolderedElectronics curve table is a GPL-3.0 data reference. Vendored ESPHome
-scripts stay unmodified and are credited in `esphome/script/README.md`.
+scripts stay unmodified and are credited in `esphome/script/README.md`. The two
+engines of the history component (esp_tsdb, LittleFS) are not vendored - they are
+pinned by version in `components/tsdb/__init__.py` and credited in
+`components/tsdb/README.md`, `docs/README.md` and `esphome/readme.md#licence`.
+
+### 7.6 History (the local copy of the measurement)
+
+* The history is a **copy**, never the source of truth: alerting stays in Home
+  Assistant or in the local pre-alarm, never in `tsdb`. A component that logs can
+  fail (partition, flash, time) without the alarm becoming weaker.
+* A column without a fresh value is **skipped** (`on_missing: skip`), so a gap
+  appears in the history - never write a `0`, which would read as clean air.
+* `sync_interval` is the amount of data a power cut may lose: it is documented in
+  `docs/data_logging.md` and in `packages/tsdb.yaml` and must not be silently
+  raised.
+* A partition that holds data but does not mount is **never** reformatted
+  (`format_on_first_boot` only fires on a blank partition): losing the history
+  silently would be worse than a boot without a database.
+* Every number in `docs/data_logging.md` (records, bytes, days) is asserted by
+  `esphome/tests/tsdb_math_test.cpp`, and the geometry constants are
+  static-asserted against esp_tsdb in `tsdb.cpp` - an engine upgrade that changes
+  the file format must fail the build, not the documentation.
 
 ---
 
@@ -274,6 +330,9 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
   correction constants needs assertions in `esphome/tests/mq_math_test.cpp` (MQ)
   or `esphome/tests/mics_math_test.cpp` (MiCS-5524), with expected values
   recomputed from first principles (never copied from the implementation).
+  Anything in `esphome/components/tsdb/tsdb_math.h` (int16 encoding, file
+  geometry, capacity, retention) is asserted in `esphome/tests/tsdb_math_test.cpp`
+  the same way - including every number `docs/data_logging.md` quotes.
 * Keep the test building with `-Wall -Wextra` and zero warnings.
 * Config-only changes: run `esphome config` for `config.yaml`, `tests/test_no_id.yaml`
   and `tests/test_tc.yaml`; the negative cases (missing `temperature:`, `curve:`
@@ -293,9 +352,15 @@ scripts stay unmodified and are credited in `esphome/script/README.md`.
 * `docs/` is the versioned, user-facing documentation; `docs/README.md` is the index.
   The user-facing set is `../README.md` (entry point), `getting_started.md` (setup),
   `home_assistant_alerts.md` (usage), `troubleshooting.md` and `development.md`, plus
-  the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`).
+  the topic documents (`mq8_*`, `mics5524_*`, `h2_thresholds`, `temperature_humidity_*`,
+  `offline_mode`, `local_alarm`, `data_logging`).
 * Every number quoted in `docs/` must be asserted by `mq_math_test.cpp`; when a
-  constant changes, update code, test and docs in the same change.
+  constant changes, update code, test and docs in the same change. The one
+  deliberate exception is the **measured build baseline** in
+  `docs/data_logging.md#flash-and-ram-cost-measured-baseline` (image size, DRAM,
+  IRAM, per-object flash): it is a snapshot of a real `esphome compile` and is
+  refreshed in the same change that shifts it noticeably, not asserted by a host
+  test (a host test cannot build the firmware).
 * Markdown may use Unicode (arrows, multiplication signs, micro, degrees - the ASCII
   rule covers code and config files only), but keep it ASCII where it is easy.
 * Docs must never rely on a path that only exists on one machine (git-ignored

@@ -3,4 +3,3 @@ switch:
     name: "${friendly_name} restart"
     icon: "mdi:restart"
     id: ${name}_reboot
-

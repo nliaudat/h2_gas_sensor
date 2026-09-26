@@ -113,6 +113,15 @@ and an `alarm test` button: amber LEDs plus a beep every 5 s from 4 000 ppm
 50 % of the LEL.  It is a local indicator, not a certified detector - see
 [`docs/local_alarm.md`](docs/local_alarm.md).
 
+The history package (`packages/tsdb.yaml`) keeps the board's own copy of the six
+readings in a time-series database on a 512 KB LittleFS partition: one row every
+60 s, ~16.7 days of rolling history, and at most one row lost to a power cut.
+It is what is left to look at when the battery room has no network and Home
+Assistant never saw the event - entities, calibration and alarm logic are
+untouched by it.  It costs each OTA slot half of the partition size and needs one
+flash over USB (the partition table changes once).  See
+[`docs/data_logging.md`](docs/data_logging.md).
+
 The two alarm entities (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`) refresh every
 **second** - the metal-oxide heaters run continuously, so there is nothing to save
 by polling slowly.  Every diagnostic and ambient entity has its own substitution
@@ -146,6 +155,7 @@ of the database.
 * [`docs/README.md`](docs/README.md) - index of every document.
 * Setup: [`docs/getting_started.md`](docs/getting_started.md) - secrets, substitutions, packages, wiring, flashing, calibration.
 * Offline: [`docs/offline_mode.md`](docs/offline_mode.md) - the open fallback access point and the dashboard web server when there is no network.
+* History: [`docs/data_logging.md`](docs/data_logging.md) - the board's own persistent copy of the readings: what is stored, the LittleFS partition and its cost, retention, the power-cut window, how to read it out.
 * Board: [`docs/hardware.md`](docs/hardware.md) - the PCB in [`pcb/`](pcb/): schematic sheets, the net-to-GPIO table, the analog front ends, power, BOM.
 * Usage: [`docs/home_assistant_alerts.md`](docs/home_assistant_alerts.md) - entities, thresholds, automations, operations.
 * Hardware depth: [`docs/mq8_sensor_guide.md`](docs/mq8_sensor_guide.md), [`docs/mics5524_guide.md`](docs/mics5524_guide.md).

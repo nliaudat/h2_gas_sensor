@@ -9,4 +9,3 @@ sensor:
     update_interval: ${wifi_signal_update_interval}
     entity_category: "diagnostic"
     id: ${name}_wifi_signal_db
-
