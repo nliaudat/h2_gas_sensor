@@ -4,7 +4,7 @@
 #   * .editorconfig          -> end_of_line = lf
 #   * .pre-commit-config.yaml -> mixed-line-ending --fix=lf
 #   * .yamllint              -> new-lines (unix)
-#   * script/ci-custom.py    -> lint_newline / lint_trailing_whitespace
+#   * esphome/script/ci-custom.py -> lint_newline / lint_trailing_whitespace
 #
 # Without this file `core.autocrlf=true` checks the files out as CRLF, which
 # makes all four of the checks above fail on a clean clone.

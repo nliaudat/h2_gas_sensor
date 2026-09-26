@@ -108,7 +108,8 @@ change is considered done.
 
 | Rule | Command | Expected |
 |---|---|---|
-| ESPHome CI checks (LF, trailing whitespace, ASCII, namespace, imports, `#define`, delays, ...) | `cd esphome && python script/ci-custom.py` | **0 findings** |
+| All hooks of the project | `pre-commit run -c esphome/.pre-commit-config.yaml --all-files` (`SKIP=no-commit-to-branch` on `main`/`dev`/`master`) | every hook passes |
+| ESPHome CI checks (UTF-8, LF, trailing whitespace, namespace, imports, `#define`, delays, ...) | `python esphome/script/run_ci_custom.py` (the `ci-custom` hook; from the git root) | **0 findings** |
 | Formatting of C++ | `pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files` (pinned **v13.0.1**; the local `clang-format` 22.x formats differently) | no changes |
 | YAML | `cd esphome && yamllint -c .yamllint .` | no output |
 | Python (flake8) | `cd esphome && flake8 --config .flake8 components tests script` | no output |
@@ -125,16 +126,35 @@ Notes and gotchas:
 
 * `pre-commit` must be invoked with `-c esphome/.pre-commit-config.yaml` because the
   git root is the parent directory of the ESPHome project. Its
-  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master` - the human's
-  concern only: the AI does not commit at all (section 10).
-* `script/ci-custom.py` and `script/helpers.py` are **vendored verbatim** (MIT) from
-  `esphome/esphome`; `script/run_ci_custom.py` is the local wrapper that runs the
-  linter with `esphome/` as CWD. That CWD matters: upstream only performs the
-  namespace and component-relative-import checks when the paths it receives start
-  with `components/`. Do not "fix" the vendored files - update them from upstream
-  (see `esphome/script/README.md`).
+  `no-commit-to-branch` hook forbids commits on `main`/`dev`/`master`; prefix a
+  check run with `SKIP=no-commit-to-branch` there - the hook itself is the human's
+  concern only: the AI does not commit at all (section 10). The hooks are
+  deliberately **not installed** as git hooks (`pre-commit install` would refuse
+  every commit on `dev`); they are run explicitly.
+* `esphome/script/ci-custom.py` and `esphome/script/helpers.py` are **vendored
+  verbatim** (MIT) from `esphome/esphome`; `run_ci_custom.py` is the local wrapper
+  - never edit the two vendored files, update them from upstream (see
+  `esphome/script/README.md`). The wrapper runs the linter **from the git root**,
+  because upstream derives the expected namespace and the component-relative
+  import rules from the paths it receives (they must look like
+  `esphome/components/...`). It also hands the linter an empty `esphome/const.py`
+  (this repository ships none, so the "constant already defined in `const.py`" and
+  the frozen `CONST_PY_MAX_CONF` checks are inactive) and keeps `esphome/script/`
+  and `pcb/` out of the file list: the vendored files are not project code
+  (upstream excludes its own `script/`) and `pcb/` holds binary archives, a file
+  type the vendored checks do not cover.
+* The `flake8` and `yamllint` hooks pass `--config=esphome/.flake8` /
+  `--config-file=esphome/.yamllint` explicitly: both tools read their
+  configuration from the working directory, which pre-commit sets to the git root,
+  and would otherwise fall back to their defaults (79/80 columns, `D103`,
+  `document-start`) and flag the whole tree.
 * The `mixed-line-ending --fix=lf`, `end-of-file-fixer` and `trailing-whitespace`
   hooks from `.pre-commit-config.yaml` overlap with `ci-custom`; both must pass.
+* Refreshing a board drawing hits the 500 kB default of
+  `check-added-large-files`: it only inspects files newly **added** to the index,
+  and `pcb/PCB_PCB1_2026-09-25.pdf` / `.png` are 0.9-1.7 MB (only the Gerber
+  `*.zip`, 141 kB, is below the limit), so such an update needs `--no-verify` or a
+  raised `--maxkb`.
 * Never commit `esphome/tests/mq_math_test.exe` (ignored) or `secrets.yaml`.
 
 ---

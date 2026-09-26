@@ -83,19 +83,26 @@ with it (the capacity/retention table of
 ## Lint
 
 ```bash
-cd esphome
-python script/ci-custom.py                     # ESPHome's own checks (LF, namespace, imports, ...)
-yamllint -c .yamllint .
-flake8 --config .flake8 components tests script
-ruff check . && ruff format --check .
+# from the git root: every hook at once (clang-format is pinned to v13.0.1)
+pre-commit run -c esphome/.pre-commit-config.yaml --all-files
 
-# from the git root; the version is pinned (clang-format v13.0.1)
-pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files
+# the same checks one by one, to narrow one down
+python esphome/script/run_ci_custom.py          # ESPHome's own checks (LF, namespace, imports, ...)
+cd esphome && yamllint -c .yamllint . && flake8 --config .flake8 components tests script
+cd esphome && ruff check . && ruff format --check .
 ```
 
-`script/ci-custom.py` and `script/helpers.py` are vendored verbatim from
-`esphome/esphome` (MIT) - do not edit them locally, update them from upstream
-([`../esphome/script/README.md`](../esphome/script/README.md)).
+`pre-commit run --all-files` stops on the `no-commit-to-branch` hook while the
+branch is `main`, `dev` or `master`; prefix the command with
+`SKIP=no-commit-to-branch` to run the checks there.
+
+`ci-custom.py` and `helpers.py` are vendored verbatim from `esphome/esphome`
+(MIT) - do not edit them locally, update them from upstream
+([`../esphome/script/README.md`](../esphome/script/README.md)). The wrapper
+`script/run_ci_custom.py` is the only local file: it runs the linter from the git
+root, hands it an empty `esphome/const.py` (this repository ships none, so the two
+upstream checks backed by that file are inactive) and keeps the vendored files
+and `pcb/` out of its file list.
 
 ## Adding a gas or a curve
 

@@ -19,6 +19,11 @@ repos:
         additional_dependencies:
           - flake8-docstrings==1.7.0
           - pydocstyle==5.1.1
+        # flake8 reads its configuration from the working directory, which
+        # pre-commit sets to the git root; point it at the project config
+        # explicitly, otherwise the defaults (79 columns, D103 enabled) apply
+        # and the vendored script/ files get linted as well.
+        args: [--config=esphome/.flake8]
         files: ^esphome/.+\.py$
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -43,6 +48,10 @@ repos:
     hooks:
       - id: yamllint
         exclude: (^|/)\.clang-(format|tidy)$
+        # yamllint, like flake8, looks for its configuration in the working
+        # directory only; pre-commit runs it from the git root, so the project
+        # config has to be named explicitly (defaults would flag 80 columns).
+        args: [--config-file=esphome/.yamllint]
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v13.0.1
     hooks:
@@ -53,8 +62,9 @@ repos:
       - id: ci-custom
         name: ci-custom
         # Vendored copy of ESPHome's CI linter (see esphome/script/README.md).
-        # The wrapper runs it with esphome/ as the working directory, which is
-        # required for the namespace and import checks to be active.
+        # The wrapper runs it from the git root with git-root-relative paths,
+        # which is what the namespace, import and const checks expect; it also
+        # keeps the vendored files and pcb/ out of the file list.
         entry: python esphome/script/run_ci_custom.py
         language: system
         pass_filenames: false

@@ -18,16 +18,28 @@ under the **MIT** license (only the C++/runtime files are GPLv3), see
 ## Running the checks
 
 ```bash
-cd esphome
-python script/ci-custom.py                     # every check, every file
-python script/ci-custom.py components packages # regex filter on the paths
+# from the git root; the same command the `ci-custom` hook runs
+python esphome/script/run_ci_custom.py              # every check, every file
+python esphome/script/run_ci_custom.py components   # regex filter on the paths
 ```
 
-The pre-commit hook runs `run_ci_custom.py`, which changes into `esphome/`
-before executing the linter: upstream derives the expected namespace and the
-component-relative-import rules from the paths it receives, so those checks are
-only active when it is started from the ESPHome project directory (paths must
-begin with `components/`).
+The wrapper changes into the git root before executing the linter: upstream
+derives the expected namespace and the component-relative-import rules from the
+paths it receives, so those checks are only active when the paths look like
+`esphome/components/...`.
+
+It also shields two things from the linter:
+
+* the vendored files themselves - upstream's own `ci-custom.py` excludes
+  `script/*` because it does not lint its own tooling, and that exclusion cannot
+  match this deeper `esphome/script/` copy;
+* `pcb/` - the binary hardware archives, a file type upstream's checks do not
+  cover.
+
+`ci-custom.py` reads upstream's `esphome/const.py` when it starts, a file this
+repository does not have; the wrapper serves it an empty one, so the two checks
+backed by that file (a constant already defined in `const.py`, and the frozen
+`CONST_PY_MAX_CONF` counter) stay quiet. Every other check is unaffected.
 
 ## Updating
 
