@@ -1,7 +1,11 @@
 # Persistent history of the board's own readings: the tsdb component logs one
 # row per `update_interval` to a time-series database on a LittleFS partition,
 # so a hydrogen event that happens while Home Assistant (or the network) is
-# unreachable is still there afterwards.  Optional - remove the
+# unreachable is still there afterwards.  That coverage starts with the first
+# SNTP sync: while the clock is still at its boot counter nothing is written
+# (`require_time: true`, a record with a boot-counter timestamp would be worse
+# than a gap), so a board that is powered up *without* a network begins its
+# history at that first sync, not at boot.  Optional - remove the
 # `tsdb: !include` line in ../config.yaml for a firmware without the partition.
 #
 # What it does NOT change
@@ -14,7 +18,7 @@
 # The partition (read this once)
 #   `partition_size: 512KB` adds a `littlefs` data partition to partitions.csv
 #   and takes the space out of the two OTA slots, so each of them shrinks from
-#   1.75MB to 1.5MB (the firmware, 1 006 047 bytes, is then at 64% of its slot).
+#   1.75MB to 1.5MB (the firmware, 1 006 259 bytes, is then at 64% of its slot).
 #   A partition table
 #   change only takes effect with a **full flash over USB** (`esphome run` with
 #   a cable): OTA cannot move partitions.  Everything else keeps working.
@@ -31,15 +35,18 @@
 #   calls tsdb_sync_h() (close + reopen) every `sync_interval`.  With the
 #   default `sync_interval: 60s` == `write_interval` at most **one** record is at
 #   risk on a power cut; a longer interval trades that for fewer flash commits
-#   (see the flash-wear section of ../../docs/data_logging.md).
+#   (see the flash-wear section of ../../docs/data_logging.md).  The deadline is
+#   checked after every interval, also after an interval that dropped a row, so a
+#   gap never postpones the commit of the rows that are stored.
 #
 # Reading the data
 #   * `... history H2 average 1h` - the aggregate of the last hour, refreshed
 #     every `aggregate_interval` (5min): it shows up in the Home Assistant
 #     history without any extra network surface.
-#   * The "history dump" button prints the newest `dump_rows` records as CSV to
-#     the log (`esphome logs config.yaml`, or the USB console) - the one export
-#     path that needs no Home Assistant at all.
+#   * The "history dump" button prints the newest `dump_rows` *stored* records as
+#     CSV to the log (`esphome logs config.yaml`, or the USB console) - the one
+#     export path that needs no Home Assistant at all.  Rows are counted, not a
+#     time window: a gap in the history does not shorten the dump.
 #   * `... history clear` deletes every stored row (it does not touch the
 #     configuration); press it deliberately.
 #
@@ -69,7 +76,8 @@ tsdb:
   memory: auto
   # The clock comes from packages/time.yaml (sntp).  Without a valid time the
   # records would carry a boot counter as their timestamp, so nothing is written
-  # until the first SNTP sync - the log says so once per boot.
+  # until the first SNTP sync - the log says so once per boot, and the history of
+  # a board that boots offline starts at that sync instead of at power-up.
   require_time: true
   time_id: ${name}_time
   columns:
@@ -80,13 +88,15 @@ tsdb:
     - sensor: mics
       name: h2_trace_ppm
       average_sensor: ${name}_history_trace_average
-    # # Diagnostics that explain *why* a value moved (see docs/data_logging.md).
-    # - sensor: ${name}_mq8_ratio
-    #   name: mq8_ratio
-    #   scale: 100
-    # - sensor: ${name}_mics_ratio
-    #   name: mics_ratio
-    #   scale: 1000
+    # The two ratios: they are what explains *why* a ppm value moved (a
+    # saturated RS/R0 means "the sensor is at the end of its range", not
+    # "clean air").  Both are plain published sensors of the gas packages.
+    - sensor: ${name}_mq8_ratio
+      name: mq8_ratio
+      scale: 100
+    - sensor: ${name}_mics_ratio
+      name: mics_ratio
+      scale: 1000
     - sensor: dht_temperature
       name: temperature
       scale: 10

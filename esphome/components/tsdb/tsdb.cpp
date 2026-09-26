@@ -52,13 +52,25 @@ static_assert(static_cast<int>(tsdbmath::MEMORY_AUTO) == static_cast<int>(TSDB_A
               "esp_tsdb changed tsdb_alloc_strategy_t");
 
 /// True when the partition has never been formatted (every byte is 0xFF).
+///
+/// The **whole** partition is scanned, not just its first block: a partition that
+/// holds data whose head happens to be erased (an interrupted write or format)
+/// must not look blank, because `format_on_first_boot` would then re-format it
+/// and throw a readable history away. The scan runs only when the mount failed
+/// and stops at the first byte that is not 0xFF, so a partition that is in use
+/// costs a single 256-byte read.
 static bool partition_is_blank(const esp_partition_t *partition) {
-  uint8_t head[16];
-  if (esp_partition_read(partition, 0, head, sizeof(head)) != ESP_OK)
-    return false;
-  for (uint8_t byte : head) {
-    if (byte != 0xFF)
-      return false;
+  static constexpr size_t CHUNK = 256;
+  uint8_t buffer[CHUNK];
+  for (uint32_t offset = 0; offset < partition->size; offset += CHUNK) {
+    const size_t remaining = static_cast<size_t>(partition->size) - offset;
+    const size_t length = remaining < CHUNK ? remaining : CHUNK;
+    if (esp_partition_read(partition, offset, buffer, length) != ESP_OK)
+      return false;  // unreadable is not blank - and never a reason to format
+    for (size_t index = 0; index < length; index++) {
+      if (buffer[index] != 0xFF)
+        return false;
+    }
   }
   return true;
 }
@@ -72,9 +84,7 @@ void TsdbComponent::add_column(const std::string &name, double scale, double off
   this->columns_.push_back(column);
 }
 
-void TsdbComponent::set_column_source(size_t index, sensor::Sensor *source) {
-  this->columns_[index].source = source;
-}
+void TsdbComponent::set_column_source(size_t index, sensor::Sensor *source) { this->columns_[index].source = source; }
 
 void TsdbComponent::set_column_average_sensor(size_t index, sensor::Sensor *sensor) {
   this->columns_[index].average_sensor = sensor;
@@ -168,8 +178,7 @@ bool TsdbComponent::open_database_() {
   // The engine's own TSDB_CALC_MAX_RECORDS() ignores that a block only holds
   // (1024 - 8) / record_size records, so its capacity overflows the budget by
   // ~1.5 %; capacity_for_bytes() shrinks it until the file really fits.
-  const uint32_t max_records =
-      tsdbmath::capacity_for_bytes(this->max_file_size_, names.size(), this->index_stride_);
+  const uint32_t max_records = tsdbmath::capacity_for_bytes(this->max_file_size_, names.size(), this->index_stride_);
   if (max_records == 0) {
     ESP_LOGE(TAG, "%s: max_file_size (%" PRIu32 " bytes) is too small for %" PRIu32 " columns", this->file_.c_str(),
              this->max_file_size_, static_cast<uint32_t>(names.size()));
@@ -198,8 +207,9 @@ bool TsdbComponent::open_database_() {
   }
 
   const uint64_t bytes = tsdbmath::file_bytes_for(max_records, names.size(), this->index_stride_);
-  ESP_LOGI(TAG, "%s: %" PRIu32 " columns, %" PRIu32 " records (%" PRIu32 " bytes of data, up to %" PRIu32
-                " KB of file) at %s",
+  ESP_LOGI(TAG,
+           "%s: %" PRIu32 " columns, %" PRIu32 " records (%" PRIu32 " bytes of data, up to %" PRIu32
+           " KB of file) at %s",
            this->file_.c_str(), static_cast<uint32_t>(names.size()), max_records, static_cast<uint32_t>(bytes),
            this->max_file_size_ / 1024, path.c_str());
   if (this->min_free_bytes_ > 0) {
@@ -234,11 +244,17 @@ void TsdbComponent::update() {
     return;
 
   this->handle_requests_();
-  if (this->write_record_())
-    this->flush_(false);
+  // flush_() keeps its own `sync_interval` deadline, so it is called after every
+  // attempt - including an attempt that dropped the row. Returning early on a
+  // dropped row (the old `if (write_record_())`) is what let the last written
+  // record sit unsynced for longer than `sync_interval` while the history had a
+  // gap.
+  this->write_record_();
+  this->flush_(false);
 
   const uint32_t now = millis();
-  if (this->aggregate_interval_ > 0 && (this->last_aggregate_ == 0 || now - this->last_aggregate_ >= this->aggregate_interval_)) {
+  if (this->aggregate_interval_ > 0 &&
+      (this->last_aggregate_ == 0 || now - this->last_aggregate_ >= this->aggregate_interval_)) {
     this->last_aggregate_ = now;
     this->publish_aggregates_();
   }
@@ -260,6 +276,10 @@ void TsdbComponent::handle_requests_() {
     } else {
       this->records_ = 0;
       this->writes_ = 0;
+      // tsdb_clear_h() flushes and syncs the header itself, so nothing stored is
+      // left uncommitted: an extra commit at the next deadline would publish an
+      // unchanged file.
+      this->dirty_ = false;
       ESP_LOGW(TAG, "%s: history cleared on request", this->file_.c_str());
       this->publish_log_("history cleared");
     }
@@ -339,6 +359,7 @@ bool TsdbComponent::write_record_() {
     return false;
   }
   this->writes_++;
+  this->dirty_ = true;  // flush_() may not have committed this record yet
   return true;
 }
 
@@ -346,6 +367,11 @@ void TsdbComponent::flush_(bool force) {
   if (this->db_ == nullptr)
     return;
   const uint32_t now = millis();
+  // Nothing was written since the last commit: syncing anyway would spend a flash
+  // metadata commit to publish an unchanged file (an idle update interval, or a
+  // run of dropped rows).
+  if (!force && !this->dirty_)
+    return;
   // The first write always syncs: that is the commit which gives the file its
   // directory entry, i.e. what makes the database survive a reboot at all.
   if (!force && this->last_sync_ != 0 && this->sync_interval_ > 0 && now - this->last_sync_ < this->sync_interval_)
@@ -358,8 +384,9 @@ void TsdbComponent::flush_(bool force) {
     ESP_LOGE(TAG, "%s: sync failed: %s", this->file_.c_str(), esp_err_to_name(err));
     if (this->errors_sensor_ != nullptr)
       this->errors_sensor_->publish_state(this->write_errors_);
-    return;
+    return;  // dirty_ stays set: the next deadline retries the commit
   }
+  this->dirty_ = false;
   ESP_LOGD(TAG, "%s: synced after %" PRIu32 " writes", this->file_.c_str(), this->writes_);
 }
 
@@ -430,8 +457,7 @@ void TsdbComponent::publish_stats_() {
     if (this->free_sensor_ != nullptr)
       this->free_sensor_->publish_state(static_cast<float>(total - used));
   }
-  ESP_LOGD(TAG, "%s: %" PRIu32 " records of %" PRIu32 ", %" PRIu32 " writes, %" PRIu32 " dropped, %" PRIu32
-                " errors",
+  ESP_LOGD(TAG, "%s: %" PRIu32 " records of %" PRIu32 ", %" PRIu32 " writes, %" PRIu32 " dropped, %" PRIu32 " errors",
            this->file_.c_str(), this->records_, stats.max_records, this->writes_, this->dropped_, this->write_errors_);
 }
 
@@ -444,10 +470,14 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
     return;
   }
 
-  const uint32_t interval_s = this->get_update_interval() / 1000;
-  const uint64_t span = static_cast<uint64_t>(rows) * (interval_s + 1);
+  // The query walks the ring buffer oldest first, so the newest `rows` records
+  // are the last ones: the window is selected by *count*, not by an estimated
+  // `rows * write_interval` span. A gap (`on_missing: skip`, a changed write
+  // interval) therefore neither shortens the export nor shifts it off the newest
+  // records - the dump simply walks past more older rows.
+  const uint32_t first = stats.oldest_timestamp != 0 ? stats.oldest_timestamp : 1;
+  const uint32_t skip = tsdbmath::dump_skip(stats.total_records, rows);
   const uint32_t end = stats.newest_timestamp;
-  const uint32_t start = end > span ? static_cast<uint32_t>(end - span) : 1;
 
   std::string header = "timestamp";
   for (const TsdbColumn &column : this->columns_) {
@@ -459,20 +489,21 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
   // The query state is ~700 bytes; a function local static keeps it out of the
   // (small) loop task stack - the dump runs there, on request only.
   static tsdb_query_t query = {};
-  if (tsdb_query_init_h(db, &query, start, end, nullptr, 0) != ESP_OK) {
+  if (tsdb_query_init_h(db, &query, first, end, nullptr, 0) != ESP_OK) {
     ESP_LOGE(TAG, "%s: csv-dump query failed", this->file_.c_str());
     return;
   }
 
   uint32_t timestamp = 0;
   std::vector<int16_t> values(this->columns_.size(), 0);
+  uint32_t seen = 0;
   uint32_t count = 0;
   while (count < rows && tsdb_query_next(&query, &timestamp, values.data()) == ESP_OK) {
+    if (seen++ < skip)
+      continue;  // an older record than the requested window
     char line[CSV_LINE_SIZE];
     int length = snprintf(line, sizeof(line), "%" PRIu32, timestamp);
-    for (size_t index = 0; index < values.size() && length > 0 &&
-                           length < static_cast<int>(sizeof(line));
-         index++) {
+    for (size_t index = 0; index < values.size() && length > 0 && length < static_cast<int>(sizeof(line)); index++) {
       const double value = tsdbmath::decode(values[index], this->columns_[index].scale, this->columns_[index].offset);
       length += snprintf(line + length, sizeof(line) - static_cast<size_t>(length), ",%.4f", value);
     }
@@ -482,7 +513,7 @@ void TsdbComponent::dump_csv_(uint32_t rows) {
     count++;
   }
   tsdb_query_close(&query);
-  ESP_LOGI(TAG, "%s: csv-dump end (%" PRIu32 " rows)", this->file_.c_str(), count);
+  ESP_LOGI(TAG, "%s: csv-dump end (%" PRIu32 " rows, %" PRIu32 " older skipped)", this->file_.c_str(), count, skip);
 }
 
 void TsdbComponent::publish_log_(const char *message) {

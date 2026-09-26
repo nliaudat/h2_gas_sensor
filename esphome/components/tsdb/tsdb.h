@@ -100,6 +100,8 @@ class TsdbComponent : public PollingComponent {
   void close_database_();
   void handle_requests_();
   bool write_record_();
+  /// Commit the file when `force`, and otherwise once a record was written since
+  /// the last commit **and** `sync_interval` has passed.
   void flush_(bool force);
   void publish_aggregates_();
   void publish_stats_();
@@ -144,6 +146,7 @@ class TsdbComponent : public PollingComponent {
   uint32_t write_errors_{0};
   uint32_t dropped_{0};
   uint32_t last_sync_{0};
+  bool dirty_{false};  ///< a record was written since the last successful sync
   uint32_t last_aggregate_{0};
   uint32_t last_stats_{0};
   uint32_t records_{0};

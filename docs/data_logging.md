@@ -59,8 +59,8 @@ littlefs, data, littlefs, , 0x80000,   # the history
 ```
 
 The 512 KB is split between the two OTA slots, so each of them shrinks from
-1.75 MB to 1.5 MB - the firmware (1 006 047 bytes with the history included) sits
-at 64 % of its slot, which still leaves 566 817 bytes (about 553 KB) of headroom
+1.75 MB to 1.5 MB - the firmware (1 006 259 bytes with the history included) sits
+at 64 % of its slot, which still leaves 566 605 bytes (about 553 KB) of headroom
 for future releases. A
 partition table change cannot be delivered by OTA: **flash once over USB**
 (`esphome run config.yaml`) after enabling the package, then OTA works as before.
@@ -107,7 +107,7 @@ the flash size.
 A bigger `max_file_size` needs a bigger `partition_size`: the partition has to
 hold the file plus `min_free_bytes`, and every KB of it is taken out of **both**
 OTA slots. On this 4 MB flash, with the firmware the history package produces
-(1 006 160 bytes):
+(1 006 259 bytes):
 
 | `partition_size` | Each OTA slot | Firmware share | Verdict |
 |---|---|---|---|
@@ -121,16 +121,18 @@ maximum on this 4 MB flash.
 
 ## Flash and RAM cost (measured baseline)
 
-Measured on 2026-09-25 with ESPHome 2026.9.0 / ESP-IDF 5.5.5: `esphome compile
+Measured on 2026-09-26 with ESPHome 2026.9.0 / ESP-IDF 5.5.5: `esphome compile
 config.yaml` prints the summary, and `esp_idf_size --archives` / `--files` on
 `esphome/.esphome/build/h2_sensor/build/h2_sensor.map` breaks it down. Compare a
-future build against these numbers:
+future build against these numbers - the 2026-09-25 run of the same firmware
+*without* the two ratio columns and the CSV-dump/mount fixes was 1 006 047 B of
+flash and 53 692 B of static DRAM, i.e. this change costs +212 B and +8 B:
 
 | Memory | Used | Total | Free |
 |---|---|---|---|
-| Flash (image) | 1 006 047 B (64.0 %) | app slot 1 572 864 B | 566 817 B (36 %) |
+| Flash (image) | 1 006 259 B (64.0 %) | app slot 1 572 864 B | 566 605 B (36 %) |
 | IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
-| DRAM (static) | 53 692 B (29.7 %) | 180 736 B | 127 044 B |
+| DRAM (static) | 53 700 B (29.7 %) | 180 736 B | 127 036 B |
 
 (The per-update `INFO` value line of the two gas components, `log_ppm:`, is
 +176 B of flash and +16 B of static DRAM against the numbers recorded before
@@ -141,20 +143,24 @@ The history itself, object by object (`esp_idf_size --files`):
 | Object | Flash |
 |---|---|
 | LittleFS - `lfs.c` 17 322, `esp_littlefs.c` 6 466, `littlefs_esp_part.c` 213 | 24 001 B |
-| esp_tsdb - `tsdb_core` 5 375, `tsdb_query` 1 718, `tsdb_write` 1 507, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 354 B |
-| `tsdb.cpp` (this component) | 5 242 B |
+| esp_tsdb - `tsdb_core` 5 375, `tsdb_query` 1 714, `tsdb_write` 1 511, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 354 B |
+| `tsdb.cpp` (this component) | 5 297 B |
 | VFS directory support (`require_vfs_dir()`, part of `vfs.c`) | ~500 B |
 | the entities and automations of `packages/tsdb.yaml` | ~1 000 B |
 | **total** | **~40 KB** |
 
-Static RAM grows by 2 080 B (`.bss` +1 952, `.data` +128); the component object
-itself is 700 B of `.bss`. IRAM does not move at all. While the database is
-mounted roughly **6 - 7 KB of heap** are in use (4 KB buffer pool, the LittleFS
-block caches, the esp_tsdb handle with its header copy and mutex);
-`buffer_pool_size` and `min_free_bytes` are the knobs.
+Static RAM is 53 700 B (29.7 %) - `.bss` 36 456, `.data` 17 084 and 160 B of
+`noinit`. Against the pre-history build that is +2 088 B (`.bss` +1 960, `.data`
++128), 8 B more than the 2026-09-25 measurement; the component object itself is
+still 700 B of `.bss` and the two extra columns are entries of the heap-allocated
+`columns_` vector, so those 8 B are generated statics, not the component's own
+state. IRAM does not move at all. While the database is mounted roughly
+**6 - 7 KB of heap** are in use (4 KB buffer pool, the LittleFS block caches, the
+esp_tsdb handle with its header copy and mutex); `buffer_pool_size` and
+`min_free_bytes` are the knobs.
 
 Reading the two size reports: before the history package the image was
-904 299 B, now 1 006 047 B (+101 748 B, ~40 KB of it the feature's own code). The
+904 299 B, now 1 006 259 B (+101 960 B, ~40 KB of it the feature's own code). The
 remainder sits in objects of the base configuration that this change does not
 touch - the current image carries `esp_timer_impl_lac.c.obj` with 91 777 B of
 `.rodata` (the time/newlib data of the `time:`/SNTP support) and the Wi-Fi and
@@ -162,7 +168,7 @@ TLS data of the IDF components. An exact attribution needs an A/B build (comment
 the `tsdb: !include` line, rebuild, diff `--archives`), because `esphome clean`
 deletes the older map file.
 
-Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 817 bytes
+Decision (2026-09-25): the shipped `512KB`/`384KB` stays as it is - 566 605 bytes
 of the app slot stay free (~1 - 2 KB per release of headroom), IRAM is untouched
 and the 16.7 days of history are worth the 40 KB.
 
@@ -185,6 +191,13 @@ The board is rebooted on purpose (Monday 06:00, [`packages/time.yaml`](../esphom
 and Home Assistant-less operation reboots it every `api: reboot_timeout`
 (30 min): a clean shutdown calls `on_shutdown()`, which syncs and closes the
 database properly. The table above is about the *unclean* case - a power cut.
+
+The deadline is checked after **every** write interval, including the ones in
+which the row was dropped (`on_missing: skip` left a column empty): a gap in the
+history never postpones the commit of the rows that *are* stored, so "at most the
+newest row" is the age of the newest written row, not of the newest attempt. An
+interval in which nothing was written at all costs no flash commit - only a file
+that changed since the last commit is synced.
 
 If the sync itself fails (flash wear-out, filesystem corruption) the component
 counts it in `... history write errors` and in the log; it does not silently
@@ -214,13 +227,17 @@ database slow in earlier engine versions.
    window longer than the (excluded) 1 Hz stream. Without a row in the window
    they are `unknown`, never `0`.
 2. **CSV dump** - the `... history dump (log)` button prints the newest
-   `dump_rows` (60) rows to the log. Read them with `esphome logs config.yaml`
-   over the network, or over USB; the first line names the columns, the values
-   are already decoded:
+   `dump_rows` (60) rows **that are stored** to the log. The window is picked by
+   row count, not as a time span: a gap (a dropped row, a changed write interval)
+   does not shorten the dump, it only makes the component skip more older rows -
+   the last line printed is always the newest record. Read them with
+   `esphome logs config.yaml` over the network, or over USB; the first line names
+   the columns, the values are already decoded:
 
    ```
    [tsdb] history.tsdb: csv-dump begin (newest 60 records, timestamp,h2_mq8_ppm,... ...)
    [tsdb] history.tsdb: 1790361000,52.0000,7.0000,68.7000,0.9810,21.4000,45.1000
+   [tsdb] history.tsdb: csv-dump end (60 rows, 23998 older skipped)
    ```
 3. **Diagnostics** - `... history records`, `... history used/free`,
    `... history oldest/newest`, `... history write errors` and the
@@ -252,10 +269,10 @@ grow by one per write interval until the ring buffer is full.
 
 | Symptom | Cause and what to do |
 |---|---|
-| `no valid time yet - no record is written` in the log, `records` stays 0 | Wi-Fi/SNTP is down, so the clock is still at the boot counter. Expected offline; the history starts with the first SNTP sync. Only for a permanently offline board: `require_time: false` (timestamps then only order the rows, they are not real dates) or a local RTC. |
+| `no valid time yet - no record is written` in the log, `records` stays 0 | Wi-Fi/SNTP is down, so the clock is still at the boot counter. Expected offline: the history - and the outage coverage it is meant to provide - starts with the first SNTP sync after power-up, so a board that boots without a network writes nothing until then. Only for a permanently offline board: `require_time: false` (the timestamps then only order the rows, they are not real dates) or a local RTC. |
 | `records` is 0 although the clock is valid | The database could not be opened - look for `esp_tsdb could not open` / `mounting 'littlefs' ... failed` earlier in the log. The component marks itself failed and stops writing rather than pretend. |
 | `no data/littlefs partition labelled 'littlefs'` after an update | The partition table was not flashed - OTA does not move partitions. Flash once over USB. |
-| `partition 'littlefs' is unformatted - formatting it (first boot)` | Normal on the first boot after adding the package (or after a full flash erase). The history starts empty. |
+| `partition 'littlefs' is unformatted - formatting it (first boot)` | Normal on the first boot after adding the package (or after a full flash erase). The partition is only formatted when *every* byte is `0xFF`: a database that holds data but fails to mount (or whose first block happens to be erased) is never overwritten. The history starts empty. |
 | `X has no value - record dropped (N dropped so far)` | That entity published `unknown`/NaN: a pending calibration, a heater warm-up or a broken sensor. Rows are missing for as long as it lasts - that is the intended `on_missing: skip` behaviour. |
 | `capacity is capped early when ... drops below ... bytes` | The free-space guard fired: the partition is nearly full. Raise `partition_size` (and `max_file_size`), or let the ring buffer overwrite. |
 | `write errors` above 0 | Writes or syncs failed (filesystem or flash trouble). Check `free`, and see [`troubleshooting.md`](troubleshooting.md). |

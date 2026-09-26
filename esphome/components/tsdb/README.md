@@ -68,7 +68,7 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | `mount_point` | `/littlefs` | VFS path the partition is mounted on. |
 | `partition` | `littlefs` | Partition label; the component registers it with ESPHome (`esp32.add_partition()`), so it appears in `partitions.csv`. |
 | `partition_size` | `512KB` | Size of that partition, 4 KB aligned. It is taken out of the two OTA slots (each shrinks by half of it). See the sizing table below. |
-| `format_on_first_boot` | `true` | Format the partition when it is *blank* (never formatted). A partition that holds data but does not mount is **not** reformatted - that would throw the history away. |
+| `format_on_first_boot` | `true` | Format the partition when it is *blank* (never formatted). Blank means **every byte is `0xFF`** - the whole partition is scanned before formatting, because a partition that holds data but does not mount (or whose head happens to be erased) must **not** be reformatted: that would throw the history away. |
 | `max_file_size` | `384KB` | Data budget of the database file. The capacity (`max_records`) is derived from it; the file never grows beyond it (ring buffer). |
 | `index_stride` | `380` | Records between two entries of the sparse time index (esp_tsdb default). Smaller = faster lookups, more index bytes. |
 | `buffer_pool_size` | `4KB` | Buffer pool for block I/O (esp_tsdb). Internal RAM on a WROOM board; raise it (with `memory: psram`) on a WROVER. |
@@ -78,13 +78,13 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | `update_interval` | `60s` | Write interval - one row per interval. |
 | `sync_interval` | `60s` | `tsdb_sync_h()` cadence. LittleFS only publishes a file on close, so this is **the age of the data a power cut can lose**. `0s` = after every write. |
 | `min_free_bytes` | `32KB` | Free-space guard: the engine caps the capacity early (and switches to ring eviction) when the partition drops below this. `0` disables it. |
-| `require_time` | `true` | Refuse to write while the clock is invalid (< 2001-09-09). Set `false` to accept wrong timestamps on a board without a time source. |
+| `require_time` | `true` | Refuse to write while the clock is invalid (< 2001-09-09). Set `false` to accept wrong timestamps on a board without a time source: the rows then only *order* the readings, a boot-counter timestamp is not a date. A board that boots offline writes nothing until the first SNTP sync - the log says so once per boot. |
 | `time_id` | – | The `time:` component the timestamps come from. Required while `require_time: true`. |
 | `on_missing` | `skip` | `skip`, `hold` or `sentinel` (see above). `hold` needs a value it can repeat: a column that has never published is dropped even with `hold`. |
 | `aggregate_window` | `1h` | Time window of the per-column aggregates. |
 | `aggregate_interval` | `5min` | How often the aggregates are computed and published. `0s` disables them. |
 | `columns` | – | 1..16 columns (see below). |
-| `dump_rows` | `60` | Rows printed by the CSV dump. |
+| `dump_rows` | `60` | Rows printed by the CSV dump: the newest `dump_rows` records that are *stored*. The window is picked by row count, so gaps in the history do not shorten the dump. |
 | `records_sensor`, `used_sensor`, `free_sensor`, `oldest_sensor`, `newest_sensor`, `errors_sensor` | – | Optional diagnostic sensors: rows stored, bytes used/free on the partition, oldest/newest timestamp, write+sync errors. |
 | `log_sensor` | – | Optional `text_sensor` that mirrors the important log lines (open, clear, flush, dropped rows, errors). |
 
@@ -121,7 +121,7 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
 | Call | What it does |
 |---|---|
 | `id(history).request_flush()` | Commit immediately (`tsdb_sync_h()`) - for "I am about to cut the power". |
-| `id(history).request_dump()` | Print the newest `dump_rows` rows as CSV to the log (header line with the column names, then one line per row, engineering values decoded). |
+| `id(history).request_dump()` | Print the newest `dump_rows` *stored* rows as CSV to the log (header line with the column names, then one line per row, engineering values decoded). Missing rows are skipped over, so a gap does not shorten the export. |
 | `id(history).request_clear()` | Delete every stored row (`tsdb_clear_h()`); the file, the partition and the calibration stay. |
 | `id(history).is_ready()` | `true` once the partition is mounted and the database is open. |
 | `id(history).get_records()` | Rows currently stored (0 until the first statistics pass). |
@@ -154,9 +154,12 @@ the maximum amount of data a power cut can lose: the component calls
 `tsdb_sync_h()` (close + reopen) on that cadence, and once after the first write
 (that is the commit which makes the database survive a reboot at all). A clean
 restart (the Monday reboot, OTA, `safe_mode:`) syncs and closes through
-`on_shutdown()`. Every write costs one LittleFS metadata commit, which is why the
-default is 60 s rather than 5 s; the numbers are in
-[`docs/data_logging.md`](../../../docs/data_logging.md).
+`on_shutdown()`. The deadline is evaluated after every write interval - including
+the ones that dropped a row - so the last record that *was* written is never left
+unsynced for longer than `sync_interval` while the history has a gap; an interval
+in which nothing was written costs no commit at all. Every write costs one
+LittleFS metadata commit, which is why the default is 60 s rather than 5 s; the
+numbers are in [`docs/data_logging.md`](../../../docs/data_logging.md).
 
 ## Limits
 

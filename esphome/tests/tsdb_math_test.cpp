@@ -88,8 +88,8 @@ int main() {
       const uint32_t capacity = capacity_for_bytes(budget, columns);
       const uint32_t optimistic = max_records_for_bytes(budget, columns);
       const uint64_t bytes = file_bytes_for(capacity, columns);
-      std::printf("   %uKB, %2u columns: %u records, %llu bytes (esp_tsdb macro says %u)\n", size_kb, columns,
-                  capacity, static_cast<unsigned long long>(bytes), optimistic);
+      std::printf("   %uKB, %2u columns: %u records, %llu bytes (esp_tsdb macro says %u)\n", size_kb, columns, capacity,
+                  static_cast<unsigned long long>(bytes), optimistic);
       char name[96];
       std::snprintf(name, sizeof(name), "   file_bytes_for(capacity(%uKB, %u columns)) <= %uKB", size_kb, columns,
                     size_kb);
@@ -125,6 +125,18 @@ int main() {
   check_true("is_valid_timestamp(uptime 3600 s) is false", !is_valid_timestamp(3600));
   check_true("is_missing(NAN) is true", is_missing(NAN));
   check_true("is_missing(0.0f) is false (a real 0 ppm is a reading)", !is_missing(0.0f));
+
+  std::printf("\n== CSV dump window ==\n");
+  // The dump queries the ring oldest-first, so the newest `rows` records are the
+  // last ones: without the skip the export would print the *oldest* rows of a
+  // one-row-too-wide window.
+  check_close("dump_skip(24058, 60) skips 23998 older rows", dump_skip(24058, 60), 23998);
+  check_close("dump_skip(61, 60) skips 1 (the off-by-one case)", dump_skip(61, 60), 1);
+  check_close("dump_skip(60, 60) skips nothing", dump_skip(60, 60), 0);
+  check_close("dump_skip(37, 60) skips nothing (fewer rows stored than asked)", dump_skip(37, 60), 0);
+  check_close("dump_skip(1, 60) skips nothing", dump_skip(1, 60), 0);
+  check_close("dump_skip(0, 60) skips nothing", dump_skip(0, 60), 0);
+  check_true("dump_skip + rows == the stored rows when the window is full", dump_skip(24058, 60) + 60 == 24058);
 
   std::printf("\n== configuration codes shared with __init__.py ==\n");
   check_close("MISSING_SKIP is 0", MISSING_SKIP, 0);

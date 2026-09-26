@@ -91,8 +91,7 @@ constexpr uint32_t max_records_for_bytes(uint64_t bytes, uint32_t columns) {
 /// whole 1 KB blocks plus the sparse index. It is an upper bound (the last
 /// block counts as full) and the source of the numbers quoted in
 /// docs/data_logging.md.
-constexpr uint64_t file_bytes_for(uint32_t records, uint32_t columns,
-                                  uint32_t index_stride = INDEX_DEFAULT_STRIDE) {
+constexpr uint64_t file_bytes_for(uint32_t records, uint32_t columns, uint32_t index_stride = INDEX_DEFAULT_STRIDE) {
   if (records == 0 || columns == 0 || index_stride == 0)
     return 0;
   const uint32_t per_block = records_per_block(columns);
@@ -109,8 +108,7 @@ constexpr uint64_t file_bytes_for(uint32_t records, uint32_t columns,
 /// `(1024 - 8) / record_size` records (63 of the 1008 bytes a 6-column block
 /// uses), so its capacity overflows the budget by ~1.5 % - the solver here
 /// shrinks the estimate until `file_bytes_for()` really fits.
-constexpr uint32_t capacity_for_bytes(uint64_t bytes, uint32_t columns,
-                                      uint32_t index_stride = INDEX_DEFAULT_STRIDE) {
+constexpr uint32_t capacity_for_bytes(uint64_t bytes, uint32_t columns, uint32_t index_stride = INDEX_DEFAULT_STRIDE) {
   uint32_t records = max_records_for_bytes(bytes, columns);
   while (records > 0 && file_bytes_for(records, columns, index_stride) > bytes) {
     const uint64_t over = file_bytes_for(records, columns, index_stride) - bytes;
@@ -123,6 +121,19 @@ constexpr uint32_t capacity_for_bytes(uint64_t bytes, uint32_t columns,
 /// Seconds of history `records` records cover at `interval_seconds` each.
 constexpr uint64_t history_seconds(uint32_t records, uint32_t interval_seconds) {
   return static_cast<uint64_t>(records) * interval_seconds;
+}
+
+/// Rows the CSV dump has to walk past so that the **newest** `rows` stored
+/// records are the ones printed.
+///
+/// The engine's query iterates the ring buffer oldest first, so a dump of the
+/// last `rows` records consumes `total_records - rows` earlier ones. `total_records`
+/// is the *stored* row count of `tsdb_get_stats_h()` (never the capacity), which
+/// is why the window is selected by count instead of by an estimated
+/// `rows * write_interval` span: gaps in the history (`on_missing: skip`, a
+/// changed write interval) then skip nothing extra, they only move the start.
+constexpr uint32_t dump_skip(uint32_t total_records, uint32_t rows) {
+  return total_records > rows ? total_records - rows : 0;
 }
 
 /// Encode an engineering value as the raw int16_t the engine stores:
