@@ -34,6 +34,15 @@ external_components:
     components: [tsdb]
     refresh: 1h
 
+  # TEMPORARY (debug): build `tsdb` from this working tree instead of PR #19728,
+  # so the new setup-failure diagnostics are flashed.  The last matching source
+  # wins (esphome/loader.py installs its finder at sys.meta_path[0]).  Remove
+  # this block before committing.  `path` is relative to this file.
+  # - source:
+      # type: local
+      # path: components
+    # components: [tsdb]
+
 # external_components:
   # - source:
       # type: local

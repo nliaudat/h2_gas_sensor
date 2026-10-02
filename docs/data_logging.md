@@ -74,11 +74,57 @@ littlefs, data, littlefs, , 0x80000,   # the history
 ```
 
 The 512 KB is split between the two OTA slots, so each of them shrinks from
-1.75 MB to 1.5 MB - the firmware (1 007 371 bytes with the history included) sits
-at 64 % of its slot, which still leaves 565 493 bytes (about 552 KB) of headroom
+1.75 MB to 1.5 MB - the firmware (1 009 743 bytes with the history included) sits
+at 64 % of its slot, which still leaves 562 121 bytes (about 548 KB) of headroom
 for future releases. A
 partition table change cannot be delivered by OTA: **flash once over USB**
 (`esphome run config.yaml`) after enabling the package, then OTA works as before.
+
+That first USB flash ships the bootloader, the partition table, `otadata`,
+`phy_init` and the app as a *single* merged `firmware.bin` written at offset
+`0x0`, and esptool erases exactly the sectors that image covers - nothing else:
+
+```
+Flash will be erased from 0x00000000 to 0x00106fff...   # the app ends at 0x106898
+Wrote 1075392 bytes (705124 compressed) at 0x00000000
+```
+
+So it does **not** erase the new region: the erase stops 2.5 MB short of it
+(`0x279000` bytes below `littlefs` at `0x380000`). The unused tail of the app
+slot is not erased either - that range follows the *image*, not the 1.5 MB slot.
+The flash itself shows the split: the partitions inside the written range take
+the new table (`otadata` at `0x9000`, and the boot log says `Set actual ota_seq=1
+in otadata[0]`), while the bytes at `0x380000` are simply the old ones. On a
+board that already ran the *older* layout the 512 KB are therefore not empty:
+the old table ended `app1` at `0x390000` and put `nvs` exactly there, so both lie
+inside today's `littlefs` (`0x380000` - `0x400000`). A partition that is not all
+`0xFF` is never formatted (a filesystem that holds data is never overwritten -
+see the symptoms below), so the mount fails on *every* boot although the
+firmware is correct:
+
+```
+[E][tsdb]: history is NOT available: setup failed at mounting the LittleFS partition (writing stays disabled)
+[E][tsdb]:   partition 'littlefs': NOT blank (data present)
+[E][tsdb]:     nothing was formatted: a partition that is not all 0xFF is never overwritten, so erase it once over USB ...
+```
+
+Erase just that region **once** - it only holds dead data of the old table - and
+reboot: the next boot finds a blank partition and formats it.
+
+```
+# BOOT held while the connection is made, then:
+python -m esptool --chip esp32 --port COM9 --before no-reset --after hard-reset erase-region 0x380000 0x80000
+```
+
+[`../tools/tsdb_partition_fix.py`](../tools/tsdb_partition_fix.py) wraps that
+command: it reads the region and reports the non-`0xFF` bytes per 4 KB block
+first (a read-only pass), refuses to erase a range that holds a real LittleFS -
+so a working history cannot be lost by accident - and reads the range back after
+the erase.
+
+The live `nvs` (`0x310000` - `0x380000`: Wi-Fi credentials, API keys) and both
+app slots are outside that range, so a targeted erase keeps them - unlike an
+`erase-flash`, which costs the credentials and a full re-flash.
 
 ## Capacity and retention
 
@@ -122,7 +168,7 @@ the flash size.
 A bigger `max_file_size` needs a bigger `partition_size`: the partition has to
 hold the file plus `min_free_bytes`, and every KB of it is taken out of **both**
 OTA slots. On this 4 MB flash, with the firmware the history package produces
-(1 007 371 bytes):
+(1 009 743 bytes):
 
 | `partition_size` | Each OTA slot | Firmware share | Verdict |
 |---|---|---|---|
@@ -145,46 +191,55 @@ CSV-dump/mount fixes and logging the two ratios cost +212 B / +8 B; selecting th
 dump window by time instead of walking the history added +192 B of flash and no
 RAM at all; dropping the two ratio columns again - a column is runtime config, it
 costs no flash - and adding the `recreate_on_schema_change` recovery path came out
-at 1 006 819 B (that build's `tsdb.cpp.obj` grew by 188 B). The current build is
-1 007 371 B: the correction of the five review findings costs +552 B of flash -
-the stored-schema probe (`read_stored_columns()` and `tsdbmath::stored_columns()`,
+at 1 006 819 B (that build's `tsdb.cpp.obj` grew by 188 B). The build that
+corrected the five review findings came to 1 007 371 B (+552 B of flash: the
+stored-schema probe (`read_stored_columns()` and `tsdbmath::stored_columns()`,
 which reads the file's own header *before* anything is deleted), the dump's
 count/skip pass that now aborts instead of printing old rows as the newest ones and
-the one-shot widening of a short dump window - with no RAM or IRAM change at all:
+the one-shot widening of a short dump window - with no RAM or IRAM change at all).
+The current build is 1 009 743 B (2026-10-02): the setup-failure diagnostics - the
+mount error, the format result and whether the partition held data at all - cost
++2 372 B of flash and +32 B of static DRAM (`.bss`), the same IRAM:
 
 | Memory | Used | Total | Free |
 |---|---|---|---|
-| Flash (image) | 1 007 371 B (64.0 %) | app slot 1 572 864 B | 565 493 B (36 %) |
+| Flash (image) | 1 009 743 B (64.2 %) | app slot 1 572 864 B | 562 121 B (36 %) |
 | IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
-| DRAM (static) | 53 700 B (29.7 %) | 180 736 B | 127 036 B |
+| DRAM (static) | 53 732 B (29.7 %) | 180 736 B | 127 004 B |
 
 (The per-update `INFO` value line of the two gas components, `log_ppm:`, added
 +176 B of flash and +16 B of static DRAM to the build that came before it.)
 
-The history itself, object by object (`esp_idf_size --files`):
+The history itself, object by object (`esp_idf_size --files`, 2026-10-02):
 
 | Object | Flash |
 |---|---|
 | LittleFS - `lfs.c` 17 322, `esp_littlefs.c` 6 466, `littlefs_esp_part.c` 213 | 24 001 B |
-| esp_tsdb - `tsdb_core` 5 363, `tsdb_query` 1 714, `tsdb_write` 1 511, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 342 B |
-| `tsdb.cpp` (this component) | 5 849 B |
+| esp_tsdb - `tsdb_core` 5 367, `tsdb_query` 1 706, `tsdb_write` 1 519, `tsdb_buffer` 559, `tsdb_migrate` 195 | 9 346 B |
+| `tsdb.cpp` (this component) | 6 721 B |
 | VFS directory support (`require_vfs_dir()`, part of `vfs.c`) | ~500 B |
 | the entities and automations of `packages/tsdb.yaml` | ~1 000 B |
-| **total** | **~40 KB** |
+| **total** | **~41 KB** |
 
-Static RAM is 53 700 B (29.7 %) - `.bss` 36 456, `.data` 17 084 and 160 B of
-`noinit`. Against the pre-history build that is +2 088 B (`.bss` +1 960, `.data`
-+128), 8 B more than the 2026-09-25 measurement. A column is not a static at all:
+Static RAM is 53 732 B (29.7 %) - `.bss` 36 488, `.data` 17 084 and 160 B of
+`noinit`. Against the pre-history build that is +2 120 B (`.bss` +1 992, `.data`
++128), 40 B more than the 2026-09-25 measurement. A column is not a static at all:
 the four columns are entries of the heap-allocated `columns_` vector, and the
-component object itself is still 700 B of `.bss` - which is also why the four
-columns (instead of six) and the one `bool` of `recreate_on_schema_change_` did
-not move a single byte of this table. IRAM does not move either. While the
+component object itself holds no table of its own - ESPHome places the instance in
+the generated `main.cpp` (`alignas(tsdb::TsdbComponent) static unsigned char
+tsdb__history__pstorage[sizeof(tsdb::TsdbComponent)]`), not in `tsdb.cpp.obj`. That
+is why the four columns (instead of six) and the one `bool` of
+`recreate_on_schema_change_` did not move a byte of this table, and the four
+diagnostics members of the failure block (one `const char *`, two `esp_err_t` and
+the `bool` of `format_attempted_`) are the only statics this change adds - the
+`.bss` delta above. IRAM does not move
+either. While the
 database is mounted roughly **6 - 7 KB of heap** are in use (4 KB buffer pool, the
 LittleFS block caches, the esp_tsdb handle with its header copy and mutex);
 `buffer_pool_size` and `min_free_bytes` are the knobs.
 
 Reading the two size reports: before the history package the image was
-904 299 B, now 1 007 371 B (+103 072 B, ~40 KB of it the feature's own code). The
+904 299 B, now 1 009 743 B (+105 444 B, ~40 KB of it the feature's own code). The
 remainder sits in objects of the base configuration that this change does not
 touch - the current image carries `esp_timer_impl_lac.c.obj` with 91 777 B of
 `.rodata` (the time/newlib data of the `time:`/SNTP support) and the Wi-Fi and
@@ -303,9 +358,10 @@ grow by one per write interval until the ring buffer is full.
 | Symptom | Cause and what to do |
 |---|---|
 | `no valid time yet - no record is written` in the log, `records` stays 0 | Wi-Fi/SNTP is down, so the clock is still at the boot counter. Expected offline: the history - and the outage coverage it is meant to provide - starts with the first SNTP sync after power-up, so a board that boots without a network writes nothing until then. Only for a permanently offline board: `require_time: false` (the timestamps then only order the rows, they are not real dates) or a local RTC. |
-| `records` is 0 although the clock is valid | The database could not be opened. The component marks itself failed and stops writing rather than pretend; the `history is NOT available: setup failed at <stage>` block that follows names the step (the configuration, mounting the partition or opening the database), the partition geometry, the state of the file and the free heap - look for the matching `esp_tsdb` / `mounting 'littlefs' ... failed` line next to it. |
+| `records` is 0 although the clock is valid | The database could not be opened. The component marks itself failed and stops writing rather than pretend; the `history is NOT available: setup failed at <stage>` block that follows names the step (the configuration, mounting the partition or opening the database), the partition geometry, the state of the file and the free heap - look for the matching `esp_tsdb` / `mounting 'littlefs' ... failed` line next to it, and, when the stage is the mount, for the `mount:` / `NOT blank (data present)` lines that follow. |
 | `history is NOT available: setup failed at ...` followed by `partition` / `mounted` / `file` / `config` / `heap` lines | The component could not bring the history up: no `columns:`, a mount failure or an esp_tsdb open failure | read the block top to bottom - `NOT FOUND` means the partition table was not (re-)flashed over USB, `NOT mounted` a filesystem/LittleFS problem, and a `file present` with a `stored schema` that matches `columns` points at the heap (the engine allocates its buffer pool *before* it opens the file): compare `heap` against `buffer pool` and try `paged_allocation: true`. |
 | `no data/littlefs partition labelled 'littlefs'` after an update | The partition table was not flashed - OTA does not move partitions. Flash once over USB. |
+| `partition 'littlefs': NOT blank (data present)` + `nothing was formatted ...` next to `setup failed at mounting the LittleFS partition` | The region holds bytes that are not a LittleFS that mounts, and it was **not** formatted - a partition that holds data is never overwritten, that is deliberate. This is what the *previous* layout leaves behind: its `nvs` sat at `0x390000`, inside today's `littlefs` (`0x380000` - `0x400000`), and neither OTA nor `esphome run` erases there - the USB re-flash erases only the merged image it writes (`0x0` - `0x107000`), which is why re-flashing never helps. Erase the region once over USB (`python -m esptool --chip esp32 --port COM9 erase-region 0x380000 0x80000`, BOOT held) and reboot - the first boot then formats it; the live `nvs` at `0x310000` and both app slots stay untouched. |
 | `partition 'littlefs' is unformatted - formatting it (first boot)` | Normal on the first boot after adding the package (or after a full flash erase). The partition is only formatted when *every* byte is `0xFF`: a database that holds data but fails to mount (or whose first block happens to be erased) is never overwritten. The history starts empty. |
 | `X has no value - record dropped (N dropped so far)` | That entity published `unknown`/NaN: a pending calibration, a heater warm-up or a broken sensor. Rows are missing for as long as it lasts - that is the intended `on_missing: skip` behaviour. |
 | `capacity is capped early when ... drops below ... bytes` | The free-space guard fired: the partition is nearly full. Raise `partition_size` (and `max_file_size`), or let the ring buffer overwrite. |

@@ -203,7 +203,11 @@ so it stops writing instead of pretending:
 
 ```
 [E][tsdb]: history is NOT available: setup failed at mounting the LittleFS partition (writing stays disabled)
-[E][tsdb]:   partition 'littlefs': at 0x00310000, 524288 bytes (configured 524288 bytes)
+[E][tsdb]:   partition 'littlefs': at 0x00380000, 524288 bytes (configured 524288 bytes)
+[E][tsdb]:   mount: esp_vfs_littlefs_register() -> ESP_FAIL (-1)
+[E][tsdb]:     format_on_first_boot 1, format attempted 0 (ESP_OK (0))
+[E][tsdb]:   partition 'littlefs': NOT blank (data present)
+[E][tsdb]:     nothing was formatted: a partition that is not all 0xFF is never overwritten, so erase it once over USB (esptool erase-region 0x00380000 0x80000) if it holds leftovers of an older partition table
 [E][tsdb]:   /littlefs: NOT mounted
 [E][tsdb]:   /littlefs/history.tsdb: missing
 [E][tsdb]:   config: max file 393216 bytes, index stride 380, buffer pool 4096 bytes (paged: 0), memory mode 0, page size 2048, min free 32768 bytes
@@ -219,6 +223,25 @@ to the configured one; and the `heap` line is the one to look at when everything
 else is healthy - esp_tsdb allocates its buffer pool before it opens the file, so
 a fragmented heap fails the open with no filesystem error at all (compare it with
 `buffer pool` and try `paged_allocation: true`).
+
+The three `mount` lines are what turns the failed mount into a decision. The
+error the component logs is always the same (`ESP_FAIL`: the LittleFS VFS
+component re-maps every failure of its own), so the line only reports the code
+that was returned - `mount_error_` keeps the one the register call really
+produced, and the format state says whether anything was tried at all:
+
+* `NOT blank (data present)` with `format attempted 0` - the partition holds
+  bytes that are not a LittleFS that mounts, and it was left alone **on
+  purpose**: only a partition whose every byte is `0xFF` is ever formatted, and
+  it is not blank. Leftovers of an *older* partition table are the usual cause
+  (the old layout put `nvs` where `littlefs` is now, and neither OTA nor
+  `esphome run` erases there): erase the region once over USB
+  (`esptool erase-region 0x380000 0x80000`) and reboot - the first boot then
+  formats it. Nothing else in this block can explain that state, which is why it
+  is worth checking first.
+* `all 0xFF (blank)` with `format attempted 1` - the format was tried and cannot
+  be followed by a mount: the partition is fine, the flash (or the partition
+  table of the running image) is the suspect, not the filesystem.
 
 ## Credits and licence
 
