@@ -17,15 +17,18 @@ Optional extras ported from https://github.com/abcdaaaaaaaaa/MQDataScience:
 
 * ``correction_mode: mqdatascience`` compensates the RS/R0 ratio for the
   ambient temperature and humidity (``temperature:``/``humidity:`` sensor ids).
-* ``curve: mqdatascience`` selects their ``a`` / ``b`` coefficient dataset
-  instead of the SolderedElectronics/MQUnifiedsensor one.
+* ``curve: mqdatascience`` selects their ``coefficient_a`` / ``coefficient_b``
+  dataset instead of the SolderedElectronics/MQUnifiedsensor one.
 """
 
 import esphome.codegen as cg
 from esphome.components import sensor
 
-CODEOWNERS = ["@nl"]
-AUTO_LOAD = ["sensor", "voltage_sampler"]
+CODEOWNERS = ["@nliaudat"]
+
+# No ``AUTO_LOAD`` here: for a platform component ESPHome processes the list of the
+# platform module, and ``sensor.py`` declares ``sensor``, ``voltage_sampler`` and
+# ``adc`` (the last one for the internal ADC sensor of a ``pin:`` configuration).
 
 mq_gas_sensors_ns = cg.esphome_ns.namespace("mq_gas_sensors")
 
@@ -40,7 +43,6 @@ MQGasSensor = mq_gas_sensors_ns.class_(
 CONF_SENSOR_TYPE = "sensor_type"
 CONF_GAS = "gas"
 CONF_VOLTAGE_MULTIPLIER = "voltage_multiplier"
-CONF_DIVIDER = "divider"
 CONF_R1 = "r1"
 CONF_R2 = "r2"
 CONF_ADC_INPUT_MAX = "adc_input_max"
@@ -50,14 +52,13 @@ CONF_ADC_SAMPLES = "adc_samples"
 CONF_RL = "rl"
 CONF_R0 = "r0"
 CONF_VCC = "vcc"
-CONF_A = "a"
-CONF_B = "b"
+CONF_COEFFICIENT_A = "coefficient_a"
+CONF_COEFFICIENT_B = "coefficient_b"
 CONF_REGRESSION_METHOD = "regression_method"
 CONF_RATIO_MODE = "ratio_mode"
 CONF_RATIO_IN_CLEAN_AIR = "ratio_in_clean_air"
-CONF_SAMPLES = "samples"
+CONF_SAMPLE_COUNT = "sample_count"
 CONF_SAMPLE_INTERVAL = "sample_interval"
-CONF_WARMUP_TIME = "warmup_time"
 CONF_MIN_PPM = "min_ppm"
 CONF_MAX_PPM = "max_ppm"
 CONF_CORRECTION_FACTOR = "correction_factor"
@@ -65,13 +66,11 @@ CONF_CORRECTION_MODE = "correction_mode"
 CONF_CORRECTION_CLAMP = "correction_clamp"
 CONF_CORRECTION_SENSOR = "correction_sensor"
 CONF_CURVE = "curve"
-CONF_HUMIDITY = "humidity"
 CONF_LOG_SENSOR = "log_sensor"
 CONF_LOG_PPM = "log_ppm"
 CONF_PERSIST = "persist"
 CONF_RATIO_SENSOR = "ratio_sensor"
 CONF_RS_SENSOR = "rs_sensor"
-CONF_TEMPERATURE = "temperature"
 CONF_VOLTAGE_SENSOR = "voltage_sensor"
 
 # MQUnifiedsensor::setRegressionMethod() values plus the MQDataScience inverse

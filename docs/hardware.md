@@ -141,7 +141,7 @@ sensor A0 ──[ R3 / R5 = 10 kΩ ]──┬── ADC-n ──> left socket (S
   20 kΩ to ground" recommendation of the guides - a stock board needs no YAML
   change for the divider.
 * C1/C2 filter the divider node (source impedance 10 k ∥ 20 k = 6.7 kΩ → ~0.7 ms),
-  which is why the default sampling of the packages (`samples:`/`sample_count:`, `sample_interval:`)
+  which is why the default sampling of the packages (`sample_count:`, `sample_interval:`)
   can stay as it is.
 * 3.33 V is a hair above the 3.3 V "recommended maximum" of the ESP32 ADC, so the
   very top of the range can clip - both packages declare `adc_input_max: 3.33` for

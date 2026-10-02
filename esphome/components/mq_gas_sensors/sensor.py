@@ -16,13 +16,17 @@ from esphome.const import (
     CONF_CALIBRATION,
     CONF_DELAY,
     CONF_DURATION,
+    CONF_HUMIDITY,
     CONF_ID,
     CONF_INTERNAL,
     CONF_NAME,
     CONF_PIN,
     CONF_RAW,
+    CONF_TEMPERATURE,
     CONF_UPDATE_INTERVAL,
     CONF_VOLTAGE,
+    CONF_VOLTAGE_DIVIDER,
+    CONF_WARMUP_TIME,
     STATE_CLASS_MEASUREMENT,
     UNIT_PARTS_PER_MILLION,
 )
@@ -30,20 +34,18 @@ from esphome.types import ConfigType
 
 from . import (
     ADC_LIMIT_MARGIN_V,
-    CONF_A,
     CONF_ADC_ATTENUATION,
     CONF_ADC_INPUT_MAX,
     CONF_ADC_PIN_MAX,
     CONF_ADC_SAMPLES,
-    CONF_B,
+    CONF_COEFFICIENT_A,
+    CONF_COEFFICIENT_B,
     CONF_CORRECTION_CLAMP,
     CONF_CORRECTION_FACTOR,
     CONF_CORRECTION_MODE,
     CONF_CORRECTION_SENSOR,
     CONF_CURVE,
-    CONF_DIVIDER,
     CONF_GAS,
-    CONF_HUMIDITY,
     CONF_LOG_PPM,
     CONF_LOG_SENSOR,
     CONF_MAX_PPM,
@@ -58,14 +60,12 @@ from . import (
     CONF_REGRESSION_METHOD,
     CONF_RL,
     CONF_RS_SENSOR,
+    CONF_SAMPLE_COUNT,
     CONF_SAMPLE_INTERVAL,
-    CONF_SAMPLES,
     CONF_SENSOR_TYPE,
-    CONF_TEMPERATURE,
     CONF_VCC,
     CONF_VOLTAGE_MULTIPLIER,
     CONF_VOLTAGE_SENSOR,
-    CONF_WARMUP_TIME,
     CORRECTION_CLAMPS,
     CORRECTION_MODES,
     ESP32_ADC_INPUT_MAX_V,
@@ -155,13 +155,13 @@ DIVIDER_SCHEMA = cv.Schema(
 def _voltage_multiplier(config: ConfigType) -> float:
     """Inverse of the divider ratio, derived from the wiring if possible.
 
-    ``divider: {r1: 10.0, r2: 20.0}`` (kOhm, r1 in series with the sensor output,
-    r2 to ground) documents the hardware and yields ``(r1 + r2) / r2`` = 1.5 for the
-    recommended 10k/20k.  ``voltage_multiplier:`` stays available as the low-level
-    escape hatch; it also covers a directly connected sensor (1.0) or a sampler
-    with a wider input range, e.g. an ADS1115.
+    ``voltage_divider: {r1: 10.0, r2: 20.0}`` (kOhm, r1 in series with the sensor
+    output, r2 to ground) documents the hardware and yields ``(r1 + r2) / r2`` =
+    1.5 for the recommended 10k/20k.  ``voltage_multiplier:`` stays available as
+    the low-level escape hatch; it also covers a directly connected sensor (1.0) or
+    a sampler with a wider input range, e.g. an ADS1115.
     """
-    divider = config.get(CONF_DIVIDER)
+    divider = config.get(CONF_VOLTAGE_DIVIDER)
     if divider is not None:
         return (divider[CONF_R1] + divider[CONF_R2]) / divider[CONF_R2]
     return float(config.get(CONF_VOLTAGE_MULTIPLIER, 1.0))
@@ -172,7 +172,7 @@ CALIBRATION_SCHEMA = cv.Schema(
         cv.Optional(CONF_RATIO_IN_CLEAN_AIR): cv.positive_not_null_float,
         cv.Optional(CONF_DELAY, default="60s"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_DURATION, default="0s"): cv.positive_time_period_milliseconds,
-        cv.Optional(CONF_SAMPLES, default=50): cv.int_range(min=1, max=1000),
+        cv.Optional(CONF_SAMPLE_COUNT, default=50): cv.int_range(min=1, max=1000),
         cv.Optional(CONF_PERSIST, default=True): cv.boolean,
     }
 )
@@ -193,8 +193,8 @@ def _validate_config(config: ConfigType) -> ConfigType:
         resolved = resolve_sensor(
             type_key,
             config.get(CONF_GAS),
-            a=config.get(CONF_A),
-            b=config.get(CONF_B),
+            a=config.get(CONF_COEFFICIENT_A),
+            b=config.get(CONF_COEFFICIENT_B),
             method=config.get(CONF_REGRESSION_METHOD),
             ratio_in_clean_air=config.get(CONF_RATIO_IN_CLEAN_AIR),
             rl=config.get(CONF_RL),
@@ -278,7 +278,8 @@ def _validate_config(config: ConfigType) -> ConfigType:
 
     if resolved.curve != CURVE_STANDARD:
         _LOGGER.info(
-            "%s %s: coefficient dataset '%s' selected (a=%s, b=%s, method=%s) - "
+            "%s %s: coefficient dataset '%s' selected (coefficient_a=%s, "
+            "coefficient_b=%s, method=%s) - "
             "the published PPM values differ from the '%s' dataset",
             label,
             resolved.gas,
@@ -309,14 +310,15 @@ def _validate_config(config: ConfigType) -> ConfigType:
     if requires_coefficients(type_key):
         _LOGGER.warning(
             "%s has no built-in coefficients in the reference library - make sure the "
-            "'a:'/'b:' values you supplied match your sensor and target gas",
+            "'coefficient_a:'/'coefficient_b:' values you supplied match your sensor "
+            "and target gas",
             label,
         )
 
-    if CONF_DIVIDER in config and CONF_VOLTAGE_MULTIPLIER in config:
+    if CONF_VOLTAGE_DIVIDER in config and CONF_VOLTAGE_MULTIPLIER in config:
         raise cv.Invalid(
-            "use either 'divider:' or 'voltage_multiplier:', not both - "
-            "'divider:' already derives the multiplier from r1/r2"
+            "use either 'voltage_divider:' or 'voltage_multiplier:', not both - "
+            "'voltage_divider:' already derives the multiplier from r1/r2"
         )
 
     # ADC range guard: the sensor output can reach VCC and the divider maps that
@@ -332,7 +334,7 @@ def _validate_config(config: ConfigType) -> ConfigType:
                 f"the sensor output can reach {resolved.vcc:.2f} V and the configured "
                 f"divider maps that to {expected_max:.2f} V on the ADC pin, above "
                 f"'adc_pin_max' ({pin_max:.2f} V) - that can damage the pin. Use "
-                f"'divider: {{r1: 10.0, r2: 20.0}}' (-> 1.5) or "
+                f"'voltage_divider: {{r1: 10.0, r2: 20.0}}' (-> 1.5) or "
                 f"'{{r1: 10.0, r2: 10.0}}' (-> 2.0), or set 'adc_pin_max' to your "
                 f"sampler's limit (6.144 for an ADS1115)"
             )
@@ -373,14 +375,14 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_ADC_SAMPLES, default=1): cv.int_range(min=1, max=255),
             cv.Optional(CONF_VOLTAGE_MULTIPLIER): cv.positive_not_null_float,
-            cv.Optional(CONF_DIVIDER): DIVIDER_SCHEMA,
+            cv.Optional(CONF_VOLTAGE_DIVIDER): DIVIDER_SCHEMA,
             cv.Optional(CONF_ADC_INPUT_MAX): cv.positive_not_null_float,
             cv.Optional(CONF_ADC_PIN_MAX): cv.positive_not_null_float,
             cv.Optional(CONF_VCC, default=5.0): cv.positive_not_null_float,
             cv.Optional(CONF_RL, default=10.0): cv.positive_not_null_float,
             cv.Optional(CONF_R0): cv.positive_not_null_float,
-            cv.Optional(CONF_A): cv.float_,
-            cv.Optional(CONF_B): cv.float_,
+            cv.Optional(CONF_COEFFICIENT_A): cv.float_,
+            cv.Optional(CONF_COEFFICIENT_B): cv.float_,
             cv.Optional(CONF_REGRESSION_METHOD): cv.one_of(
                 *REGRESSION_METHODS, lower=True
             ),
@@ -388,7 +390,7 @@ CONFIG_SCHEMA = cv.All(
                 *RATIO_MODES, lower=True
             ),
             cv.Optional(CONF_RATIO_IN_CLEAN_AIR): cv.positive_not_null_float,
-            cv.Optional(CONF_SAMPLES, default=2): cv.int_range(min=1, max=255),
+            cv.Optional(CONF_SAMPLE_COUNT, default=2): cv.int_range(min=1, max=255),
             cv.Optional(
                 CONF_SAMPLE_INTERVAL, default="20ms"
             ): cv.positive_time_period_milliseconds,
@@ -447,8 +449,8 @@ async def to_code(config: ConfigType) -> None:
     resolved = resolve_sensor(
         config[CONF_SENSOR_TYPE],
         config.get(CONF_GAS),
-        a=config.get(CONF_A),
-        b=config.get(CONF_B),
+        a=config.get(CONF_COEFFICIENT_A),
+        b=config.get(CONF_COEFFICIENT_B),
         method=config.get(CONF_REGRESSION_METHOD),
         ratio_in_clean_air=config.get(CONF_RATIO_IN_CLEAN_AIR),
         rl=config.get(CONF_RL),
@@ -478,7 +480,7 @@ async def to_code(config: ConfigType) -> None:
     cg.add(var.set_min_ppm(resolved.min_ppm))
     cg.add(var.set_max_ppm(resolved.max_ppm))
     cg.add(var.set_voltage_multiplier(_voltage_multiplier(config)))
-    cg.add(var.set_samples(config[CONF_SAMPLES]))
+    cg.add(var.set_samples(config[CONF_SAMPLE_COUNT]))
     cg.add(var.set_sample_interval(config[CONF_SAMPLE_INTERVAL]))
     cg.add(var.set_warmup_time(config[CONF_WARMUP_TIME]))
     cg.add(var.set_correction_factor(config[CONF_CORRECTION_FACTOR]))
@@ -508,7 +510,7 @@ async def to_code(config: ConfigType) -> None:
                 ratio_in_clean_air,
                 calibration[CONF_DELAY],
                 calibration[CONF_DURATION],
-                calibration[CONF_SAMPLES],
+                calibration[CONF_SAMPLE_COUNT],
                 calibration[CONF_PERSIST],
             )
         )
@@ -531,8 +533,8 @@ async def to_code(config: ConfigType) -> None:
             cg.add(setter(await cg.get_variable(target)))
 
     _LOGGER.debug(
-        "%s %s: a=%s b=%s method=%s curve=%s ratio_in_clean_air=%s rl=%s vcc=%s "
-        "range=%s..%s ppm correction=%s",
+        "%s %s: coefficient_a=%s coefficient_b=%s method=%s curve=%s "
+        "ratio_in_clean_air=%s rl=%s vcc=%s range=%s..%s ppm correction=%s",
         resolved.label,
         resolved.gas,
         resolved.a,

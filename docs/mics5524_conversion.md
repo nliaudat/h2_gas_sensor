@@ -85,7 +85,8 @@ Only CO ships with coefficients, taken from the Home Assistant community thread
 How good is a two-point fit? Checked by the host test: it returns 13.5 ppm at
 RS/R0 = 0.5 (the datasheet point is 10 ppm) and 998.5 ppm at 0.01 (datasheet:
 1000 ppm) - a few tens of percent in the low decade, which is well inside the
-sensor's own spread. For every other gas supply your own `a:`/`b:` derived with
+sensor's own spread. For every other gas supply your own
+`coefficient_a:`/`coefficient_b:` derived with
 the two-point recipe.
 
 The same thread's later posts (11) propose fits of the form

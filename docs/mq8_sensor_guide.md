@@ -30,11 +30,11 @@ AO ──[ 10k ]──┬──> GPIO34 (ADC1_CH6)
               │
             [ 20k ]
               │
-             GND          ratio = 20/(10+20) = 2/3  ->  divider: {r1: 10.0, r2: 20.0}
+             GND          ratio = 20/(10+20) = 2/3  ->  voltage_divider: {r1: 10.0, r2: 20.0}
 ```
 
 * Use an **ADC1** pin (GPIO32…GPIO39). ADC2 is unusable while Wi-Fi is active.
-* `divider: {r1, r2}` (kOhm) is the documented way and derives
+* `voltage_divider: {r1, r2}` (kOhm) is the documented way and derives
   `voltage_multiplier = (r1 + r2) / r2` = **1.5** for 10k/20k; the raw
   `voltage_multiplier` key stays available (1.0 for an ADS1115 or a directly
   connected 3.3 V sensor).
@@ -73,7 +73,7 @@ RS = (VCC × RL) / V_AO − RL
    calibration:
      ratio_in_clean_air: 70   # RS/R0 in clean air, MQ-8 datasheet
      delay: 5min              # wait for boot + heater stabilisation
-     samples: 50
+     sample_count: 50
      persist: true            # store R0 in flash, reuse after a reboot
    ```
 
@@ -109,7 +109,7 @@ air is far off 70, the divider ratio or `rl:` is wrong.
 | `R0 unknown`, state stays `unknown` | no `r0:` and no `calibration:`, or the calibration has not run yet |
 | warning `analog output reads 0.0000 V` | AO not connected, module not powered from 5 V, wrong divider |
 | ppm far too low / nearly flat | `rl:` does not match the module, or `voltage_multiplier` is missing |
-| ppm pinned at `max_ppm` (10 000) | wrong `a`/`b` for the gas, or `ratio_mode` mismatch |
+| ppm pinned at `max_ppm` (10 000) | wrong `coefficient_a`/`coefficient_b` for the gas, or `ratio_mode` mismatch |
 | values drift over weeks | normal sensor drift — re-calibrate in clean air |
 | correction factor stuck at 1.0000 | no T/RH sensor is linked (`temperature:`/`humidity:` on the MQ-8 entry), the T/RH sensor has no state yet (see the logs), or `correction_mode: none` was written |
 

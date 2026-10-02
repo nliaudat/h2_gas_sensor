@@ -156,7 +156,7 @@ deliberately and update [`h2_thresholds.md`](h2_thresholds.md) with it.
   `alarm_danger_ppm` below it to see the red/silent state - then put both back.
   Never leave lowered thresholds in a flashed firmware.
 * The LEDs show blue while the MQ-8 has no valid value: that is normal during the
-  warm-up and the first calibration (up to `calibration.delay` + `samples`), and a
+  warm-up and the first calibration (up to `calibration.delay` + `sample_count`), and a
   warning sign afterwards - check the `MQ-8 logs` text sensor and
   [`troubleshooting.md`](troubleshooting.md).
 
