@@ -102,12 +102,12 @@ sensor:
     gas: H2
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    divider:  # 5 V * (20/30) = 3.33 V at the ADC pin
+    voltage_divider:  # 5 V * (20/30) = 3.33 V at the ADC pin
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     # 10k/20k maps the 5 V A0 maximum to 3.33 V, a hair above the ESP32 ADC's
     # 3.3 V recommended maximum: accepted here, the very top of the range may clip.
-    # With an ADS1115 (no divider) remove `divider:`, set `voltage_multiplier: 1.0`
+    # With an ADS1115 (no divider) remove `voltage_divider:`, set `voltage_multiplier: 1.0`
     # and `adc_input_max: 6.144` / `adc_pin_max: 6.144` instead.
     adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
@@ -116,7 +116,7 @@ sensor:
     # polling saves nothing).  The four other gas views below are the same signal
     # and carry their own cadence (`mics_extra_gas_update_interval`).
     update_interval: ${mics_update_interval}
-    samples: 4
+    sample_count: 4
     sample_interval: 20ms
     warmup_time: 3min  # DFRobot's warm-up; use 24h of burn-in for a new sensor
     min_ppm: 0
@@ -130,7 +130,7 @@ sensor:
     #   inverted: true  # LOW enables the module
     calibration:
       delay: 3min  # after boot, in clean air
-      samples: 10  # DFRobot averages 10 samples for the reference
+      sample_count: 10  # DFRobot averages 10 samples for the reference
       persist: true  # store the reference in flash and reuse it after a reboot
     ratio_sensor: ${name}_mics_ratio
     voltage_sensor: ${name}_mics_voltage
@@ -155,13 +155,13 @@ sensor:
     gas: CO
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    divider:
+    voltage_divider:
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
     update_interval: ${mics_extra_gas_update_interval}
-    samples: 4
+    sample_count: 4
     sample_interval: 20ms
     warmup_time: 3min
     min_ppm: 0
@@ -169,7 +169,7 @@ sensor:
     log_ppm: false
     calibration:  # own clean-air reference, persisted once (see the H2 entry)
       delay: 3min
-      samples: 10
+      sample_count: 10
       persist: true
 
   - platform: mics_5524_gas_sensor
@@ -178,13 +178,13 @@ sensor:
     gas: NH3
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    divider:
+    voltage_divider:
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
     update_interval: ${mics_extra_gas_update_interval}
-    samples: 4
+    sample_count: 4
     sample_interval: 20ms
     warmup_time: 3min
     min_ppm: 0
@@ -192,7 +192,7 @@ sensor:
     log_ppm: false
     calibration:
       delay: 3min
-      samples: 10
+      sample_count: 10
       persist: true
 
   - platform: mics_5524_gas_sensor
@@ -201,13 +201,13 @@ sensor:
     gas: C2H5OH
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    divider:
+    voltage_divider:
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
     update_interval: ${mics_extra_gas_update_interval}
-    samples: 4
+    sample_count: 4
     sample_interval: 20ms
     warmup_time: 3min
     min_ppm: 0
@@ -215,7 +215,7 @@ sensor:
     log_ppm: false
     calibration:
       delay: 3min
-      samples: 10
+      sample_count: 10
       persist: true
 
   - platform: mics_5524_gas_sensor
@@ -224,13 +224,13 @@ sensor:
     gas: CH4
     conversion: dfrobot
     voltage: ${name}_mics_adc
-    divider:
+    voltage_divider:
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     adc_input_max: 3.33
     vcc: 5.0
     update_interval: ${mics_extra_gas_update_interval}
-    samples: 4
+    sample_count: 4
     sample_interval: 20ms
     warmup_time: 3min
     min_ppm: 0
@@ -238,7 +238,7 @@ sensor:
     log_ppm: false
     calibration:  # CH4 reports 0 below 1000 ppm - that is the vendor's own floor
       delay: 3min
-      samples: 10
+      sample_count: 10
       persist: true
 
   # Diagnostics (remove if not needed). The ratio is 1.0 in clean air and drops

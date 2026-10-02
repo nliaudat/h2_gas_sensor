@@ -86,7 +86,8 @@ MQ-8 / MiCS-5524 at 5 V
                   |
                 [ 20k ]
                   |
-                 GND            ->  divider: {r1: 10.0, r2: 20.0}  (multiplier 1.5)
+                 GND    ->  divider: {r1: 10.0, r2: 20.0}  (MQ-8, multiplier 1.5)
+                            voltage_divider: {r1: 10.0, r2: 20.0}  (MiCS-5524)
    EN (MiCS-5524 only) -> GPIO4, `inverted: true` (the module is enabled by LOW)
 ```
 

@@ -4,8 +4,7 @@ The MiCS-5524 is the small MEMS multi-gas sensor used as the trace / early-warni
 device of this project (100 - 1000 ppm of H2, i.e. 0.25 - 2.5 % of the LEL), where
 the MQ-8 covers the 4000 - 10000 ppm pre-alarm band.
 
-Two conversion models are available (see ``coefficients.py`` and
-``docs/mics5524_conversion.md``):
+Two conversion models are available (see ``coefficients.py``):
 
 ``conversion: dfrobot`` (default)
     The vendor model of the DFRobot_MICS library (MIT) used by the analog
@@ -25,8 +24,11 @@ which creates a hidden internal ``adc`` sensor for you).
 import esphome.codegen as cg
 from esphome.components import sensor
 
-CODEOWNERS = ["@nl"]
-AUTO_LOAD = ["sensor", "voltage_sampler"]
+CODEOWNERS = ["@nliaudat"]
+
+# No ``AUTO_LOAD`` here: for a platform component ESPHome processes the list of the
+# platform module, and ``sensor.py`` declares ``sensor``, ``voltage_sampler`` and
+# ``adc`` (the last one for the internal ADC sensor of a ``pin:`` configuration).
 
 mics_5524_gas_sensor_ns = cg.esphome_ns.namespace("mics_5524_gas_sensor")
 
@@ -38,12 +40,13 @@ MiCS5524GasSensor = mics_5524_gas_sensor_ns.class_(
 # ---------------------------------------------------------------------------
 # Configuration keys
 # ---------------------------------------------------------------------------
+# The keys shared with other components (`warmup_time`, `enable_pin`,
+# `voltage_divider`) are imported from esphome.const by the platform schema.
 CONF_GAS = "gas"
 CONF_CONVERSION = "conversion"
-CONF_A = "a"
-CONF_B = "b"
+CONF_COEFFICIENT_A = "coefficient_a"
+CONF_COEFFICIENT_B = "coefficient_b"
 CONF_VOLTAGE_MULTIPLIER = "voltage_multiplier"
-CONF_DIVIDER = "divider"
 CONF_R1 = "r1"
 CONF_R2 = "r2"
 CONF_ADC_INPUT_MAX = "adc_input_max"
@@ -54,12 +57,10 @@ CONF_VCC = "vcc"
 CONF_RL = "rl"
 CONF_R0 = "r0"
 CONF_AIR_REFERENCE = "air_reference"
-CONF_SAMPLES = "samples"
+CONF_SAMPLE_COUNT = "sample_count"
 CONF_SAMPLE_INTERVAL = "sample_interval"
-CONF_WARMUP_TIME = "warmup_time"
 CONF_MIN_PPM = "min_ppm"
 CONF_MAX_PPM = "max_ppm"
-CONF_ENABLE_PIN = "enable_pin"
 CONF_LOG_SENSOR = "log_sensor"
 CONF_LOG_PPM = "log_ppm"
 CONF_PERSIST = "persist"

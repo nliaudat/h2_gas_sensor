@@ -3,7 +3,7 @@
 // Pure math of the MiCS-5524 gas sensor models.
 //
 // Two conversion models are implemented, because the published references use
-// two different ones (see docs/mics5524_conversion.md):
+// two different ones (see `coefficients.py` for the per-gas constants):
 //
 // 1) "dfrobot" - the vendor model of the DFRobot_MICS library (MIT), used by the
 //    DFRobot/Fermion analog breakout and by the makerguides tutorial:
@@ -23,7 +23,8 @@
 //        ppm   = a * ratio^b
 //
 // This header is intentionally free of ESPHome / ESP-IDF dependencies so the very
-// same code can be unit tested on the host (esphome/tests/mics_math_test.cpp).
+// same code can be unit tested on the host
+// (esphome/tests/mics_math_test.cpp).
 //
 
 #include <cfloat>
@@ -32,10 +33,10 @@
 
 namespace esphome::mics_5524_gas_sensor::micsmath {
 
-/// Conversion model, mirrors `CONVERSIONS` in `__init__.py`.
+/// Conversion model, mirrors `CONVERSION_MODELS` in `__init__.py`.
 enum ConversionModel : uint8_t {
-  CONVERSION_DFROBOT = 0,    ///< vendor model of DFRobot_MICS (analog breakout)
-  CONVERSION_DATASHEET = 1,  ///< RS/R0 power law fitted on the datasheet curve
+  CONVERSION_MODEL_DFROBOT = 0,    ///< vendor model of DFRobot_MICS (analog breakout)
+  CONVERSION_MODEL_DATASHEET = 1,  ///< RS/R0 power law fitted on the datasheet curve
 };
 
 /// Per-gas constants of the vendor model, see `coefficients.py` for the table.
