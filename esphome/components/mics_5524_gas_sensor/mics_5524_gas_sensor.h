@@ -3,12 +3,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/preferences.h"
+#include "esphome/core/string_ref.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/voltage_sampler/voltage_sampler.h"
@@ -31,10 +31,12 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   void loop() override;
   void update() override;
   void dump_config() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
 
   // ------------------------------------------------------------------ config
-  void set_gas(const std::string &gas) { this->gas_ = gas; }
+  /// Name of the gas this channel reports (e.g. `'H2'`).  Code generation passes a
+  /// literal that lives in flash for the life of the program, so it is kept as a
+  /// view instead of copied onto the heap.
+  void set_gas(const char *gas) { this->gas_ = StringRef(gas); }
   void set_conversion(uint8_t conversion) { this->conversion_ = conversion; }
   void set_threshold(float threshold) { this->threshold_ = threshold; }
   void set_gain(float gain) { this->gain_ = gain; }
@@ -65,20 +67,20 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   void set_log_ppm(bool log_ppm) { this->log_ppm_ = log_ppm; }
 
   /// Console level of a `log_message_()` call.  The order mirrors the verbosity
-  /// of ESP-IDF's `esp_log_level_t`: `LOG_ERROR` is always printed, `LOG_DEBUG`
+  /// of ESP-IDF's `esp_log_level_t`: `LOG_LEVEL_ERROR` is always printed, `LOG_LEVEL_DEBUG`
   /// only with `logger: level: DEBUG`.  The message is mirrored to `log_sensor:`
   /// either way, so the measurement chain stays readable from Home Assistant.
   enum LogLevel : uint8_t {
-    LOG_DEBUG = 0,
-    LOG_INFO = 1,
-    LOG_WARN = 2,
-    LOG_ERROR = 3,
+    LOG_LEVEL_DEBUG = 0,
+    LOG_LEVEL_INFO = 1,
+    LOG_LEVEL_WARN = 2,
+    LOG_LEVEL_ERROR = 3,
   };
 
   /// Size of the message buffer of `log_message_()` (also the text sensor limit).
   static constexpr size_t LOG_BUFFER_SIZE = 160;
 
-  /// Minimum interval between two *per-update* (`LOG_DEBUG`) messages mirrored to
+  /// Minimum interval between two *per-update* (`LOG_LEVEL_DEBUG`) messages mirrored to
   /// `log_sensor_`.  The sensor may poll at 1 Hz, and a text state per second would
   /// flood the Home Assistant recorder - calibration messages, warnings and errors
   /// are always mirrored immediately (the console log is never throttled).
@@ -97,8 +99,9 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   float get_sensor_voltage() const { return this->sensor_voltage_; }
 
  protected:
-  bool is_vendor_model_() const { return this->conversion_ == micsmath::CONVERSION_DFROBOT; }
-  /// Averaged, scaled analog output voltage of the sensor (V).
+  bool is_vendor_model_() const { return this->conversion_ == micsmath::CONVERSION_MODEL_DFROBOT; }
+  /// Averaged, scaled analog output voltage of the sensor (V).  The `samples_`
+  /// conversions are taken back to back, so the call returns without waiting.
   float sample_voltage_();
   /// Sensor resistance (kOhm) for the datasheet model.
   float current_rs_() const;
@@ -117,20 +120,20 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   bool load_reference_();
   void log_config_();
   /// Log the value published by the next `publish_state()` at `INFO`
-  /// (`'<gas>': <ppm> ppm`), the "normal mode" counterpart of the `LOG_DEBUG`
+  /// (`'<gas>': <ppm> ppm`), the "normal mode" counterpart of the `LOG_LEVEL_DEBUG`
   /// chain in `update()`.  No-op when `log_ppm:` is off or the reading is
   /// invalid; console only - the chain is what reaches `log_sensor_`.
   void log_reading_(float ppm);
   /// Publish a message to `log_sensor_` (no-op when it is not configured);
-  /// `LOG_DEBUG` messages are rate limited to `LOG_SENSOR_DEBUG_INTERVAL_MS`.
+  /// `LOG_LEVEL_DEBUG` messages are rate limited to `LOG_SENSOR_DEBUG_INTERVAL_MS`.
   void publish_log_(LogLevel level, const char *message);
   /// Log a message on the console and mirror it to `log_sensor_`; it is prefixed
   /// with the gas (`'H2': ...`) so several channels stay readable.
   void log_message_(LogLevel level, const char *format, ...);
 
   // ------------------------------------------------------------- configuration
-  std::string gas_{"CUSTOM"};
-  uint8_t conversion_{micsmath::CONVERSION_DFROBOT};
+  StringRef gas_{StringRef::from_lit("CUSTOM")};
+  uint8_t conversion_{micsmath::CONVERSION_MODEL_DFROBOT};
   float threshold_{0.0f};
   float gain_{1.0f};
   float vendor_min_ppm_{0.0f};
@@ -143,6 +146,8 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   float vcc_{5.0f};
   float voltage_multiplier_{1.0f};
   uint8_t samples_{4};
+  /// Minimum spacing between two clean-air calibration samples (ms); a normal
+  /// reading never waits for it.  The ~16 ms main loop tick is the practical floor.
   uint32_t sample_interval_{20};
   uint32_t warmup_time_{0};
   bool log_ppm_{false};  ///< log the published value at INFO on every update (`log_ppm: true`)
@@ -159,7 +164,6 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   bool calibrating_{false};
   bool calibration_pending_{false};
   uint32_t calibration_due_{0};
-  uint32_t calibration_start_{0};
   uint32_t calibration_last_sample_{0};
   uint32_t calibration_count_{0};
   uint32_t calibration_attempts_{0};
@@ -181,7 +185,7 @@ class MiCS5524GasSensor : public sensor::Sensor, public PollingComponent {
   sensor::Sensor *rs_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
   text_sensor::TextSensor *log_sensor_{nullptr};
-  uint32_t last_log_sensor_debug_{0};  ///< `millis()` of the last mirrored DEBUG message
+  uint32_t last_log_sensor_debug_{0};  ///< `App.get_loop_component_start_time()` of the last mirrored DEBUG message
 
   ESPPreferenceObject reference_pref_{};
 };

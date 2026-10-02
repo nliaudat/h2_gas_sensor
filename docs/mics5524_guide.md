@@ -23,13 +23,13 @@ and `EN` (enable, sometimes `PD`).
 ```
 module 5V  -> 5 V (the devkit's 5V pin, ~90 mA during the heater cycle)
 module GND -> GND (same node as the ESP32)
-module A0  -> divider -> ADC1 pin          (or directly into an ADS1115 input)
+module A0  -> voltage_divider -> ADC1 pin  (or directly into an ADS1115 input)
 module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clones)
 ```
 
 * The output swings up to 5 V while the ESP32 ADC stops measuring correctly
   around 3.1-3.3 V with `attenuation: 12db`, so use a divider - **10 kOhm in
-  series / 20 kOhm to ground** (`divider: {r1: 10.0, r2: 20.0}` -> multiplier
+  series / 20 kOhm to ground** (`voltage_divider: {r1: 10.0, r2: 20.0}` -> multiplier
   1.5) maps 5 V to 3.33 V. The vendor model only needs the ratio to be
   *compensated*, not to be a specific value.
 * **The ESP32 ADC pins are not 5 V tolerant** (absolute maximum VDD + 0.3 V =
@@ -62,7 +62,7 @@ module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clo
    (`warmup_time: 24h` suppresses everything during that window).
 3. **Calibration in clean air** (`calibration:`) stores the reference - the
    vendor model's `x_air = VCC - V_AO`, the datasheet model's `R0 = RS`. It runs
-   after `max(delay, warmup_time)`, averages `samples` readings (the vendor library
+   after `max(delay, warmup_time)`, averages `sample_count` readings (the vendor library
    averages 10) and is kept in flash. Pin it later with `air_reference:`/`r0:` to
    skip the calibration at boot.
 4. **A reference is only valid if it was captured with a settled sensor.** The
@@ -89,14 +89,14 @@ module EN  -> GPIO (+ inverted: true)      (LOW = enabled on the Fermion and clo
   community thread translates to ≈ 7 ppm CO - and to an equivalent floor for H2.
   Fuel the module through a divider that keeps the interesting range above that,
   or use an ADS1115.
-* ESP32 ADC readings are noisy: `samples: 4` (default) averages four conversions
-  per update, `samples: 16` is worth trying if your values jitter. A 100 nF
+* ESP32 ADC readings are noisy: `sample_count: 4` (default) averages four conversions
+  per update, `sample_count: 16` is worth trying if your values jitter. A 100 nF
   capacitor from the ADC pin to ground also helps.
 * The shipped package polls the H2 trace entry and its diagnostics every second
   (`mics_update_interval`, `mics_diag_interval`) - the four extra gas views are the
   same signal through other curves, so they carry their own key
   (`mics_extra_gas_update_interval`) and can be slowed down (e.g. `30s`) without
-  touching the alarm entity.  Raise `samples:` if the raw value matters more than
+  touching the alarm entity.  Raise `sample_count:` if the raw value matters more than
   the response time.
 
 ## Role in this project (H2 battery room)

@@ -4,8 +4,9 @@
 #   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin,
 #     automatic calibration in clean air, a `log_sensor:` mirror and the
 #     per-update `INFO` value line (`log_ppm: true`)
-#   * datasheet model (`conversion: datasheet`) with explicit a/b, a fixed r0, a
-#     shared external voltage source and no `log_ppm` (the default `false` keeps
+#   * datasheet model (`conversion: datasheet`) with explicit coefficient_a/
+#     coefficient_b, a fixed r0, a shared external voltage source and no
+#     `log_ppm` (the default `false` keeps
 #     the value line off - like the four extra views of `packages/mics5524.yaml`)
 #   * diagnostics for both models
 esphome:
@@ -37,14 +38,14 @@ sensor:
     adc_attenuation: 12db
     voltage_multiplier: 1.5
     vcc: 5.0
-    samples: 4
+    sample_count: 4
     enable_pin:
       number: GPIO4
       inverted: true
     warmup_time: 3min
     calibration:
       delay: 3min
-      samples: 10
+      sample_count: 10
       persist: false
     ratio_sensor: mics_ratio
     voltage_sensor: mics_voltage
@@ -63,8 +64,8 @@ sensor:
     adc_pin_max: 6.144
     vcc: 5.0
     rl: 10.0
-    a: 6.3
-    b: -1.1
+    coefficient_a: 6.3
+    coefficient_b: -1.1
     r0: 700
     min_ppm: 0
     max_ppm: 1000
@@ -76,7 +77,7 @@ sensor:
     gas: methane  # datasheet alias for CH4
     conversion: dfrobot
     voltage: mics_ao
-    divider:  # 10k/20k -> multiplier 1.5, 3.33 V at the ADC pin
+    voltage_divider:  # 10k/20k -> multiplier 1.5, 3.33 V at the ADC pin
       r1: 10.0
       r2: 20.0
     adc_input_max: 3.33  # accepted trade-off of the 10k/20k divider

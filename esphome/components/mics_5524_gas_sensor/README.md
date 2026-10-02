@@ -36,14 +36,14 @@ sensor:
     name: "H2 trace (MiCS-5524)"
     gas: H2
     pin: GPIO33                 # or: voltage: some_adc_or_ads1115_sensor
-    divider:                    # 10k/20k, the recommended wiring
+    voltage_divider:            # 10k/20k, the recommended wiring
       r1: 10.0                  # kOhm, in series with A0 (top)
       r2: 20.0                  # kOhm, to GND (bottom)   -> voltage_multiplier 1.5
     vcc: 5.0
     warmup_time: 3min           # DFRobot's heater warm-up
     calibration:
       delay: 3min               # in clean air, after boot
-      samples: 10
+      sample_count: 10
       persist: true
     enable_pin:                 # EN of the module (LOW = enabled)
       number: GPIO4
@@ -63,20 +63,20 @@ the wiring notes).
 | `pin` | – | ADC pin owned by the component; a hidden internal `adc` sensor is generated with `adc_attenuation`/`adc_samples`. |
 | `adc_attenuation` | `12db` (ESP32) | Only for `pin:`. |
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
-| `voltage_multiplier` | `1.0` | Scales the sampled voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `divider:`. |
-| `divider` | – | `r1`/`r2` in kOhm (r1 in series with A0, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
+| `voltage_multiplier` | `1.0` | Scales the sampled voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `voltage_divider:`. |
+| `voltage_divider` | – | `r1`/`r2` in kOhm (r1 in series with A0, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
 | `adc_input_max` | `3.3` | Largest voltage the ADC measures correctly (ESP32 VDD; `6.144` for an ADS1115) - a warning is logged above it. |
 | `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Module supply; the vendor model works on `VCC - V_AO`, the datasheet model needs it for `RS`. |
 | `rl` | `10.0` | Load resistor of the board in kOhm - **datasheet model only** (the vendor model rejects it). |
-| `a`, `b` | table | Datasheet coefficients - **datasheet model only**; required for every gas except CO. |
+| `coefficient_a`, `coefficient_b` | table | Datasheet coefficients - **datasheet model only**; required for every gas except CO. |
 | `r0` | – | Fixed R0 in kOhm (datasheet model) - disables the automatic calibration. |
 | `air_reference` | – | Fixed clean-air reference in volts (vendor model) - disables the automatic calibration. |
 | `min_ppm`, `max_ppm` | `0` / table | Clamp of the published value (`max_ppm` defaults to the gas's vendor range: 1000 ppm for H2/CO, 500 for NH3/C2H5OH, 25000 for CH4). |
-| `samples`, `sample_interval` | `4`, `20ms` | Averaging of the analog output per update. |
+| `sample_count`, `sample_interval` | `4`, `20ms` | Averaging of the analog output per update. |
 | `warmup_time` | `3min` | Heater warm-up; nothing is published before it elapses (use `24h` for the burn-in of a new sensor). |
 | `enable_pin` | – | Pin that enables the module (DFRobot drives `EN` **low** to wake it - use `inverted: true`). |
-| `calibration` | – | `delay:` (default `60s`), `samples:` (default `10`), `persist:` (default `true`). |
+| `calibration` | – | `delay:` (default `60s`), `sample_count:` (default `10`), `persist:` (default `true`). |
 | `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional diagnostic entities (the ratio of the active model, RS in kOhm for the datasheet model, the scaled AO voltage). |
 | `log_sensor` | – | Optional `text_sensor` id that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `log_ppm` | `false` | Log the value that is about to be published at **`INFO`** on every update, e.g. `[I][mics_5524_gas_sensor]: 'H2': 93.7 ppm` - the "normal mode" line. The chain (`V_AO=... x=... ratio=... -> ... ppm` / `V_AO=... RS=... ratio=... -> ... ppm`) stays at `DEBUG` and appears once the `mics_5524_gas_sensor` tag is back at `DEBUG`. Console only: the line is *not* mirrored to `log_sensor`. |
@@ -144,7 +144,7 @@ datasheet  R0            = RS measured in clean air           (ratio is 1.0 ther
 | `analog output reads 0.0000 V` warning | AO not wired, module not powered from 5 V, EN not enabled (or the wrong polarity) |
 | ratio stuck near 1.0 | sensor still warming up, or a gas-free environment (that is the baseline) |
 | ratio sits at 0.8 - 0.9 in clean air, or drifts away from 1.0 after a calibration | the stored reference is stale: it was captured while the module was still warming up / burning in, or the sensor drifted. Re-calibrate once the reading is stable (24 - 48 h of burn-in for a new module) - the vendor model over-reports while the reference is too high (the ratio is normalised against it) |
-| values jump around | ESP32 ADC noise - raise `samples`, add an RC filter, or use an `ads1115` (16 bit, gain 6.144 V covers the 0-5 V output without a divider) |
+| values jump around | ESP32 ADC noise - raise `sample_count`, add an RC filter, or use an `ads1115` (16 bit, gain 6.144 V covers the 0-5 V output without a divider) |
 | ppm far too high | wrong `conversion` for the hardware (the vendor model expects the module's analog front-end), or a reference captured while gas was present |
 | ppm always 0 | the vendor thresholds sit close to the clean-air ratio; re-calibrate in really clean air and check the ratio diagnostic |
 
