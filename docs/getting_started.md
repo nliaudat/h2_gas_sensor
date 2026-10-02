@@ -62,6 +62,7 @@ Wiring, in the package you include:
 | `alarm_led_count` / `alarm_led_chipset` / `alarm_led_channel_colors` | `2` / `SK6812` / `GRB` | strip geometry and colour order (`GRBW` for RGBW LEDs) |
 | `alarm_early_ppm` / `alarm_danger_ppm` | `4000` / `10000` | amber LEDs + beeps from 10 % of the LEL, buzzer silent from 25 % - see [`local_alarm.md`](local_alarm.md) |
 | `alarm_beep_interval` / `alarm_rtttl` | `5s` / `two_short:...` | repeat interval and RTTTL melody of the pre-alarm beep |
+| `alarm_gain` | `50%` | RTTTL duty cycle of the pre-alarm piezo (~50 % is the loudest, 100 % is a static level and silent) |
 | `alarm_led_refresh_interval` | `60s` | how often the LED state is re-asserted (self-heal of a stray command) |
 | `mq8_update_interval` / `mq8_adc_update_interval` / `mq8_diag_interval` | `1s` / `1s` / `1s` | poll interval of the `H2 (MQ-8)` entity, of its raw `AO voltage` entity and the publish throttle of its RS / ratio / T-RH diagnostics |
 | `mq8_trh_update_interval` | `60s` | poll interval of the two commented T/RH examples in `packages/mq8.yaml` |

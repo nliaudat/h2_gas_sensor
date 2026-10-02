@@ -91,13 +91,16 @@ GPIO33 -------------+--------|>|----- GND        passive piezo, no series part n
 * A piezo draws a few mA, so it can sit on the pin directly. A magnetic/coil
   buzzer draws far more (tens of mA, with an inductive kick): drive it through a
   transistor (and a flyback diode), never straight from the GPIO.
-* `gain:` in the package sets the loudness (leave headroom: a clipped signal
-  sounds harsh and heats the piezo).
+* `alarm_gain` is the RTTTL **duty cycle**, not an amplitude. For a passive
+  piezo the tone peaks near 50 % duty and fades to nothing at 100 % (a static
+  level - the `ledc` output stops the PWM), so `100%` is the *quietest* setting;
+  the ESPHome default is 60 %.
 * The PCB in [`../pcb/`](../pcb/) drives the piezo through a transistor (Q2 SS8050
   + 1 kΩ base resistor) instead of directly from the pin, and it does not fit the
   data-line series resistor or the 10 kΩ pull-down of the LED wiring above - the
-  melody and the pin are unchanged, but the disc is louder (it sees ~5 V) so
-  `gain:` may need a nudge.  See [`hardware.md`](hardware.md).
+  melody and the pin are unchanged, but the disc is louder (it sees ~5 V); the
+  50 % duty above still holds, so `alarm_gain` needs no more than a nudge.  See
+  [`hardware.md`](hardware.md).
 
 LEDs (2 x SK6812, `alarm_led_pin` = GPIO19):
 
@@ -136,7 +139,8 @@ Everything lives in `substitutions:` at the top of `packages/alarm.yaml`:
 | `alarm_danger_ppm` | `10000` | from here on the buzzer is silent (see above) |
 | `alarm_beep_interval` | `5s` | how often the pre-alarm beep repeats |
 | `alarm_led_refresh_interval` | `60s` | how often the LED state is re-asserted (self-heal of a stray command) |
-| `alarm_rtttl` | `two_short:d=4,o=5,b=100:16e6,16e6` | the melody (any RTTTL string) |
+| `alarm_rtttl` | `two_short:d=4,o=5,b=100:16b7,16b7` | the melody (any RTTTL string); `b7` ~ 3.95 kHz sits on the disc's 4 kHz resonance |
+| `alarm_gain` | `50%` | RTTTL duty cycle of the piezo: ~50 % is the loudest, 100 % is a static level (silent) |
 
 The colours and blink patterns of the four states are the `effects:` list of the
 `light:` entry; each state is a `strobe` effect, so changing the timing there does
