@@ -159,8 +159,9 @@ esphome run config.yaml           # flash over USB, later over OTA
 3. **Calibration is automatic** on the first boot, after `calibration.delay`
    (5 min MQ-8, 3 min MiCS) and never before `warmup_time` ends. The result is
    stored in flash (`persist: true`) and reused after every reboot:
-   * MQ-8: `ratio_in_clean_air: 70` (RS/R0 in clean air), 50 samples;
-   * MiCS-5524: the vendor clean-air reference (`x_air = VCC - V_AO`), 10 samples.
+   * MQ-8: `ratio_in_clean_air: 70` (RS/R0 in clean air), `sample_count: 50`;
+   * MiCS-5524: the vendor clean-air reference (`x_air = VCC - V_AO`),
+     `sample_count: 10`.
 4. **Force a re-calibration** with the `MQ-8 recalibrate` /
    `MiCS-5524 recalibrate` button in Home Assistant, or with an `on_boot` action
    in your own YAML:

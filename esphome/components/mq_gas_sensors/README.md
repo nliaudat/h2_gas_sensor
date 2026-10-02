@@ -28,13 +28,13 @@ ratio_eff  = ratio / correction
 ```
 
 plus the reference implementation's guards (`safe_pow`, `will_overflow`,
-negative → 0, non-finite → `FLT_MAX`) and the `samples`/`sample_interval`
+negative → 0, non-finite → `FLT_MAX`) and the `sample_count`
 averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
 
 ## Highlights
 
-* Supports **all MQ sensor types** with the `a` / `b` / regression method /
-  clean-air ratio tables built in (see `coefficients.py`) - a wrong
+* Supports **all MQ sensor types** with the `coefficient_a` / `coefficient_b` /
+  regression method / clean-air ratio tables built in (see `coefficients.py`) - a wrong
   `sensor_type`/`gas` combination fails the build instead of producing nonsense.
 * Optional temperature/humidity compensation (`correction_mode: mqdatascience`,
   needs `temperature:`/`humidity:` sensor ids) ported from
@@ -73,7 +73,7 @@ sensor:
     sensor_type: MQ-8          # MQ-2, MQ-3, ... MQ-309A, CUSTOM
     gas: H2                    # default: the primary gas of the type
     voltage: mq8_adc           # or: pin: GPIO34
-    divider:                   # 10k/20k divider, the recommended wiring
+    voltage_divider:           # 10k/20k divider, the recommended wiring
       r1: 10.0                 # kOhm, in series with AO (top)
       r2: 20.0                 # kOhm, to GND (bottom)  ->  voltage_multiplier 1.5
     vcc: 5.0                   # sensor supply
@@ -97,25 +97,25 @@ sensor:
 | `pin` | – | ADC pin owned by the component; a hidden internal `adc` sensor is generated with `adc_attenuation`/`adc_samples`. Exactly one of `voltage`/`pin`. |
 | `adc_attenuation` | `12db` (ESP32) | Only for `pin:` (e.g. `0db`, `2.5db`, `6db`, `11db`, `12db`, `auto`). |
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
-| `voltage_multiplier` | `1.0` | Scales the sampled AO voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `divider:`. |
-| `divider` | – | `r1`/`r2` in kOhm (r1 in series with AO, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
+| `voltage_multiplier` | `1.0` | Scales the sampled AO voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `voltage_divider:`. |
+| `voltage_divider` | – | `r1`/`r2` in kOhm (r1 in series with AO, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
 | `adc_input_max` | `3.3` | Largest voltage the ADC measures correctly (ESP32 VDD; `6.144` for an ADS1115) - a warning is logged above it. |
 | `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Sensor supply voltage in V (used for RS). |
 | `rl` | `10.0` | Load resistor of the module in kOhm. |
 | `r0` | – | Fixed R0 in kOhm. Disables the automatic calibration. |
-| `a`, `b` | from the table | Regression coefficients (`PPM = a * ratio^b`). Required for `CUSTOM`, MQ-136, MQ-214, MQ-303A, MQ-309A. |
+| `coefficient_a`, `coefficient_b` | from the table | Regression coefficients (`PPM = a * ratio^b`). Required for `CUSTOM`, MQ-136, MQ-214, MQ-303A, MQ-309A. |
 | `regression_method` | from the table | `exponential` (default) or `linear`. |
 | `ratio_mode` | `rs_r0` | `rs_r0` (datasheet convention, matches the shipped coefficients) or `r0_rs` (`MQUnifiedsensor::readSensorR0Rs()`). |
 | `ratio_in_clean_air` | from the table | RS/R0 in clean air, used to compute R0. |
-| `samples` | `2` | Number of AO readings averaged per update (the reference library uses 2). |
-| `sample_interval` | `20ms` | Delay between those readings. |
+| `sample_count` | `2` | Number of AO readings averaged per update (the reference library uses 2). |
+| `sample_interval` | `20ms` | Spacing of the samples of a clean-air calibration (the AO readings of an update are taken back to back). |
 | `warmup_time` | `0s` | Burn-in/warm-up: nothing is published (state `unknown`) before it elapses. Use `24h`+ for a new sensor. |
 | `min_ppm`, `max_ppm` | table/datasheet | Clamp of the published value (`MQ-8`: 0 … 10 000 ppm). |
 | `correction_factor` | `0.0` | Added to the ratio (and to R0) as in `MQUnifiedsensor` (`readSensor(correctionFactor)`). |
 | `correction_mode` | `mqdatascience` when both links are set, otherwise `none` | `none` or `mqdatascience` - temperature/humidity compensation of the ratio. Selected automatically by `temperature:`/`humidity:`; needs a type with correction constants (MQ-2 … MQ-8, MQ-135 … MQ-138, MQ-214). |
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm` (the alarm ceiling does not move); `scaled` clips to `max_ppm * correction` (MQDataScience's own behaviour). |
-| `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `a:`/`b:`. |
+| `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `coefficient_a:`/`coefficient_b:`. |
 | `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors. **Linking both selects `correction_mode: mqdatascience`**; a half-wired pair (only one of the two) is rejected at config time. |
 | `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
 | `calibration` | – | See below. |
@@ -151,7 +151,7 @@ provide it, in order of precedence:
    calibration:
      ratio_in_clean_air: 70   # RS/R0 from the datasheet (default per type)
      delay: 5min              # after boot (max(delay, warmup_time))
-     samples: 50              # number of RS samples
+     sample_count: 50         # number of RS samples
      duration: 0s             # extra time limit, 0 = only the sample count matters
      persist: true            # write R0 to flash and reuse it after a reboot
    ```
@@ -230,7 +230,7 @@ referenced by id, so any temperature/humidity source works.
   `output`, the component only warns about it during configuration).
 * The `AO` output can swing up to `VCC` (5 V) while the ESP32 ADC saturates
   around **3.1-3.3 V** at 12 dB attenuation. Use a divider (the recommended
-  wiring is **10k / 20k**: 5 V -> 3.33 V) and describe it with `divider: {r1, r2}`
+  wiring is **10k / 20k**: 5 V -> 3.33 V) and describe it with `voltage_divider: {r1, r2}`
   or `voltage_multiplier: 1.5`.
 * **The ESP32 ADC pins are not 5 V tolerant** (absolute maximum VDD + 0.3 V =
   3.6 V): never wire `AO` straight to a GPIO, and do not rely on the series
@@ -278,7 +278,7 @@ is the better early-warning device.
 | MQ-135 | linear | 1 | NH3 | NH3, H2, TOLUENE |
 | MQ-137 | linear | 1 | NH3 | NH3 |
 | MQ-138 | linear | 1 | TOLUENE | TOLUENE, ALCOHOL, ACETONE |
-| MQ-136, MQ-214, MQ-303A, MQ-309A, `CUSTOM` | – | – | – | none - `a:`/`b:` are required |
+| MQ-136, MQ-214, MQ-303A, MQ-309A, `CUSTOM` | – | – | – | none - `coefficient_a:`/`coefficient_b:` are required |
 
 Provenance of the numbers (`coefficients.py` has the details):
 `a`/`b`/method/clean-air ratio come from the `sensorConfigData.h` of the
@@ -301,7 +301,8 @@ A/B compare both on the same hardware:
 
 The slope is the same (0.688 vs 0.68994): their dataset is the same datasheet fit
 anchored ≈ 11 % lower, not a more accurate one - which is why `standard` stays
-the default. `curve:` cannot be combined with `a:`/`b:`/`regression_method:` (the
+the default. `curve:` cannot be combined with
+`coefficient_a:`/`coefficient_b:`/`regression_method:` (the
 dataset defines them); the regression method `inverse` (`ppm = (ratio/a)^(1/b)`,
 their `inverseYaxb()`) is available for hand-written coefficients as well.
 Background: `docs/mqdatascience_comparison.md`.
@@ -317,9 +318,12 @@ your own coefficients fitted to the port's convention.
 
 ## Behaviour
 
-* `update_interval` (default 60 s) triggers one reading: `samples` AO voltages
-  are averaged (with `sample_interval` between them, like the library's
-  `retries`/`retry_interval`), then `RS`, the ratio and the PPM are computed.
+* `update_interval` (default 60 s) triggers one reading: `sample_count` AO
+  voltages are averaged back to back (the sampler itself averages further
+  according to `adc_samples` / `sampling_mode`), then `RS`, the ratio and the
+  PPM are computed. `sample_interval` only spaces the samples of a clean-air
+  calibration, so the update does not block the main loop for
+  `sample_count x sample_interval`.
 * Nothing is published (state stays `unknown`) during the warm-up window, while
   a calibration is pending/running (the previous value was computed with the old
   `R0`), or while `R0` is unknown.
@@ -346,7 +350,7 @@ your own coefficients fitted to the port's convention.
   `correction_sensor` the applied factor, and the debug log shows
   `V=… RS=… ratio=… (correction=…) -> … ppm`.
 * Configuration problems (unknown `sensor_type`, gas without a curve, missing
-  `a`/`b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`, a correction mode
+  `coefficient_a`/`coefficient_b`, `max_ppm <= min_ppm`, both `r0:` and `calibration:`, a correction mode
   without both ambient links, a half-wired `temperature:`/`humidity:` pair) are
   reported at compile time; missing calibration and heater notes are logged as
   warnings.
@@ -358,7 +362,7 @@ your own coefficients fitted to the port's convention.
 | `R0 unknown` / state stays `unknown` | no `r0:` and no `calibration:` configured, or the calibration has not run yet |
 | `analog output reads 0.0000 V` warning | AO not connected, module not powered from 5 V, or the divider is wrong |
 | PPM far too low / flat | `rl:` does not match the module's real load resistor, or the divider ratio is not compensated with `voltage_multiplier` |
-| PPM pinned at `max_ppm` | wrong `a`/`b` for the selected gas, or `ratio_mode` mismatch |
+| PPM pinned at `max_ppm` | wrong `coefficient_a`/`coefficient_b` for the selected gas, or `ratio_mode` mismatch |
 | Values drift over weeks | MQ sensors drift; re-run `request_calibration()` in clean air |
 | `correction_sensor` stays at 1.0000 | the T/RH sensor has no state yet (check the one-time warning in the log), or `correction_mode` is `none` |
 

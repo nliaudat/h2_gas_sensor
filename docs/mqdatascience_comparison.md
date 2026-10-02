@@ -40,11 +40,12 @@ variant is only for A/B comparison:
     sensor_type: MQ-8
     gas: H2
     curve: mqdatascience       # optional, default: standard
-    # ... no a:/b: here - the dataset defines them itself
+    # ... no coefficient_a:/coefficient_b: here - the dataset defines them itself
 ```
 
 Both datasets are verified by the host test (including the −11 % offset), and
-`esphome config` rejects `curve:` combined with explicit `a:`/`b:`.
+`esphome config` rejects `curve:` combined with explicit
+`coefficient_a:`/`coefficient_b:`.
 
 ## Temperature/humidity compensation — adopted
 
