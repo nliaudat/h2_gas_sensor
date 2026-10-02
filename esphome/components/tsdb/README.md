@@ -49,7 +49,7 @@ Every `update_interval` (the write interval):
 1. the clock is checked - with `require_time: true` (default) nothing is written
    while the time is not valid yet (a record with a boot counter as its timestamp
    would be worse than a gap);
-2. every column is read: `raw = round(value * scale + offset)`, clamped to the
+2. every column is read: `raw = round(value * scale_factor + offset)`, clamped to the
    `int16_t` range `-32767 .. 32767` (`-32768` is reserved for "no value");
 3. a column whose sensor has never published, or publishes `NaN`, follows
    `on_missing:` - `skip` (default) drops the whole row (a gap is honest, a zero
@@ -58,7 +58,7 @@ Every `update_interval` (the write interval):
 4. the row is appended (`tsdb_write_h`) and - at most every `sync_interval` -
    committed with `tsdb_sync_h()`.
 
-Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
+Reading a column back is `value = (raw - offset) / scale_factor`; the CSV dump of the
 "history dump" button prints the engineering values already decoded.
 
 ## Options
@@ -96,14 +96,14 @@ Reading a column back is `value = (raw - offset) / scale`; the CSV dump of the
   columns:
     - sensor: mq8                 # id of the source sensor (required)
       name: h2_mq8_ppm            # column name in the file header (required, <= 31 chars, unique)
-      scale: 1                    # raw = round(value * scale + offset)
+      scale_factor: 1             # raw = round(value * scale_factor + offset)
       offset: 0
       average_sensor: my_average  # optional: AVG/MIN/MAX over `aggregate_window`
       min_sensor: my_min
       max_sensor: my_max
 ```
 
-* The engine stores `int16_t`, so pick a `scale` that keeps the expected range
+* The engine stores `int16_t`, so pick a `scale_factor` that keeps the expected range
   inside `-32767 .. 32767`: ppm and dBm are `1`, °C and %RH are `10`,
   `RS/R0` of the MQ-8 (up to ~70 in clean air) is `100`, the MiCS-5524 ratio
   (~1.0) is `1000`, volts are `1000` (mV). A value outside the range is clamped,

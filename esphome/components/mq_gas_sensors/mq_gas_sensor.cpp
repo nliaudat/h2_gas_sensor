@@ -115,7 +115,7 @@ void MQGasSensor::setup() {
     }
   } else if (!this->has_r0()) {
     this->log_message_(LOG_LEVEL_WARN, "no R0 available, set 'r0:' or 'calibration:' - the PPM value stays "
-                                 "unknown until then");
+                                       "unknown until then");
   }
 }
 
@@ -189,7 +189,7 @@ float MQGasSensor::compute_correction_() {
     if (!this->warned_correction_) {
       this->warned_correction_ = true;
       this->log_message_(LOG_LEVEL_WARN, "temperature/humidity correction is enabled but a source is missing - "
-                                   "publishing the uncorrected value");
+                                         "publishing the uncorrected value");
     }
     return 1.0f;
   }
@@ -419,8 +419,8 @@ void MQGasSensor::finish_calibration_() {
   if (this->persist_)
     this->save_r0_();
 
-  this->log_message_(LOG_LEVEL_INFO, "R0 = %.4f kOhm (%" PRIu32 "/%" PRIu32 " samples valid)%s", this->r0_, valid, attempts,
-                     this->persist_ ? LOG_STR_LITERAL(", stored in flash") : "");
+  this->log_message_(LOG_LEVEL_INFO, "R0 = %.4f kOhm (%" PRIu32 "/%" PRIu32 " samples valid)%s", this->r0_, valid,
+                     attempts, this->persist_ ? LOG_STR_LITERAL(", stored in flash") : "");
   if (!this->persist_) {
     this->log_message_(LOG_LEVEL_INFO, "hard-code 'r0: %.4f' in the YAML to skip the calibration at boot", this->r0_);
   }
