@@ -56,8 +56,13 @@
 #   `effects:` list, change `alarm_rtttl` for another melody (the RTTTL "Common
 #   Beeps" of the ESPHome docs are a good source), and move `alarm_early_ppm` /
 #   `alarm_danger_ppm` to retune the bands - the thresholds are the only place
-#   the policy lives.  `gain:` sets the buzzer volume.  The two `logger.log`
-#   strings in the `sensor:` fragment quote the default numbers - update them too.
+#   the policy lives.  `alarm_gain` is the RTTTL duty cycle, not an amplitude:
+#   a passive piezo is capacitive, so the tone peaks near 50 % and is effectively
+#   gone at 100 % (a static level - see the `rtttl:` block below).  The melody
+#   sits on the disc's 4 kHz resonance (b7 ~ 3.95 kHz) rather than the far
+#   off-resonance e6 of the stock `two_short`, which makes it noticeably louder.
+#   The two `logger.log` strings in the `sensor:` fragment quote the default
+#   numbers - update them too.
 #   There is deliberately no mute switch: nothing in Home Assistant can silence
 #   the local pre-alarm without editing this file.
 
@@ -70,8 +75,22 @@ substitutions:
   alarm_early_ppm: "4000"  # 10 % LEL: LEDs amber, the buzzer starts beeping
   alarm_danger_ppm: "10000"  # 25 % LEL: MQ-8 ceiling - buzzer silent, LEDs red
   alarm_beep_interval: 5s  # repeat interval of the pre-alarm beep
-  alarm_rtttl: "two_short:d=4,o=5,b=100:16e6,16e6"  # the pre-alarm melody
+  alarm_rtttl: "two_short:d=4,o=5,b=100:16b7,16b7"  # the pre-alarm melody (b7 ~ 3.95 kHz, on the 4 kHz disc)
+  siren_rtttl: "siren:d=8,o=5,b=100:d,e,d,e,d,e,d,e"  # the siren melody
+  alarm_gain: "50%"  # RTTTL duty cycle; ~50 % is the loudest for a passive piezo
   alarm_led_refresh_interval: 60s  # how often the LED state is re-asserted (self-heal)
+
+# Latches whether the last MQ-8 value was invalid (NaN).  `on_value` fires on
+# *every* publish, and the component publishes `unknown` once per second while it
+# has no R0 / is calibrating, so without this latch the state script below (and its
+# `rtttl.stop`) would run at 1 Hz.  Only the transition *into* the invalid state
+# runs the script; the recovery edge is handled by `on_value_range`, which is
+# edge-triggered already.
+globals:
+  - id: ${name}_alarm_no_reading
+    type: bool
+    restore_value: false
+    initial_value: "false"
 
 output:
   - platform: ledc
@@ -82,7 +101,11 @@ output:
 rtttl:
   id: ${name}_rtttl
   output: ${name}_buzzer_out
-  gain: 80%  # 0 .. 100 %, the loudness of a passive piezo
+  # The gain is the LEDC duty cycle, not an amplitude: a passive piezo is
+  # capacitive, so the tone peaks near 50 % duty and vanishes at 100 % (a static
+  # level - the LEDC stops the PWM).  100 % is the quietest setting, not the
+  # loudest; the ESPHome default is 60 %.
+  gain: ${alarm_gain}
   on_finished_playback:
     - logger.log: "Alarm melody finished"
 
@@ -166,8 +189,13 @@ script:
           condition:
             lambda: return isnan(id(mq8).state);
           then:
-            - rtttl.stop:
-                id: ${name}_rtttl
+            - if:
+                condition:
+                  rtttl.is_playing:
+                    id: ${name}_rtttl
+                then:
+                  - rtttl.stop:
+                      id: ${name}_rtttl
             - light.turn_on:
                 id: ${name}_alarm_led
                 effect: "no-reading"
@@ -178,10 +206,17 @@ script:
                     id: mq8
                     above: ${alarm_danger_ppm}
                 then:
-                  # Danger: no local sound, only the red LEDs.  `rtttl.stop` also
-                  # covers a beep that was still running when the band flipped.
-                  - rtttl.stop:
-                      id: ${name}_rtttl
+                  # Danger: no local sound, only the red LEDs.  The guarded
+                  # `rtttl.stop` only covers a beep that was still running when the
+                  # band flipped (an unconditional stop() would fire the finished
+                  # callback, and log it, even with nothing playing).
+                  - if:
+                      condition:
+                        rtttl.is_playing:
+                          id: ${name}_rtttl
+                      then:
+                        - rtttl.stop:
+                            id: ${name}_rtttl
                   - light.turn_on:
                       id: ${name}_alarm_led
                       effect: "danger"
@@ -196,8 +231,13 @@ script:
                             id: ${name}_alarm_led
                             effect: "pre-alarm"
                       else:
-                        - rtttl.stop:
-                            id: ${name}_rtttl
+                        - if:
+                            condition:
+                              rtttl.is_playing:
+                                id: ${name}_rtttl
+                            then:
+                              - rtttl.stop:
+                                  id: ${name}_rtttl
                         - light.turn_on:
                             id: ${name}_alarm_led
                             effect: "ok"
@@ -225,12 +265,19 @@ sensor:
           - script.execute: ${name}_alarm_state
           - logger.log: "H2 below 4000 ppm (10 percent of the LEL)"
     # `unknown` (NaN) means no valid reading - the ranges above cannot see it
-    # (every comparison with NaN is false), so it is caught here.  Only the LED
-    # state is re-applied; the beep timer below cannot fire on NaN.
+    # (every comparison with NaN is false), so it is caught here.  `on_value` fires
+    # on every publish (the component republishes `unknown` once per second), so the
+    # latch limits the script to the transition *into* the invalid state - otherwise
+    # it would re-run (and re-stop the buzzer) at 1 Hz.  The beep timer below cannot
+    # fire on NaN, and the recovery edge is handled by `on_value_range`.
     on_value:
       - if:
           condition:
-            lambda: return isnan(x);
+            lambda: |-
+              const bool no_reading = isnan(x);
+              const bool was_no_reading = id(${name}_alarm_no_reading);
+              id(${name}_alarm_no_reading) = no_reading;
+              return no_reading && !was_no_reading;
           then:
             - script.execute: ${name}_alarm_state
 

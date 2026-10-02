@@ -188,10 +188,13 @@ GPIO33 ──[ R7 = 1 kΩ ]──┬── B   Q2 SS8050
   [`local_alarm.md`](local_alarm.md) describes driving the disc straight from the
   pin. For RTTTL (`alarm_buzzer_pin: GPIO33`) that makes no difference except that
   the drive is inverted and the disc now sees ~5 V instead of 3.3 V - i.e. louder.
-  Tune `gain:` in [`../esphome/packages/alarm.yaml`](../esphome/packages/alarm.yaml)
-  if the tone is harsh, and keep a **passive** piezo (the 4 kHz HNR-1707 of the
-  BOM): an active buzzer only clicks, a magnetic one would also need a flyback
-  diode.
+  `alarm_gain` in [`../esphome/packages/alarm.yaml`](../esphome/packages/alarm.yaml)
+  is the `ledc` duty cycle, not an amplitude: a passive piezo is loudest near
+  50 % duty and silent at 100 %, so *lowering* it makes the tone louder.  The
+  pre-alarm melody uses `b7` (~3.95 kHz, on the HNR-1707's 4 kHz resonance)
+  rather than the off-resonance `e6`, which also helps.  Keep a **passive** piezo
+  (the 4 kHz HNR-1707 of the BOM): an active buzzer only clicks, a magnetic one
+  would also need a flyback diode.
 * The two status LEDs are `U6` and `U7` (`SK6812MINI-HS`, chained DIN → DOUT →
   DIN) on the `LED` net (GPIO19), fed from 5 V via the `LED`/`5V` pads:
   `alarm_led_count: 2`, chipset `SK6812`, `GRB`. The alternative

@@ -30,7 +30,7 @@ preferences:
 
 # Enable Home Assistant API
 api:
-  reboot_timeout: 30min
+  reboot_timeout: 0s #disabled for offline board
 
 ota:
   - platform: esphome

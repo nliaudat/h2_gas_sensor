@@ -195,6 +195,31 @@ macros/structs (`TSDB_BLOCK_SIZE`, `TSDB_BLOCK_HEADER_SIZE`,
 an engine upgrade that changes the file format fails the build instead of
 silently invalidating `docs/data_logging.md`.
 
+## When setup fails
+
+If the configuration, the partition, the filesystem or the engine cannot be
+brought up, `setup()` logs one block at **ERROR** and marks the component failed,
+so it stops writing instead of pretending:
+
+```
+[E][tsdb]: history is NOT available: setup failed at mounting the LittleFS partition (writing stays disabled)
+[E][tsdb]:   partition 'littlefs': at 0x00310000, 524288 bytes (configured 524288 bytes)
+[E][tsdb]:   /littlefs: NOT mounted
+[E][tsdb]:   /littlefs/history.tsdb: missing
+[E][tsdb]:   config: max file 393216 bytes, index stride 380, buffer pool 4096 bytes (paged: 0), memory mode 0, page size 2048, min free 32768 bytes
+[E][tsdb]:   heap: 183424 bytes internal free (110592 largest block), 0 bytes PSRAM free
+```
+
+The first line names the stage (`the configuration`, `mounting the LittleFS
+partition`, `opening the database`); `dump_config()` repeats it in the `tsdb:`
+block. The `partition` line carries the *real* address and size, so a partition
+table that OTA never moved is obvious; `mounted` shows whether the filesystem
+came up; `file` gives the database file's size and its stored column count next
+to the configured one; and the `heap` line is the one to look at when everything
+else is healthy - esp_tsdb allocates its buffer pool before it opens the file, so
+a fragmented heap fails the open with no filesystem error at all (compare it with
+`buffer pool` and try `paged_allocation: true`).
+
 ## Credits and licence
 
 * [zakery292/esp_tsdb](https://github.com/zakery292/esp_tsdb) 2.4.3 - the

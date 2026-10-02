@@ -6,6 +6,17 @@
 # validated.  It includes `packages/mq8.yaml` first because the alarm package
 # merges its band logic into `id: mq8` with `!extend` and reads that sensor from
 # its lambda - the minimal real installation is exactly these two packages.
+#
+# What this fixture must keep validating (beyond "Configuration is valid!"):
+# * The `!extend mq8` merge resolves and the package still survives `esphome compile`.
+# * The invalid-reading handler is edge-triggered.  `on_value` runs on *every*
+#   publish, and the MQ-8 republishes `unknown` once per second while it has no R0 /
+#   is calibrating, so the lambda latches `${name}_alarm_no_reading` (a
+#   non-restoring global) and only the transition *into* "no reading" runs the
+#   `alarm_state` script.  Without the latch the melody/LED routine - and the
+#   unconditional `rtttl.stop` "finished" log - repeats at 1 Hz.  Dropping the
+#   global or the `was_no_reading` test silently reintroduces that loop, and
+#   `esphome config` cannot catch it, so it is called out here.
 substitutions:
   name: alarm_pkg
   friendly_name: "Alarm package test"
