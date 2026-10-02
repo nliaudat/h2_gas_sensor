@@ -17,7 +17,7 @@ board.
 One row per write interval (`history_write_interval`, 60 s by default) with four
 columns, all taken from the *last published value* of an existing entity:
 
-| Column | Source entity | `scale` | Stored range |
+| Column | Source entity | `scale_factor` | Stored range |
 |---|---|---|---|
 | `h2_mq8_ppm` | `H2 (MQ-8)` | 1 | 0 - 10 000 ppm |
 | `h2_trace_ppm` | `H2 trace (MiCS-5524)` | 1 | 0 - 1 000 ppm |
@@ -40,11 +40,12 @@ empty one - the log says `history recreated (the column set changed)`, the old
 history is gone. Without the option the component would stay failed, writing
 nothing and taking the diagnostics and the history buttons down with it.
 
-The engine stores `int16_t`, so a column is quantised: `scale: 10` keeps one
-decimal (0.1 °C), `scale: 100` two (0.01 ratio). Decoding is
+The engine stores `int16_t`, so a column is quantised: `scale_factor: 10` keeps
+one decimal (0.1 °C), `scale_factor: 100` two (0.01 ratio). Decoding is
 
 ```
-value = (raw - offset) / scale        raw = round(value * scale + offset)
+value = (raw - offset) / scale_factor
+raw = round(value * scale_factor + offset)
 ```
 
 A value outside the `int16_t` range is **clamped** to `-32767 .. 32767`

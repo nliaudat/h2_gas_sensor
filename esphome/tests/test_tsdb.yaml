@@ -8,7 +8,7 @@
 # entities of the gas packages, they are just not logged to the database.)
 #
 # Negative cases that must keep failing with an explanatory message:
-#   * `scale: 0` on a column               -> "scale must not be 0 ..."
+#   * `scale_factor: 0` on a column        -> "scale_factor must not be 0 ..."
 #   * a duplicate column `name:`           -> "duplicate column name(s): ..."
 #   * `max_file_size: 512KB` with the      -> "max_file_size + min_free_bytes = ...
 #     default `partition_size: 512KB`         do not fit into partition_size"

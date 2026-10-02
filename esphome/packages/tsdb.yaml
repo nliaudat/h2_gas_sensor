@@ -107,10 +107,10 @@ tsdb:
       average_sensor: ${name}_history_trace_average
     - sensor: dht_temperature
       name: temperature
-      scale: 10
+      scale_factor: 10
     - sensor: dht_humidity
       name: humidity
-      scale: 10
+      scale_factor: 10
   # Diagnostics of the logger itself (drop the ones you do not want, together
   # with their sensor block below).
   records_sensor: ${name}_history_records

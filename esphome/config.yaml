@@ -21,24 +21,24 @@ substitutions:
   ### time
   TZ: "Europe/Zurich"  # timezone
 
-# external_components:
-#   - source: github://pr#19717
-#     components: [mq_gas_sensors]
-#     refresh: 1h
-
-#   - source: github://pr#19721
-#     components: [mics_5524_gas_sensor]
-#     refresh: 1h
-
-#   - source: github://pr#19728
-#     components: [tsdb]
-#     refresh: 1h
-
 external_components:
-  - source:
-      type: local
-      path: components
-    components: [mq_gas_sensors, mics_5524_gas_sensor, tsdb]  # every component folder must be listed here
+  - source: github://pr#19717
+    components: [mq_gas_sensors]
+    refresh: 1h
+
+  - source: github://pr#19721
+    components: [mics_5524_gas_sensor]
+    refresh: 1h
+
+  - source: github://pr#19728
+    components: [tsdb]
+    refresh: 1h
+
+# external_components:
+  # - source:
+      # type: local
+      # path: components
+    # components: [mq_gas_sensors, mics_5524_gas_sensor, tsdb]  # every component folder must be listed here
 
 # external_components:
 #   - source:
