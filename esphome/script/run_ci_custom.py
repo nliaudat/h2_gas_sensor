@@ -44,7 +44,7 @@ CI_CUSTOM = Path(__file__).resolve().parent / "ci-custom.py"
 UPSTREAM_CONST_PY = "esphome/const.py"
 
 # Paths hidden from the linter, see ``_install_lint_exclusions``.
-LINT_EXCLUDED_PATHS = re.compile(r"^(?:esphome/script/|pcb/)")
+LINT_EXCLUDED_PATHS = re.compile(r"^(?:esphome/script/|patches/|pcb/)")
 
 _REAL_CODECS_OPEN = codecs.open
 
@@ -64,7 +64,9 @@ def _install_lint_exclusions() -> None:
     copy sits one level deeper in ``esphome/script/``, so those upstream exclude
     patterns cannot match it and it would otherwise be linted as project code.
     The ``pcb/`` directory holds the hardware archives, a file type upstream's
-    checks do not know (it tracks no binary CAD assets).
+    checks do not know (it tracks no binary CAD assets), and ``patches/`` holds
+    unified diffs, whose context lines are a single space by design (the
+    trailing-whitespace and line-ending checks are about source files).
 
     The linter calls ``helpers.git_ls_files()`` to build its file list, so
     filtering that function filters every check, including the ones that look at
@@ -75,7 +77,7 @@ def _install_lint_exclusions() -> None:
     unfiltered_git_ls_files = helpers.git_ls_files
 
     def git_ls_files(patterns=None):
-        """Return ``git ls-files`` without this repository's tooling and PCB files."""
+        """Return ``git ls-files`` without this repository's tooling and assets."""
         return {
             path: mode
             for path, mode in unfiltered_git_ls_files(patterns).items()

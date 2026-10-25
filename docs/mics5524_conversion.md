@@ -73,8 +73,14 @@ b = log10(ppm2 / ppm1) / log10(ratio2 / ratio1)
 a = 10^(log10(ppm1) - b * log10(ratio1))
 ```
 
-Only CO ships with coefficients, taken from the Home Assistant community thread
-*"CO sensor - MICS-5524 or MICS-6814"* (post 8):
+Only CO ships with coefficients: the component uses the fit of the SGX datasheet
+graph (`RS/R0` falls from about 3.5 at 1 ppm to about 0.011 at 1000 ppm, i.e. one
+decade of concentration per ~a factor of 10^1.2 in resistance), which is
+`a = 1.0`, `b = -1.2` with `R0` taken in clean air (where the graph sits at the
+1 ppm bottom of its range).
+
+The Home Assistant community thread *"CO sensor - MICS-5524 or MICS-6814"* (post
+8) instead fits two points of the same graph:
 
 | Point | value |
 |---|---|
@@ -82,12 +88,12 @@ Only CO ships with coefficients, taken from the Home Assistant community thread
 | p2 | 1000 ppm at RS/R0 = 0.01 |
 | result | `a = 6.3`, `b = -1.1` |
 
-How good is a two-point fit? Checked by the host test: it returns 13.5 ppm at
-RS/R0 = 0.5 (the datasheet point is 10 ppm) and 998.5 ppm at 0.01 (datasheet:
-1000 ppm) - a few tens of percent in the low decade, which is well inside the
-sensor's own spread. For every other gas supply your own
-`coefficient_a:`/`coefficient_b:` derived with
-the two-point recipe.
+That fit is what the host test uses as its example of user-supplied coefficients
+(`coefficient_a: 6.3`, `coefficient_b: -1.1` in `tests/test_mics.yaml`); it
+returns 13.5 ppm at RS/R0 = 0.5 (the datasheet point is 10 ppm) and 998.5 ppm at
+0.01 (datasheet: 1000 ppm) - a few tens of percent in the low decade, which is
+well inside the sensor's own spread. For every other gas supply your own
+`coefficient_a:`/`coefficient_b:` derived with the two-point recipe.
 
 The same thread's later posts (11) propose fits of the form
 `A * ratio^B * exp(C * ln ratio)`, which algebraically collapse to a plain power

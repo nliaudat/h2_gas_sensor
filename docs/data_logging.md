@@ -207,6 +207,15 @@ mount error, the format result and whether the partition held data at all - cost
 | IRAM | 82 963 B (63.3 %) | 131 072 B | 48 109 B |
 | DRAM (static) | 53 732 B (29.7 %) | 180 736 B | 127 004 B |
 
+A build on 2026-10-25 - components taken straight from their upstream revisions
+(`mq_gas_sensors` at PR #20896 head `320bab78`, `tsdb` at PR #20892 head
+`40b8d41`, `mics_5524` merged, plus `patches/pr20896-adc-input-max.patch`) -
+came out at **1 008 939 B of flash (64.1 %)** and **51 752 B of static DRAM
+(28.6 %)**: -804 B / -1 980 B against the table, i.e. the upstream components are
+slightly leaner than the retired local copies. That ESPHome summary does not
+print IRAM. The per-object table below is still the 2026-10-02 measurement the
+history of the numbers above describes.
+
 (The per-update `INFO` value line of the two gas components, `log_ppm:`, added
 +176 B of flash and +16 B of static DRAM to the build that came before it.)
 

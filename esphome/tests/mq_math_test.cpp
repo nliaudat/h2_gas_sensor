@@ -133,8 +133,8 @@ int main() {
                            ppm_from_ratio(mq8_a, mq8_b, 70.0f, REGRESSION_EXPONENTIAL) -
                        1.0),
               -11.1, 0.2);
-  check_close("inverse: ratio 0 -> FLT_MAX (saturated end)",
-              ppm_from_ratio(ds_a, ds_b, 0.0f, REGRESSION_INVERSE), FLT_MAX);
+  check_close("inverse: ratio 0 -> FLT_MAX (saturated end)", ppm_from_ratio(ds_a, ds_b, 0.0f, REGRESSION_INVERSE),
+              FLT_MAX);
   check_nan("inverse: a = 0 -> NaN", ppm_from_ratio(0.0f, ds_b, 3.0f, REGRESSION_INVERSE));
 
   std::printf("\n== Temperature/humidity correction (MQDataScience Correction.cpp) ==\n");

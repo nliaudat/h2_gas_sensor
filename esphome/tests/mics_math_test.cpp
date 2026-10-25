@@ -29,8 +29,8 @@ static int failures = 0;
 
 static void check_close(const char *name, double actual, double expected, double eps = 1e-4) {
   const double scale = std::max(std::fabs(actual), std::fabs(expected));
-  const bool ok = std::isfinite(actual) && std::isfinite(expected) &&
-                  std::fabs(actual - expected) <= eps + 1e-6 * scale;
+  const bool ok =
+      std::isfinite(actual) && std::isfinite(expected) && std::fabs(actual - expected) <= eps + 1e-6 * scale;
   std::printf("%-58s %-14s got=%.6g expected=%.6g\n", name, ok ? "OK" : "FAIL", actual, expected);
   if (!ok)
     failures++;
@@ -89,10 +89,10 @@ int main() {
   // Note: a reading within one vendor gain step of the minimum rounds to 0 ppm
   // (the vendor clamps everything below min_ppm), so exact checks use multiples
   // of the gain that are unambiguous in float arithmetic.
-  check_close("two gain steps below the threshold -> 2 ppm", ppm_from_vendor_curve(0.279f - 2.0f * 0.00026f, H2),
-              2.0, 1e-3);
-  check_close("just inside the 1 ppm limit -> ~1.05 ppm", ppm_from_vendor_curve(0.279f - 1.05f * 0.00026f, H2),
-              1.05, 1e-3);
+  check_close("two gain steps below the threshold -> 2 ppm", ppm_from_vendor_curve(0.279f - 2.0f * 0.00026f, H2), 2.0,
+              1e-3);
+  check_close("just inside the 1 ppm limit -> ~1.05 ppm", ppm_from_vendor_curve(0.279f - 1.05f * 0.00026f, H2), 1.05,
+              1e-3);
   check_close("ratio 0 (saturated sensor) -> the 1000 ppm top", ppm_from_vendor_curve(0.0f, H2), 1000.0);
   check_nan("ppm_from_vendor_curve(NAN) stays NaN", ppm_from_vendor_curve(NAN, H2));
 
@@ -101,8 +101,7 @@ int main() {
   check_close("CO ratio 0.4 -> 61.7 ppm", ppm_from_vendor_curve(0.4f, CO), (0.425 - 0.4) / 0.000405, 1e-3);
   check_close("NH3 below its 10 ppm minimum -> 0", ppm_from_vendor_curve(0.79f, NH3), 0.0);
   check_close("CH4 below its 1000 ppm minimum -> 0", ppm_from_vendor_curve(0.77f, CH4), 0.0);
-  check_close("CH4 ratio 0.7629 -> 1004.3 ppm", ppm_from_vendor_curve(0.7629f, CH4), (0.786 - 0.7629) / 0.000023,
-              1e-2);
+  check_close("CH4 ratio 0.7629 -> 1004.3 ppm", ppm_from_vendor_curve(0.7629f, CH4), (0.786 - 0.7629) / 0.000023, 1e-2);
 
   std::printf("\n== Vendor model: end to end on a 5 V module ==\n");
   const float x_air = air_value_from_voltage(0.5f, 5.0f);  // 4.5 V of headroom in clean air

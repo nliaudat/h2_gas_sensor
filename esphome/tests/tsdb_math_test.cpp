@@ -47,9 +47,7 @@ static void check_nan(const char *name, double value) {
 // Retention of a capacity at a write interval. The header no longer carries this
 // helper (the capacity arithmetic is what it owns), so the doc numbers are
 // derived from the capacity and the interval right here.
-static double history_seconds(double records, double interval_seconds) {
-  return records * interval_seconds;
-}
+static double history_seconds(double records, double interval_seconds) { return records * interval_seconds; }
 
 int main() {
   std::printf("== int16 encoding (raw = round(value * scale + offset)) ==\n");
