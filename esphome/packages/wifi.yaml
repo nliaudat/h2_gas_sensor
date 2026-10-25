@@ -13,15 +13,18 @@ wifi:
     - ssid: !secret wifi_ssid_3
       password: !secret wifi_password_3
       priority: 0
-      
+
   # The post-connect roaming scan takes the radio away from the AP, so the
-  # coexist option below rejects the default (see wifi/__init__.py).
+  # `ap_mode:` below rejects the default (see wifi/__init__.py).
   post_connect_roaming: false
 
+  # The AP stays up next to the station connection (upstream `ap_mode:`, which
+  # replaced the older `ap: coexist:`). It rejects the roaming scan, hence the
+  # `post_connect_roaming: false` above.
   ap:
     ssid: "H2 sensor Hotspot" #access with 192.168.4.1
     # password: "1123456"
-    coexist: true
+    ap_mode: ALWAYS_ON
     # napt: true
 
   # Open fallback hotspot (see ../../docs/offline_mode.md).  `password:` is

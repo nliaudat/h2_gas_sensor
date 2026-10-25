@@ -1,12 +1,16 @@
-// Host side validation of components/mq_gas_sensors/mq_math.h
+// Host side validation of the MQ gas-sensor math, against the vendored copy of
+// the header the build compiles (tests/mq_math.h, see the banner there).
 //
 // Build & run (no ESPHome/ESP-IDF needed):
-//     g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test
+//     g++ -std=c++17 -O2 -Wall -Wextra -I . mq_math_test.cpp -o mq_math_test
 //     ./mq_math_test
 //
 // The expected values are recomputed here with plain <cmath> calls, so the test
-// doubles as a check that the ported formulas still match MQUnifiedsensor.
+// doubles as a check that the ported formulas still match MQUnifiedsensor. The
+// ADC conversion itself lives in the component, not in the math header, so the
+// voltage below is computed from counts by hand.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -32,17 +36,22 @@ static void check_true(const char *name, bool ok) {
     failures++;
 }
 
-int main() {
-  std::printf("== ADC voltage ==\n");
-  check_close("voltage_from_adc(4095, 12 bits, 3.3 V)", voltage_from_adc(4095, 12, 3.3f), 3.3);
-  check_close("voltage_from_adc(2048, 12 bits, 3.3 V)", voltage_from_adc(2048, 12, 3.3f), 2048.0 * 3.3 / 4095.0);
-  check_close("voltage_from_adc(1023, 10 bits, 5 V)", voltage_from_adc(1023, 10, 5.0f), 5.0);
+static void check_nan(const char *name, double value) {
+  const bool ok = std::isnan(value);
+  std::printf("%-58s %s\n", name, ok ? "OK" : "FAIL");
+  if (!ok)
+    failures++;
+}
 
-  std::printf("\n== RS from the AO voltage (RS = (VCC*RL)/V - RL) ==\n");
+int main() {
+  std::printf("== RS from the AO voltage (RS = (VCC*RL)/V - RL) ==\n");
+  // 2048 counts of a 12 bit ADC at 3.3 V, the reading the old ADC helper
+  // produced - computed here by hand, the conversion lives in the component.
   const double v = 2048.0 * 3.3 / 4095.0;
   check_close("rs_from_voltage(V, VCC=5, RL=10)", rs_from_voltage(v, 5.0f, 10.0f), (5.0 * 10.0) / v - 10.0);
-  check_close("rs_from_voltage(0 V) is clamped to 0", rs_from_voltage(0.0f, 5.0f, 10.0f), 0.0);
-  check_close("rs_from_voltage(negative) is clamped to 0", rs_from_voltage(-1.0f, 5.0f, 10.0f), 0.0);
+  check_nan("rs_from_voltage(0 V) is a missing reading -> NaN", rs_from_voltage(0.0f, 5.0f, 10.0f));
+  check_nan("rs_from_voltage(negative) is NaN", rs_from_voltage(-1.0f, 5.0f, 10.0f));
+  check_nan("rs_from_voltage(above VCC * RL / RL, i.e. RS < 0) is NaN", rs_from_voltage(6.0f, 5.0f, 10.0f));
 
   std::printf("\n== MQ-8 (H2) curve: a=976.97, b=-0.688, RS/R0 in clean air = 70 ==\n");
   const float mq8_a = 976.97f;
@@ -57,7 +66,7 @@ int main() {
 
   std::printf("\n== R0 calibration (R0 = RS_air / ratio_in_clean_air) ==\n");
   const double rs_air = (5.0 * 10.0) / v - 10.0;
-  const double r0 = r0_from_clean_air(static_cast<float>(rs_air), 70.0f, 0.0f);
+  const double r0 = r0_from_clean_air(static_cast<float>(rs_air), 70.0f);
   check_close("r0_from_clean_air(RS_air, 70)", r0, rs_air / 70.0);
   check_close("ratio back in clean air is 70",
               ratio_from_rs(static_cast<float>(rs_air), static_cast<float>(r0), 0.0f, RATIO_RS_R0), 70.0, 1e-3);
@@ -66,8 +75,8 @@ int main() {
       ppm_from_ratio(mq8_a, mq8_b, ratio_from_rs(static_cast<float>(rs_air), static_cast<float>(r0), 0.0f, RATIO_RS_R0),
                      REGRESSION_EXPONENTIAL),
       52.47, 0.5);
-  check_close("r0_from_clean_air(0, 70) is 0", r0_from_clean_air(0.0f, 70.0f, 0.0f), 0.0);
-  check_close("r0_from_clean_air(RS, 0) is 0", r0_from_clean_air(10.0f, 0.0f, 0.0f), 0.0);
+  check_close("r0_from_clean_air(0, 70) is 0", r0_from_clean_air(0.0f, 70.0f), 0.0);
+  check_close("r0_from_clean_air(RS, 0) is 0", r0_from_clean_air(10.0f, 0.0f), 0.0);
 
   std::printf("\n== R0/RS mode (MQUnifiedsensor readSensorR0Rs) ==\n");
   check_close("ratio R0/RS = 1/70 in clean air",
@@ -83,8 +92,9 @@ int main() {
               std::pow(10.0, (0.0 - 0.4491) / -0.47712));
 
   std::printf("\n== Guards and clamps ==\n");
-  check_close("ratio 0 -> 0 ppm", ppm_from_ratio(mq8_a, mq8_b, 0.0f, REGRESSION_EXPONENTIAL), 0.0);
-  check_close("a = 0 -> 0 ppm", ppm_from_ratio(0.0f, mq8_b, 3.0f, REGRESSION_EXPONENTIAL), 0.0);
+  check_close("ratio 0 -> FLT_MAX (saturated end, clamped later)",
+              ppm_from_ratio(mq8_a, mq8_b, 0.0f, REGRESSION_EXPONENTIAL), FLT_MAX);
+  check_nan("a = 0 -> NaN", ppm_from_ratio(0.0f, mq8_b, 3.0f, REGRESSION_EXPONENTIAL));
   // MQ-3 CH4 curve (a=2e31, b=19.01): 2e31 * 10^19.01 exceeds FLT_MAX -> FLT_MAX
   check_close("log overflow -> FLT_MAX", ppm_from_ratio(2e31f, 19.01f, 10.0f, REGRESSION_EXPONENTIAL), FLT_MAX);
   // b=max, tiny ratio -> 10^-3800 underflows -> 0
@@ -123,8 +133,9 @@ int main() {
                            ppm_from_ratio(mq8_a, mq8_b, 70.0f, REGRESSION_EXPONENTIAL) -
                        1.0),
               -11.1, 0.2);
-  check_close("inverse: ratio 0 -> 0 ppm", ppm_from_ratio(ds_a, ds_b, 0.0f, REGRESSION_INVERSE), 0.0);
-  check_close("inverse: a = 0 -> 0 ppm", ppm_from_ratio(0.0f, ds_b, 3.0f, REGRESSION_INVERSE), 0.0);
+  check_close("inverse: ratio 0 -> FLT_MAX (saturated end)",
+              ppm_from_ratio(ds_a, ds_b, 0.0f, REGRESSION_INVERSE), FLT_MAX);
+  check_nan("inverse: a = 0 -> NaN", ppm_from_ratio(0.0f, ds_b, 3.0f, REGRESSION_INVERSE));
 
   std::printf("\n== Temperature/humidity correction (MQDataScience Correction.cpp) ==\n");
   // MQ-8 constants: a 0.8559 -> 0.8201, b -0.0611 -> -0.0606, c 0.1673 -> 0.1492.

@@ -30,9 +30,9 @@ esp32:
 logger:
   level: INFO
 external_components:
-  - source:
-      type: local
-      path: ../components
+  - source: github://pr#20896
+    components: [mq_gas_sensors]
+    refresh: always
 
 packages:
   mq8: !include ../packages/mq8.yaml

@@ -145,10 +145,13 @@ sensor A0 ──[ R3 / R5 = 10 kΩ ]──┬── ADC-n ──> left socket (S
   can stay as it is.
 * 3.33 V is a hair above the 3.3 V "recommended maximum" of the ESP32 ADC, so the
   very top of the range can clip - both packages declare `adc_input_max: 3.33` for
-  that reason, and both components take a declared range as authoritative instead
-  of clamping it to the 2.45 V the ADC measures at `attenuation: 12db`. Fit
-  10 k / 10 k (2.5 V) instead of the 20 k if you want the whole range unambiguous
-  and set `mq8_divider_r2` / `mics_divider_r2` to `10.0`.
+  that reason. The merged `mics_5524` component takes a declared range as
+  authoritative; `mq_gas_sensors` only does with
+  [`../patches/pr20896-adc-input-max.patch`](../patches/pr20896-adc-input-max.patch)
+  applied (its current PR head clamps the value to the 2.45 V the ADC measures at
+  `attenuation: 12db`) - see [`development.md`](development.md#upstream-revisions).
+  Fit 10 k / 10 k (2.5 V) instead of the 20 k if you want the whole range
+  unambiguous and set `mq8_divider_r2` / `mics_divider_r2` to `10.0`.
 * The MQ-8 header is `VCC` (5 V) / `GND` / `D0` / `A0`: only `A0` is used, the
   digital output stays open. It sits inside the module outline printed as `MQ-9` -
   the MQ-8 and the MQ-9 module share the 4-pin interface and the outline, so

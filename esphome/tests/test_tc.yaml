@@ -7,7 +7,8 @@
 #     coefficient dataset (`curve: mqdatascience`) and `correction_clamp: scaled`
 #     (MQDataScience's own behaviour) - `mq8_tc`
 #   * explicit opt-out: both links present, `correction_mode: none` - `mq8_tc_none`
-#   * all three driven by template sensors (no I2C hardware needed for validation)
+#   * the ambient sensors are template sensors (no I2C hardware needed for
+#     validation); `correction_sensor:` is declared inline, as upstream expects
 esphome:
   name: mq_tc_test
 esp32:
@@ -17,9 +18,9 @@ esp32:
 logger:
   level: INFO
 external_components:
-  - source:
-      type: local
-      path: ../components
+  - source: github://pr#20896
+    components: [mq_gas_sensors]
+    refresh: always
 sensor:
   - platform: template
     id: test_temperature
@@ -33,16 +34,6 @@ sensor:
     unit_of_measurement: "%"
     accuracy_decimals: 1
     update_interval: 60s
-
-  - platform: template
-    id: test_correction
-    name: "Test correction factor"
-    accuracy_decimals: 4
-
-  - platform: template
-    id: test_correction_auto
-    name: "Test correction factor (auto)"
-    accuracy_decimals: 4
 
   - platform: mq_gas_sensors
     id: mq8_tc
@@ -62,7 +53,9 @@ sensor:
     humidity: test_humidity
     correction_mode: mqdatascience
     correction_clamp: scaled
-    correction_sensor: test_correction
+    correction_sensor:
+      name: "Test correction factor"
+      accuracy_decimals: 4
     min_ppm: 0
     max_ppm: 10000
 
@@ -81,7 +74,9 @@ sensor:
     r0: 0.29
     temperature: test_temperature
     humidity: test_humidity
-    correction_sensor: test_correction_auto
+    correction_sensor:
+      name: "Test correction factor (auto)"
+      accuracy_decimals: 4
     min_ppm: 0
     max_ppm: 10000
 

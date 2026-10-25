@@ -1,0 +1,81 @@
+diff --git a/esphome/components/mq_gas_sensors/sensor.py b/esphome/components/mq_gas_sensors/sensor.py
+index 56d2ed1..7978b09 100644
+--- a/esphome/components/mq_gas_sensors/sensor.py
++++ b/esphome/components/mq_gas_sensors/sensor.py
+@@ -372,26 +372,27 @@ def _effective_input_max(
+ ) -> float:
+     """Range the divider is checked against.
+ 
+-    A declared ``adc_input_max:`` describes a sampler whose range the
+-    configuration otherwise cannot, but it cannot widen an ADC past what its
+-    attenuation measures: above that voltage the conversion flattens, so the
+-    reading silently stops tracking the sensor.
++    A declared ``adc_input_max:`` is authoritative, exactly as it is in the
++    merged ``mics_5524`` component: it describes the sampler the wiring feeds,
++    and only the configuration knows that. Above the range the ADC measures at
++    its attenuation the conversion flattens at the top of the scale; a wiring
++    that lands there (a 10k/20k divider on a 5 V module reaches 3.33 V, where
++    the sensor itself never goes) is a deliberate trade-off, so it is logged
++    instead of refused.
+     """
+     declared = config.get(CONF_ADC_INPUT_MAX)
+     if declared is None:
+         return known_max
+-    if not known or declared <= known_max:
+-        return float(declared)
+-    _LOGGER.warning(
+-        "%s: 'adc_input_max: %.2f' is above the %.2f V the ADC measures at its "
+-        "attenuation - the divider is checked against %.2f V, and conversions "
+-        "above it flatten",
+-        label,
+-        declared,
+-        known_max,
+-        known_max,
+-    )
+-    return known_max
++    if known and declared > known_max:
++        _LOGGER.debug(
++            "%s: 'adc_input_max: %.2f' is above the %.2f V the ADC measures at "
++            "its attenuation - conversions above that flatten, the divider is "
++            "checked against the declared range",
++            label,
++            declared,
++            known_max,
++        )
++    return float(declared)
+ 
+ 
+ def _validate_config(config: ConfigType) -> ConfigType:
+diff --git a/tests/component_tests/mq_gas_sensors/test_mq_gas_sensors.py b/tests/component_tests/mq_gas_sensors/test_mq_gas_sensors.py
+index c9317d0..667eb53 100644
+--- a/tests/component_tests/mq_gas_sensors/test_mq_gas_sensors.py
++++ b/tests/component_tests/mq_gas_sensors/test_mq_gas_sensors.py
+@@ -708,17 +708,24 @@ def test_voltage_source_range_is_checked(
+     assert "above the 1.75 V measuring range of the sampler" in captured.out
+ 
+ 
+-def test_declared_range_cannot_widen_the_sampler(
++def test_declared_range_is_authoritative(
+     component_config_path: Callable[[str], Path],
+     capsys: pytest.CaptureFixture[str],
+     caplog: pytest.LogCaptureFixture,
+ ) -> None:
+-    """A declared `adc_input_max:` is capped at the sampler's attenuation range."""
++    """A declared `adc_input_max:` is what the divider is checked against.
++
++    The attenuation of the sampler only sets the range it *measures*: a wiring
++    that maps the sensor maximum above it clips at the top of the scale, which
++    the configuration accepts explicitly (10k/20k on a 5 V module reaches
++    3.33 V). Refusing it would leave no way to declare a divider that the
++    hardware really has.
++    """
+     CORE.config_path = component_config_path("declared_range_voltage_source.yaml")
+-    with caplog.at_level("WARNING"):
++    with caplog.at_level("DEBUG"):
+         assert read_config({}) is None
+     captured = capsys.readouterr()
+-    assert "above the 1.75 V measuring range of the sampler" in captured.out
++    assert "measuring range of the sampler" not in captured.out
+     assert "'adc_input_max: 3.34' is above the 1.75 V" in caplog.text
+ 
+ 

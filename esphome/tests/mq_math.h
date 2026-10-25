@@ -1,3 +1,10 @@
+// VENDORED - do not edit. Copy of the component header the build compiles, so the
+// host test next to it asserts the same code that runs on the device.
+//   component: mq_gas_sensors (github://pr#20896 head)
+//   revision:  320bab784c7fbeb1cc0509855f10473394a7fba5
+//   licence:   MIT (c) the ESPHome authors
+// Keep the code below byte-identical to that revision; only this banner is local.
+
 #pragma once
 //
 // Pure math of the MQ sensor PPM model.

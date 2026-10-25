@@ -17,7 +17,7 @@
 #   * `partition_size: 500KB`              -> "partition_size must be a multiple of 4KB"
 #   * `memory: psram` without `psram:`     -> "Component psram is required ..."
 #
-# The full list of options is in ../components/tsdb/README.md.
+# The full list of options is in ../../docs/components/tsdb.md.
 substitutions:
   name: tsdbtest
   friendly_name: "tsdb test"
@@ -34,9 +34,9 @@ logger:
   level: INFO
 
 external_components:
-  - source:
-      type: local
-      path: ../components
+  - source: github://pr#20892
+    components: [tsdb]
+    refresh: always
 
 # Stand-in for the SNTP clock of packages/time.yaml: an I2C RTC validates and
 # compiles without a network, without secrets and without the `network`

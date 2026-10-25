@@ -20,21 +20,19 @@ substitutions:
 
   ### time
   TZ: "Europe/Zurich"  # timezone
-  
-### set PYTHONPATH=.esphome\external_components\85e8b4d0
 
+### Components come from their upstream pull requests only - this repository keeps
+### no copy of them. `mics_5524` and the `wifi` `ap_mode:` option (which replaced
+### the older `ap: coexist:`) are merged into ESPHome and built in; `mq_gas_sensors`
+### and `tsdb` are still PR-only. `refresh: always` tracks the PR head: a build
+### needs network access for the first fetch on a machine, later builds reuse the
+### clone in .esphome/external_components/.
 external_components:
   - source: github://pr#20896
     components: [mq_gas_sensors]
     refresh: always
-  - source: github://pr#21024
-    components: [mics_5524]
-    refresh: always
   - source: github://pr#20892
     components: [tsdb]
-    refresh: always
-  - source: github://pr#20077
-    components: [wifi]
     refresh: always
 
 # Enable logging
@@ -55,14 +53,18 @@ logger:
     number: ERROR
     sensor: INFO
     # Gas sensor components - these keys are the ESPHome log *tags*, not the
-    # entity ids: mq_gas_sensors = packages/mq8.yaml, mics_5524_gas_sensor =
+    # entity ids: mq_gas_sensors = packages/mq8.yaml, mics_5524 =
     # packages/mics5524.yaml.
-    #   * `INFO` + `log_ppm: true` in the two packages is the "normal mode": one
+    #   * The MQ-8 package runs at `INFO` + `log_ppm: true` ("normal mode"): one
     #     line per update with the published value, next to the boot, calibration
     #     and warning messages, e.g. `[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm`.
+    #   * MiCS-5524 has no value line of its own: `INFO` keeps its boot, warm-up
+    #     and calibration messages, and the gas sub-sensors publish through the
+    #     `[S][sensor]` lines of the log client.
     #   * Set a tag back to `DEBUG` (a per-tag level can only be *quieter* than
     #     the global level, see `level:` above) to read the whole chain,
-    #     `V=... RS=... ratio=... (correction=...) -> ... ppm`, per update.
+    #     `V=... RS=... ratio=... (correction=...) -> ... ppm` (MQ-8) or
+    #     `V_AO=... ratio=... -> ... ppm` (MiCS-5524), per update.
     # The `[S][sensor]: '...' >> ...` lines are not device logs: they are
     # synthesised by the log *client* (`esphome logs`, the dashboard) for every
     # entity state change; `esphome logs --no-states config.yaml` (or

@@ -34,7 +34,12 @@ repos:
           - --branch=dev
           - --branch=master
       - id: end-of-file-fixer
+        # patches/ holds unified diffs: their context lines are load-bearing.
+        exclude: \.patch$
       - id: trailing-whitespace
+        # A unified diff encodes context lines as " <text>" and empty context as a
+        # single space, so the whitespace here is part of the format.
+        exclude: \.patch$
       - id: check-added-large-files
       - id: mixed-line-ending
         args: [--fix=lf]
@@ -57,6 +62,10 @@ repos:
     hooks:
       - id: clang-format
         types_or: [c, c++]
+        # The math headers are vendored verbatim from upstream, which formats with
+        # a newer clang-format; reformatting them would break "only the banner is
+        # local" (see the banner in each file).
+        exclude: ^esphome/tests/(mq|mics|tsdb)_math\.h$
   - repo: local
     hooks:
       - id: ci-custom

@@ -2,9 +2,9 @@
 
 Upstream derives some checks (namespace, component-relative includes/imports)
 from the paths it is handed, so the linter has to see the layout it was written
-for: the ``esphome/`` project directory holding ``components/``, ``packages/``
-and ``tests/``, with paths expressed relative to the git root
-(``esphome/components/...``). ``pre-commit`` starts hooks in the git root, but a
+for: the ``esphome/`` project directory holding ``packages/`` and ``tests/``
+(``components/`` upstream), with paths expressed relative to the git root
+(``esphome/packages/...``). ``pre-commit`` starts hooks in the git root, but a
 manual run can come from anywhere, so this wrapper changes the directory first.
 
 The vendored linter also reads upstream's ``esphome/const.py`` at import time

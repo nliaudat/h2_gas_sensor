@@ -29,7 +29,7 @@
 #
 # Sizing
 #   4 columns = 4 + 4*2 = 12 bytes per record, 84 records per 1KB block.
-#   `max_file_size: 384KB` -> 32 064 records = ~22.3 days at 60s (ring buffer:
+#   `max_file_size: 384KB` -> 32 088 records = ~22.3 days at 60s (ring buffer:
 #   the oldest row is overwritten when the capacity is reached, the file never
 #   grows beyond `max_file_size`).  Leaving a column out of the file is what buys
 #   the extra days - the byte count, not the config, decides.  The numbers are
@@ -58,13 +58,13 @@
 #   * `... history clear` deletes every stored row (it does not touch the
 #     configuration); press it deliberately.
 #
-# Documentation: ../../docs/data_logging.md and ../components/tsdb/README.md
+# Documentation: ../../docs/data_logging.md and ../../docs/components/tsdb.md
 
 substitutions:
   history_write_interval: 60s  # one row per interval; also the CSV/decode stride
   history_sync_interval: 60s  # tsdb_sync_h() cadence: the data at risk on a power cut
   history_partition_size: 512KB  # littlefs partition; each OTA slot shrinks by half
-  history_max_file_size: 384KB  # data budget -> ~32 064 records ~ 22.3 days at 60s
+  history_max_file_size: 384KB  # data budget -> ~32 088 records ~ 22.3 days at 60s
   history_aggregate_interval: 5min  # how often the 1h averages below refresh
   history_dump_rows: 60  # records printed by the "history dump" button
 

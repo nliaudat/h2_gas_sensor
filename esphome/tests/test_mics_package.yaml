@@ -15,10 +15,8 @@ esp32:
     type: esp-idf
 logger:
   level: INFO
-external_components:
-  - source:
-      type: local
-      path: ../components
 
+# mics_5524 is built into ESPHome (pull request #21024 is merged), so the
+# package needs no external_components: entry of its own.
 packages:
   mics5524: !include ../packages/mics5524.yaml

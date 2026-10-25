@@ -9,7 +9,7 @@ value and publishes it to Home Assistant.
 | Board | ESP32 devkit (`az-delivery-devkit-v4` by default), ESP-IDF framework |
 | Sensors | MQ-8 (4 000 - 10 000 ppm band, pre-alarm) + optional MiCS-5524 (100 - 1 000 ppm trace band) |
 | Optional | Ambient temperature/humidity: `packages/dht22.yaml` (1-wire DHT22, shipped) or any other sensor (SHT4x on I2C, ...) linked by id - it selects the MQDataScience compensation of the MQ-8 ratio |
-| Components | `components/mq_gas_sensors/` (MQ-2 ... MQ-309A), `components/mics_5524_gas_sensor/` (MiCS-5524) and `components/tsdb/` (persistent history on a LittleFS partition) |
+| Components | `mq_gas_sensors` (MQ-2 ... MQ-309A) and `tsdb` (persistent history on a LittleFS partition) fetched from their pull requests, `mics_5524` (MiCS-5524) merged into ESPHome - see `config.yaml` and [`../docs/development.md`](../docs/development.md) |
 
 This file is the **firmware reference**: which package does what, where every
 setting lives and how the board behaves in operation. For the first install read
@@ -146,10 +146,10 @@ capture a wrong reference) and the value stays `unknown` while the calibration i
 pending or running - a calibration changes the reference, so the previous value
 must not stay visible.
 
-The log prints the result (`R0 = ... kOhm`, `air reference = ...`) and mirrors it
-to the `MQ-8 logs` / `MiCS-5524 logs` text sensor; pin it and drop the
-`calibration:` block for a deterministic setup. Re-calibrate every few months -
-metal-oxide sensors drift. Full workflow:
+The log prints the result (`R0 = ... kOhm` for the MQ-8, `air reference = ...` for
+the MiCS-5524) and the MQ-8 mirrors its chain to the `MQ-8 logs` text sensor; pin
+the value and drop the `calibration:` block for a deterministic setup.
+Re-calibrate every few months - metal-oxide sensors drift. Full workflow:
 [`../docs/getting_started.md`](../docs/getting_started.md).
 
 ## Validate, flash, test
@@ -176,16 +176,17 @@ measurement math and every lint command are collected in
   `alarm test` button plays the melody - see
   [`../docs/local_alarm.md`](../docs/local_alarm.md).
 * **Logging** - `logger:` in `config.yaml` runs at `DEBUG` with per-tag
-  overrides: the two gas-sensor tags (`mq_gas_sensors`, `mics_5524_gas_sensor`)
-  are pinned at `INFO` and the packages enable `log_ppm:`, so the *normal mode*
-  prints one line per update with the published value
+  overrides: the two gas-sensor tags (`mq_gas_sensors`, `mics_5524`) are pinned at
+  `INFO`, and the MQ-8 package enables `log_ppm:`, so the *normal mode* prints one
+  line per update with the published value
   (`[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm`).  Set the tags back to `DEBUG`
   under `logger.logs` to read the whole chain (`V=... RS=... ratio=...
-  (correction=...) -> ... ppm`, the applied T/RH correction, the calibration
-  result).  The chain is mirrored to the `MQ-8 logs` / `MiCS-5524 logs` text
-  sensors (`log_sensor:` in the packages), so it is also visible in Home
-  Assistant without changing the logger level - the per-update line at most every
-  30 s, calibration messages and warnings immediately.  The per-entity
+  (correction=...) -> ... ppm` for the MQ-8, `ratio=... -> ... ppm` per MiCS gas,
+  the applied T/RH correction, the calibration result).  The MQ-8 chain is
+  mirrored to the `MQ-8 logs` text sensor (`log_sensor:`), so it is also visible
+  in Home Assistant without changing the logger level - the per-update line at
+  most every 30 s, calibration messages and warnings immediately; the MiCS-5524
+  has no such mirror upstream.  The per-entity
   `[S][sensor]: '...' >> ...` lines are synthesised by the log *client* for every
   state change; `esphome logs --no-states config.yaml` (or `ESPHOME_LOG_STATES=0`)
   leaves only the device log - see
@@ -230,9 +231,9 @@ Something wrong? [`../docs/troubleshooting.md`](../docs/troubleshooting.md).
 
 * [`../README.md`](../README.md) - user entry point (what it is, quick start).
 * [`../docs/README.md`](../docs/README.md) - index of every document.
-* [`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md) - MQ component reference (all options, calibration, behaviour).
-* [`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md) - MiCS-5524 component reference.
-* [`components/tsdb/README.md`](components/tsdb/README.md) - history component reference (all options, sizing, durability, limits) and [`../docs/data_logging.md`](../docs/data_logging.md) for the user-facing view.
+* [`../docs/components/mq_gas_sensors.md`](../docs/components/mq_gas_sensors.md) - MQ component reference (all options, calibration, behaviour).
+* [`../docs/components/mics_5524.md`](../docs/components/mics_5524.md) - MiCS-5524 component reference.
+* [`../docs/components/tsdb.md`](../docs/components/tsdb.md) - history component reference (all options, sizing, durability, limits) and [`../docs/data_logging.md`](../docs/data_logging.md) for the user-facing view.
 * [`script/README.md`](script/README.md) - provenance of the vendored ESPHome CI linter.
 * [`../.ai/instructions.md`](../.ai/instructions.md) - rule book: lint commands, C++/Python/YAML style, domain and safety rules.
 
@@ -241,9 +242,9 @@ Something wrong? [`../docs/troubleshooting.md`](../docs/troubleshooting.md).
 The components embed data and formulas from MIT-licensed projects, and the
 history component links two more from the ESP-IDF component registry - the full
 attribution is in
-[`components/mq_gas_sensors/README.md`](components/mq_gas_sensors/README.md),
-[`components/mics_5524_gas_sensor/README.md`](components/mics_5524_gas_sensor/README.md),
-[`components/tsdb/README.md`](components/tsdb/README.md),
+[`../docs/components/mq_gas_sensors.md`](../docs/components/mq_gas_sensors.md),
+[`../docs/components/mics_5524.md`](../docs/components/mics_5524.md),
+[`../docs/components/tsdb.md`](../docs/components/tsdb.md),
 [`script/README.md`](script/README.md) and
 [`../docs/README.md`](../docs/README.md):
 
@@ -268,13 +269,13 @@ licence and is attributed where it is used:
 
 | Material | Where it is used | Licence |
 |---|---|---|
-| MQUnifiedsensor / MQSensorsLib - PPM model, and the `a`/`b` coefficients cross-checked against its examples | `components/mq_gas_sensors/` (`mq_math.h`, `coefficients.py`) | MIT |
-| SolderedElectronics MQ library - `sensorConfigData.h` referenced for the curve table (the values themselves are the datasheet / MQUnifiedsensor fits) | `components/mq_gas_sensors/coefficients.py` | GPL-3.0 (data reference only) |
-| MQDataScience (`MQSpaceData` v6.0.0) - temperature/humidity correction model and the alternative MQ-8 dataset | `components/mq_gas_sensors/`, `docs/mqdatascience_comparison.md` | MIT |
-| DFRobot_MICS - MiCS-5524 vendor thresholds, gains and measuring ranges | `components/mics_5524_gas_sensor/coefficients.py` | MIT |
+| MQUnifiedsensor / MQSensorsLib - PPM model, and the `a`/`b` coefficients cross-checked against its examples | `mq_gas_sensors` (`mq_math.h`, `coefficients.py`; the header is vendored as `tests/mq_math.h`) | MIT |
+| SolderedElectronics MQ library - `sensorConfigData.h` referenced for the curve table (the values themselves are the datasheet / MQUnifiedsensor fits) | `mq_gas_sensors/coefficients.py` | GPL-3.0 (data reference only) |
+| MQDataScience (`MQSpaceData` v6.0.0) - temperature/humidity correction model and the alternative MQ-8 dataset | `mq_gas_sensors/`, `docs/mqdatascience_comparison.md` | MIT |
+| DFRobot_MICS - MiCS-5524 vendor thresholds, gains and measuring ranges | `mics_5524/coefficients.py` | MIT |
 | ESPHome - `script/ci-custom.py` and `script/helpers.py`, vendored verbatim | `script/`, used by the `ci-custom` pre-commit hook | MIT |
-| zakery292/esp_tsdb - the time-series engine of the history component (not vendored: fetched at build time by the ESP-IDF component manager, pinned to 2.4.3 in `components/tsdb/__init__.py`) | `components/tsdb/` | MIT |
-| joltwallet/esp_littlefs - the LittleFS VFS component (not vendored, pinned to 1.22.3) and littlefs itself, which it bundles | `components/tsdb/` | MIT / BSD-3-Clause (littlefs) |
+| zakery292/esp_tsdb - the time-series engine of the history component (not vendored: fetched at build time by the ESP-IDF component manager, pinned to 2.4.3 in `tsdb/__init__.py`) | `tsdb` | MIT |
+| joltwallet/esp_littlefs - the LittleFS VFS component (not vendored, pinned to 1.22.3) and littlefs itself, which it bundles | `tsdb` | MIT / BSD-3-Clause (littlefs) |
 | ESPHome framework itself (not vendored; the firmware is compiled against it like any ESPHome project) | the build | MIT for the Python codebase, GPLv3 for the C++/runtime files |
 | Datasheet fits quoted from community sources (e.g. the MiCS-5524 CO two-point fit) | `docs/mics5524_conversion.md`, `docs/mq8_h2_curve.md` | facts / derivations - attributed to the sources in `docs/README.md` |
 

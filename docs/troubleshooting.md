@@ -10,7 +10,7 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | `esphome config` fails with "... can damage the pin" | the configuration allows more than `adc_pin_max` (3.6 V) at the ADC pin - e.g. a 5 V module with `voltage_multiplier: 1.0` and no divider | add `voltage_divider: {r1: 10.0, r2: 20.0}` (both modules) - 5 V -> 3.33 V - switch to 10k/10k (2.5 V), or declare `adc_pin_max` when the ADC really does see the full swing (ADS1115) |
-| warning "top of the range may clip" | the divider maps the sensor maximum slightly above `adc_input_max` (10k/20k -> 3.33 V vs 3.3 V recommended) | accept it - only the very top of the range reads non-linearly - or use 10k/10k |
+| warning "top of the range may clip" / error "above the 2.45 V measuring range of the sampler" | the divider maps the sensor maximum slightly above what the ADC measures (10k/20k -> 3.33 V vs 2.45 V at `attenuation: 12db`) | the merged `mics_5524` accepts the declared `adc_input_max: 3.33`; `mq_gas_sensors` needs [`../patches/pr20896-adc-input-max.patch`](../patches/pr20896-adc-input-max.patch), otherwise use 10k/10k and re-check that 2.5 V fits |
 | `Duplicate id: mq8` | `packages/mq8.yaml` is included twice (for instance under two different package names in `config.yaml`) | include the MQ-8 package exactly once |
 | the configuration validates but nothing arrives in Home Assistant | missing/typo in `secrets.yaml`, or the board is on another network | try the fallback AP `<name> Fallback` (password `fallback_hotspot_password`), then the captive portal |
 | upload fails: no serial device, or the port is busy | missing USB driver (CP2102/CH340), or another program holds the port | install the driver, close the serial monitor, try another cable (some are charge-only) |
@@ -25,7 +25,7 @@ Two stages: **setup / configuration** (nothing is flashed yet) and **runtime**
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | state stays `unknown`, log says `R0 unknown` / `no air reference` | no `calibration:` block and no pinned reference, or the calibration has not run yet (delay / warm-up window) | wait for the delay or the burn-in, or pin `r0:` / `air_reference:` |
-| the value stays `unknown` after pressing *recalibrate* | this is intentional: a request is deferred until `warmup_time` ends, and nothing is published while the calibration is pending or running (the reference is about to change) | watch the `MQ-8 logs` / `MiCS-5524 logs` text sensor - it reports the remaining warm-up time and the calibration result |
+| the value stays `unknown` after pressing the MiCS-5524 *recalibrate* button | this is intentional: a request is deferred until `warmup_time` ends, and nothing is published while the calibration is pending or running (the reference is about to change) | watch the console log (`calibration requested`, then the result); the MQ-8 has no runtime recalibration at all - re-flash with `r0:` pinned or `persist: false` |
 | the MiCS ratio sits at 0.8 - 0.9 in clean air / drifts away from 1.0 | stale clean-air reference - captured during the warm-up or before the burn-in finished, or the sensor drifted | re-calibrate once the reading is stable (24 - 48 h burn-in for a new module); the vendor model over-reports while the reference is too high |
 | warning `analog output reads 0.0000 V` | `AO` not connected, module not powered from 5 V, wrong divider node, MiCS `EN` polarity | re-check the wiring and `inverted:` |
 | ppm far too low, or nearly flat | `rl:` does not match the module (measure the resistor between `AO` and GND), or the divider ratio changed without updating `r1`/`r2` | set `rl:` and `voltage_divider:` (both modules) to the measured values |
@@ -57,18 +57,18 @@ mode":
 
 ```
 [I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm
-[I][mics_5524_gas_sensor]: 'H2': 0.0 ppm
 ```
 
 The whole measurement chain stays at `DEBUG` and appears as soon as
-`mq_gas_sensors` / `mics_5524_gas_sensor` are set back to `DEBUG` under
-`logger.logs` (`log_ppm:` in the two packages switches the value line above -
-see the logger comment in `config.yaml`).  Illustrative values:
+`mq_gas_sensors` / `mics_5524` are set back to `DEBUG` under `logger.logs`
+(`log_ppm: true` in the MQ-8 package switches the value line above - see the
+logger comment in `config.yaml`; the MiCS-5524 has no value line of its own).
+Illustrative values:
 
 ```
 [D][mq_gas_sensors]: 'MQ-8 H2': V=1.234 V, RS=12.345 kOhm, ratio=42.100 (correction=0.9987) -> 74.5 ppm
-[D][mics_5524_gas_sensor]: 'H2': V_AO=1.234 V, x=3.7660, ratio=0.9980 (dfrobot) -> 0.0 ppm
-[D][mics_5524_gas_sensor]: 'CO': V_AO=1.234 V, RS=30.519 kOhm, ratio=0.8720 (datasheet) -> 7.3 ppm
+[D][mics_5524]: V_AO=1.234 V, ratio=0.9980
+[D][mics_5524]: 'H2': ratio=0.9980 -> 0.0 ppm
 ```
 
 **The synthesised state lines** are the second source: the log *client*
@@ -89,16 +89,17 @@ esphome logs --no-states config.yaml     # or: set ESPHOME_LOG_STATES=0
 
 * `V` (MQ) / `V_AO` (MiCS) is the scaled voltage at the pin (after
   `voltage_multiplier`) - use it to verify the divider ratio;
-* the MiCS prints `x = VCC - V_AO` for the vendor model and `RS` for the
-  datasheet model - each line shows the quantity its model uses;
+* the MiCS line shows the ratio of its model per gas (vendor: `x / x_air`,
+  datasheet: `RS / R0`);
 * `ratio` is RS/R0 for the MQ-8 and for the MiCS datasheet model, or the vendor
   ratio for `conversion: dfrobot` (≈ 1.0 in clean air, dropping when a reducing
   gas arrives);
 * `correction` is the T/RH factor (1.0000 = none);
 * the ppm value at the end is what the sensor entity publishes.
 
-Both packages also mirror the chain - and the calibration messages and warnings
-- into the `MQ-8 logs` / `MiCS-5524 logs` text sensors (`log_sensor:`), so the
-same chain can be read from Home Assistant without changing `logger.logs`.  The
-per-update *value* line is console-only: a text state per second would flood the
-recorder.
+The MQ-8 package also mirrors the chain - and the calibration messages and
+warnings - into the `MQ-8 logs` text sensor (`log_sensor:`), so the same chain
+can be read from Home Assistant without changing `logger.logs`.  The per-update
+*value* line is console-only: a text state per second would flood the recorder.
+The MiCS-5524 package has no such mirror upstream (no `log_sensor:`/
+`log_ppm:` key), so read its DEBUG lines from the console.

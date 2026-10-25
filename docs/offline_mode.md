@@ -16,6 +16,10 @@ the HTTP side is
 
 ## The open fallback AP
 
+The shipped [`../esphome/packages/wifi.yaml`](../esphome/packages/wifi.yaml) uses
+an always-on open hotspot instead (see "AP and station at the same time"); the
+block below is the *fallback* variant, kept commented out in that package:
+
 ```yaml
 ap:
   ssid: "${name} Fallback"
@@ -25,14 +29,15 @@ ap:
 * **No password** - with the `password:` key absent ESPHome starts the SoftAP
   with `WIFI_AUTH_OPEN`. This is deliberate: a responder must be able to join the
   board in a room with no infrastructure and read the value on the spot.
-* **It is a fallback, not a second interface** - the AP comes up only after
-  `ap_timeout` (ESPHome's default is **90 s**) with no station connected, i.e.
-  after all three `networks` were tried. Uncomment `ap_timeout:` under `ap:` to
-  change that wait (`0s` disables the fallback AP completely).
+* **In the fallback mode it is not a second interface** - with the default
+  `ap_mode: FALLBACK` the AP comes up only after `ap_timeout` (ESPHome's default is
+  **90 s**) with no station connected, i.e. after all three `networks` were tried.
+  Uncomment `ap_timeout:` under `ap:` to change that wait (`0s` disables the
+  fallback AP completely).
 * **It starts at most once per boot.** Once one of the known networks has
-  connected, the AP is switched off and is not brought back until the next boot -
-  see "AP and station at the same time" below. A power-cycle, or the Monday
-  06:00 restart of
+  connected, the fallback AP is switched off and is not brought back until the
+  next boot - see "AP and station at the same time" below. A power-cycle, or the
+  Monday 06:00 restart of
   [`../esphome/packages/time.yaml`](../esphome/packages/time.yaml), re-arms it.
 * The AP address is the ESPHome default `192.168.4.1`. The captive portal's DNS
   answers every queried name with that address, so a browser that opens any URL
@@ -72,19 +77,33 @@ captive_portal:
   smaller firmware without port 80): the monitor - the sensors, the Home
   Assistant API and the local pre-alarm - does not need it.
 
-## What does not work: AP and station at the same time
+## AP and station at the same time (`ap_mode: ALWAYS_ON`)
 
-Stock ESPHome cannot run the SoftAP and the station simultaneously. The AP is a
-**fallback**: `WiFiComponent::check_connecting_finished()` disables it
-(`wifi_mode_({}, false)`) the moment a configured network connects, and the
-fallback block in `WiFiComponent::loop()` is gated on `!this->ap_setup_`, so it
-does not come back until the next boot. There is no configuration option to keep
-it on - that needs a custom external component re-asserting `WIFI_AP_STA` mode
-against the Wi-Fi state machine.
+The project runs the SoftAP **next to** the station connection:
+[`../esphome/packages/wifi.yaml`](../esphome/packages/wifi.yaml) sets
 
-Practical result: while the board is on your Wi-Fi you reach it over the LAN and
-Home Assistant, and while it is offline you reach it over its own AP - but never
-both at once.
+```yaml
+ap:
+  ssid: "H2 sensor Hotspot"   # open, no password
+  ap_mode: ALWAYS_ON
+```
+
+`ap_mode:` comes from the upstream `wifi` component (merged PR #20077) and
+replaces the older `ap: coexist:` option. `FALLBACK` (the default) keeps the
+historical behaviour described above - the AP appears only after `ap_timeout` and
+is switched off as soon as a known network connects - while `ALWAYS_ON` starts it
+at boot and leaves it up; `WISP` routes its clients through an upstream
+connection instead (with an optional captive portal).
+
+Practical result: the open hotspot `H2 sensor Hotspot` (`192.168.4.1`) is
+reachable while the board is on the house Wi-Fi as well, so a phone in the battery
+room does not depend on the router. `ALWAYS_ON` is rejected together with
+`post_connect_roaming: true` (the roaming scan takes the radio away from the AP),
+which is why the package sets `post_connect_roaming: false`.
+
+The station still reconnects on its own; only the *fallback* AP is one-shot per
+boot. If you prefer that behaviour, delete the `ap:` block or set
+`ap_mode: FALLBACK`.
 
 ## Offline reliability
 

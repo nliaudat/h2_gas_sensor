@@ -25,9 +25,7 @@ reasoning is in [`h2_thresholds.md`](h2_thresholds.md), the sensors themselves i
 | `MiCS-5524 AO (scaled)` | V | diagnostic | `packages/mics5524.yaml` |
 | `MiCS-5524 ratio` | - | diagnostic | `packages/mics5524.yaml` |
 | `MQ-8 logs` | text | diagnostic | `packages/mq8.yaml` |
-| `MQ-8 recalibrate` | - | button (config) | `packages/mq8.yaml` |
-| `MiCS-5524 logs` | text | diagnostic | `packages/mics5524.yaml` |
-| `MiCS-5524 recalibrate` | - | button (config) | `packages/mics5524.yaml` |
+| `MiCS-5524 recalibrate` | - | button (optional) | `packages/mics5524.yaml` (commented block) |
 | `WiFi Signal` | dBm | diagnostic | `packages/sensors_others.yaml` |
 | `restart` | - | switch | `packages/switch.yaml` |
 | `alarm LEDs` | - | light (diagnostic) | `packages/alarm.yaml` |
@@ -196,17 +194,19 @@ on the MQ-8).
   repeated crashes), `api: reboot_timeout: 30min`, OTA (`ota: platform: esphome`)
   and the `restart` switch.
 * **Logs** - `logger:` runs at `DEBUG` with per-tag overrides (the two gas-sensor
-  tags are pinned at `INFO` and the packages enable `log_ppm:`), so the normal
+  tags are pinned at `INFO` and the MQ-8 package enables `log_ppm:`), so the normal
   mode prints the published values (`'MQ-8 H2': 93.7 ppm`) and the whole
   measurement chain needs the tags back at `DEBUG`;
   `esphome logs --no-states config.yaml` removes the `[S]` state lines the log
   client adds - see [`troubleshooting.md`](troubleshooting.md#reading-the-log) for
-  how to read it. The chain is mirrored into Home Assistant by the `MQ-8 logs` /
-  `MiCS-5524 logs` text sensors, so it is readable without changing the logger
-  level.
-* **Re-calibration** - the `MQ-8 recalibrate` / `MiCS-5524 recalibrate` buttons
-  start a clean-air calibration from Home Assistant (press them *only* in clean
-  air; the value is stored in flash). The MiCS button refreshes all five gas
-  entries because they share one physical sensor.
+  how to read it. The MQ-8 chain is mirrored into Home Assistant by the
+  `MQ-8 logs` text sensor, so it is readable without changing the logger level;
+  the MiCS-5524 lines stay in the console.
+* **Re-calibration** - the optional `MiCS-5524 recalibrate` button (uncomment the
+  block at the end of `packages/mics5524.yaml`) starts a clean-air calibration
+  from Home Assistant and refreshes all five gas sub-sensors, which share one
+  physical sensor. Press it *only* in clean air; the reference is stored in flash.
+  The MQ-8 has no runtime recalibration: re-flash it with `r0:` pinned or with
+  `persist: false`.
 * **Firmware updates** - `esphome run config.yaml` over OTA, then press `EN` once
   so the new firmware starts.

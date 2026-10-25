@@ -21,9 +21,9 @@ esp32:
 logger:
   level: INFO
 external_components:
-  - source:
-      type: local
-      path: ../components
+  - source: github://pr#20896
+    components: [mq_gas_sensors]
+    refresh: always
 
 sensor:
   # Stand-ins for the ambient sensors of the package (no I2C/1-wire hardware):

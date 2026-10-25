@@ -4,8 +4,8 @@ The component can convert the analog output with two different models. They are
 **not** interchangeable: they are fitted against different quantities.
 
 Implemented in
-[`../esphome/components/mics_5524_gas_sensor/mics_math.h`](../esphome/components/mics_5524_gas_sensor/mics_math.h)
-and asserted by
+[`../esphome/tests/mics_math.h`](../esphome/tests/mics_math.h) (the vendored
+copy of the upstream component header the build compiles) and asserted by
 [`../esphome/tests/mics_math_test.cpp`](../esphome/tests/mics_math_test.cpp).
 
 ## 1. `conversion: dfrobot` (default) - the vendor model

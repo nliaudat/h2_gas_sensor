@@ -1,11 +1,12 @@
-// Host side validation of components/tsdb/tsdb_math.h
+// Host side validation of the tsdb math, against the vendored copy of the header
+// the build compiles (tests/tsdb_math.h, see the banner there).
 //
 // Build & run (no ESPHome/ESP-IDF needed):
-//     g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test
+//     g++ -std=c++17 -O2 -Wall -Wextra -I . tsdb_math_test.cpp -o tsdb_math_test
 //     ./tsdb_math_test
 //
 // The geometry numbers asserted here are the ones quoted in
-// docs/data_logging.md and in the component README: the int16_t encoding of a
+// docs/data_logging.md and in docs/components/tsdb.md: the int16_t encoding of a
 // column, the bytes per record, records per block, the capacity of a
 // `max_file_size` and the history that capacity buys at a given write interval.
 // The shipped configuration (packages/tsdb.yaml) has four columns, so the
@@ -43,6 +44,13 @@ static void check_nan(const char *name, double value) {
     failures++;
 }
 
+// Retention of a capacity at a write interval. The header no longer carries this
+// helper (the capacity arithmetic is what it owns), so the doc numbers are
+// derived from the capacity and the interval right here.
+static double history_seconds(double records, double interval_seconds) {
+  return records * interval_seconds;
+}
+
 int main() {
   std::printf("== int16 encoding (raw = round(value * scale + offset)) ==\n");
   check_close("encode(4821 ppm, scale 1)", encode(4821.0, 1.0), 4821);
@@ -76,12 +84,12 @@ int main() {
   check_close("record_bytes(6 columns) = 4 + 6*2", record_bytes(6), 16);
   check_close("records_per_block(6) = (1024-8)/16", records_per_block(6), 63);
   check_close("max_records_for_bytes(384KB, 4)", max_records_for_bytes(384 * 1024, 4), 32597);
-  check_close("file_bytes_for(32597, 4) = header + blocks + index", file_bytes_for(32597, 4), 399608);
+  check_close("file_bytes_for(32088, 4) = index offset + blocks + index", file_bytes_for(32088, 4), 392872);
 
   std::printf("\n== retention ==\n");
-  check_close("history_seconds(32597, 60 s)", history_seconds(32597, 60), 1955820);
-  check_close("history_seconds(32597, 60 s) in days", history_seconds(32597, 60) / 86400.0, 22.6377, 1e-3);
-  check_close("history_seconds(32597, 300 s) in days", history_seconds(32597, 300) / 86400.0, 113.1840, 1e-3);
+  check_close("history_seconds(32088, 60 s)", history_seconds(32088, 60), 1925280);
+  check_close("history_seconds(32088, 60 s) in days", history_seconds(32088, 60) / 86400.0, 22.2833, 1e-3);
+  check_close("history_seconds(32088, 300 s) in days", history_seconds(32088, 300) / 86400.0, 111.4167, 1e-3);
 
   std::printf("\n== planning: capacity_for_bytes() keeps the file inside max_file_size ==\n");
   for (const uint32_t size_kb : {128u, 256u, 384u, 512u, 768u, 1024u}) {
@@ -100,27 +108,27 @@ int main() {
       check_true(name, capacity <= optimistic);
     }
   }
-  check_close("capacity_for_bytes(384KB, 4)", capacity_for_bytes(384 * 1024, 4), 32064);
-  check_close("shipped: file at capacity is 392432 bytes", file_bytes_for(32064, 4), 392432);
+  check_close("capacity_for_bytes(384KB, 4)", capacity_for_bytes(384 * 1024, 4), 32088);
+  check_close("shipped: file at capacity is 392872 bytes", file_bytes_for(32088, 4), 392872);
   check_close("capacity_for_bytes(384KB, 4) in days at 60 s",
-              history_seconds(capacity_for_bytes(384 * 1024, 4), 60) / 86400.0, 22.2667, 1e-3);
+              history_seconds(capacity_for_bytes(384 * 1024, 4), 60) / 86400.0, 22.2833, 1e-3);
   check_close("capacity_for_bytes(384KB, 4) in days at 300 s",
-              history_seconds(capacity_for_bytes(384 * 1024, 4), 300) / 86400.0, 111.3333, 1e-3);
+              history_seconds(capacity_for_bytes(384 * 1024, 4), 300) / 86400.0, 111.4167, 1e-3);
 
   // The four budget rows of the table in docs/data_logging.md (four columns, the
   // shipped configuration).
-  check_close("128KB budget -> 10614 records", capacity_for_bytes(128 * 1024, 4), 10614);
-  check_close("128KB budget -> 130856 bytes", file_bytes_for(10614, 4), 130856);
-  check_close("128KB budget -> 7.4 days at 60 s", history_seconds(10614, 60) / 86400.0, 7.3708, 1e-3);
-  check_close("256KB budget -> 21330 records", capacity_for_bytes(256 * 1024, 4), 21330);
-  check_close("256KB budget -> 261136 bytes", file_bytes_for(21330, 4), 261136);
-  check_close("256KB budget -> 14.8 days at 60 s", history_seconds(21330, 60) / 86400.0, 14.8125, 1e-3);
-  check_close("768KB budget -> 64262 records", capacity_for_bytes(768 * 1024, 4), 64262);
-  check_close("768KB budget -> 786328 bytes", file_bytes_for(64262, 4), 786328);
-  check_close("768KB budget -> 44.6 days at 60 s", history_seconds(64262, 60) / 86400.0, 44.6264, 1e-3);
-  check_close("1MB budget -> 85727 records", capacity_for_bytes(1024 * 1024, 4), 85727);
-  check_close("1MB budget -> 1047896 bytes", file_bytes_for(85727, 4), 1047896);
-  check_close("1MB budget -> 59.5 days at 60 s", history_seconds(85727, 60) / 86400.0, 59.5326, 1e-3);
+  check_close("128KB budget -> 10584 records", capacity_for_bytes(128 * 1024, 4), 10584);
+  check_close("128KB budget -> 130272 bytes", file_bytes_for(10584, 4), 130272);
+  check_close("128KB budget -> 7.35 days at 60 s", history_seconds(10584, 60) / 86400.0, 7.35, 1e-3);
+  check_close("256KB budget -> 21336 records", capacity_for_bytes(256 * 1024, 4), 21336);
+  check_close("256KB budget -> 261576 bytes", file_bytes_for(21336, 4), 261576);
+  check_close("256KB budget -> 14.8 days at 60 s", history_seconds(21336, 60) / 86400.0, 14.8167, 1e-3);
+  check_close("768KB budget -> 64260 records", capacity_for_bytes(768 * 1024, 4), 64260);
+  check_close("768KB budget -> 785744 bytes", file_bytes_for(64260, 4), 785744);
+  check_close("768KB budget -> 44.6 days at 60 s", history_seconds(64260, 60) / 86400.0, 44.625, 1e-3);
+  check_close("1MB budget -> 85764 records", capacity_for_bytes(1024 * 1024, 4), 85764);
+  check_close("1MB budget -> 1048336 bytes", file_bytes_for(85764, 4), 1048336);
+  check_close("1MB budget -> 59.6 days at 60 s", history_seconds(85764, 60) / 86400.0, 59.5583, 1e-3);
 
   std::printf("\n== timestamps and missing values ==\n");
   check_true("is_valid_timestamp(0) is false", !is_valid_timestamp(0));
@@ -173,7 +181,7 @@ int main() {
   // the statistics already reported - 32064 at the shipped 384KB budget/4 columns:
   // the skip then trims it to the newest 60 of the *stored* rows.
   check_true("the widened skip comes from total_records (the shipped capacity)",
-             dump_skip(32064, 60) == 32004 && dump_skip(32064, 60) + 60 == 32064);
+             dump_skip(32088, 60) == 32028 && dump_skip(32088, 60) + 60 == 32088);
 
   std::printf("\n== stored schema probe (recreate_on_schema_change) ==\n");
   // A failed open may only delete the history when the file's *own* header proves

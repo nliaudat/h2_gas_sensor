@@ -135,7 +135,7 @@ columns. The numbers below are asserted by
 
 | Columns | Bytes/record | Records/block | `max_file_size` | Records | File at capacity | History at 60 s | History at 5 min |
 |---|---|---|---|---|---|---|---|
-| 4 (shipped) | 12 | 84 | 384 KB | 32 064 | 392 432 B (383 KB) | 22.3 days | 111.3 days |
+| 4 (shipped) | 12 | 84 | 384 KB | 32 088 | 392 872 B (384 KB) | 22.3 days | 111.4 days |
 
 `capacity_for_bytes()` is deliberately a little more conservative than the
 engine's own `TSDB_CALC_MAX_RECORDS()` (which would allow 32 597 records): the
@@ -155,12 +155,12 @@ Other budgets, same four columns (measured by the same host test):
 
 | `max_file_size` | Records | File at capacity | History at 60 s |
 |---|---|---|---|
-| 128 KB | 10 614 | 130 856 B | 7.4 days |
-| 256 KB | 21 330 | 261 136 B | 14.8 days |
-| 384 KB (shipped) | 32 064 | 392 432 B | 22.3 days |
-| 768 KB | 64 262 | 786 328 B | 44.6 days |
+| 128 KB | 10 584 | 130 272 B | 7.4 days |
+| 256 KB | 21 336 | 261 576 B | 14.8 days |
+| 384 KB (shipped) | 32 088 | 392 872 B | 22.3 days |
+| 768 KB | 64 260 | 785 744 B | 44.6 days |
 
-A 1 MB budget is possible in principle (85 727 records) but needs a partition of
+A 1 MB budget is possible in principle (85 764 records) but needs a partition of
 at least ~1.1 MB - and that would leave the two OTA slots below 1.2 MB, i.e. the
 current firmware at more than 80 % of its slot. Not advisable without changing
 the flash size.
@@ -387,7 +387,7 @@ grow by one per write interval until the ring buffer is full.
 
 ## See also
 
-* [`../esphome/components/tsdb/README.md`](../esphome/components/tsdb/README.md) -
+* [`components/tsdb.md`](components/tsdb.md) -
   every option of the component.
 * [`home_assistant_alerts.md`](home_assistant_alerts.md) - the live entities and
   the automations; the history is the backup for the window they miss.

@@ -13,11 +13,11 @@ filesystem is [`joltwallet/littlefs`](https://github.com/joltwallet/esp_littlefs
 and both are only *build* dependencies - this repository ships no third-party
 code.
 
-Role in this project: [`packages/tsdb.yaml`](../../packages/tsdb.yaml) logs the
+Role in this project: [`packages/tsdb.yaml`](../../esphome/packages/tsdb.yaml) logs the
 four readings that explain a hydrogen event (`H2 (MQ-8)`, `H2 trace (MiCS-5524)`,
 ambient temperature and humidity; the two RS/R0 ratios stay live entities of the
 gas packages, they are just not stored - see
-[`docs/data_logging.md`](../../../docs/data_logging.md) for the user-facing
+[`docs/data_logging.md`](../data_logging.md) for the user-facing
 description). The entities, the calibration and the alarm logic stay exactly as
 they are - the component only reads the last published value of each configured
 sensor.
@@ -40,7 +40,7 @@ tsdb:
 That is a 512 KB partition (both OTA slots shrink by 256 KB),
 `/littlefs/history.tsdb`, one row every 60 s and a `tsdb_sync_h()` after every
 write. The complete, ready-to-use version is
-[`packages/tsdb.yaml`](../../packages/tsdb.yaml).
+[`packages/tsdb.yaml`](../../esphome/packages/tsdb.yaml).
 
 ## How a row is written
 
@@ -153,7 +153,7 @@ next to the existing `nvs` partition; nothing else moves but the two app slots.
 A partition table change can only be delivered by a **USB flash**, so the first
 run after adding the package needs a cable. The measured flash/RAM cost of the
 whole feature (per object, and the numbers to compare a future build against) is
-in [`docs/data_logging.md`](../../../docs/data_logging.md#flash-and-ram-cost-measured-baseline):
+in [`docs/data_logging.md`](../data_logging.md#flash-and-ram-cost-measured-baseline):
 ~40 KB of flash, +2 KB of static RAM, no IRAM.
 
 ## Durability and flash wear
@@ -168,7 +168,7 @@ the ones that dropped a row - so the last record that *was* written is never lef
 unsynced for longer than `sync_interval` while the history has a gap; an interval
 in which nothing was written costs no commit at all. Every write costs one
 LittleFS metadata commit, which is why the default is 60 s rather than 5 s; the
-numbers are in [`docs/data_logging.md`](../../../docs/data_logging.md).
+numbers are in [`docs/data_logging.md`](../data_logging.md).
 
 ## Limits
 

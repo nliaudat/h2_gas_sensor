@@ -6,16 +6,48 @@ lists the commands below as the "must be clean before a change is done" set.
 
 ## Layout in one paragraph
 
-`esphome/config.yaml` is the entry point (substitutions + package includes),
-`esphome/packages/*.yaml` are the includes, `esphome/components/` holds the three
-custom components (`mq_gas_sensors`, `mics_5524_gas_sensor`, `tsdb`) with their
-own READMEs, `esphome/tests/` holds the host tests and the config fixtures, and
-`esphome/script/` holds the vendored ESPHome CI linter (see
+`esphome/config.yaml` is the entry point (substitutions, package includes and the
+`external_components:` block), `esphome/packages/*.yaml` are the includes,
+`esphome/tests/` holds the host tests, the vendored math headers and the config
+fixtures, `docs/components/` holds the component references, and `esphome/script/`
+holds the vendored ESPHome CI linter (see
 [`../esphome/script/README.md`](../esphome/script/README.md)).
 
-A new component must also be listed in `config.yaml`
-(`external_components: ... components: [...]`): folders under `esphome/components/`
-are not discovered automatically.
+None of the three components lives in this repository: `mq_gas_sensors` and
+`tsdb` are fetched from their pull requests (see below) and `mics_5524` is
+merged into ESPHome. A new component has to be listed in the
+`external_components:` block of `config.yaml` - nothing is discovered
+automatically.
+
+## Upstream revisions
+
+The build tracks the PR heads (`github://pr#...` cannot be pinned to a commit),
+so the state the documentation and the host tests were written against is
+recorded here. `refresh: always` re-fetches on every `esphome config`/`compile`.
+
+| Component | Source | Revision this tree was verified against |
+|---|---|---|
+| `mq_gas_sensors` | `github://pr#20896` | `320bab784c7fbeb1cc0509855f10473394a7fba5` |
+| `tsdb` | `github://pr#20892` | `40b8d412def3b607013bc61a6765554eada28444` |
+| `mics_5524` | merged into ESPHome (PR #21024) | ESPHome `2026.11.0-dev` as installed |
+| `wifi` `ap_mode:` | merged into ESPHome (PR #20077) | ESPHome `2026.11.0-dev` as installed |
+
+The math of each component is compiled from a **vendored copy** of its header
+next to the host test (`esphome/tests/{mq,mics,tsdb}_math.h`, each with the
+revision in its banner), so a host test run always asserts the code the build
+uses. When a PR head changes a header, re-copy it, re-run the tests and update
+the numbers in `docs/` - the banner is the only local addition.
+
+`mq_gas_sensors` needs one local patch on this hardware: the PCB feeds both gas
+sensors through a 10k/20k divider (5 V -> 3.33 V), and the current PR head
+refuses a declared `adc_input_max:` above the ADC's 2.45 V measuring range.
+[`../patches/pr20896-adc-input-max.patch`](../patches/pr20896-adc-input-max.patch)
+(`git apply` in an `esphome/esphome` checkout at the revision above) makes the
+declared range authoritative again, the way the merged `mics_5524` component
+treats it - see [`../patches/README.md`](../patches/README.md). **Until it is
+applied, `esphome config config.yaml` fails in `packages/mq8.yaml`** with
+"the sensor output can reach 5.00 V and the configured wiring maps that to
+3.33 V at the ADC input".
 
 ## Validate configurations (no hardware needed)
 
@@ -65,13 +97,13 @@ that table in the same change when a build shifts them noticeably.
 ## Host tests (the measurement math)
 
 The math of the three components lives in a header with no ESPHome/ESP-IDF
-dependency, so it compiles and asserts on the host:
+dependency, vendored next to the tests, so it compiles and asserts on the host:
 
 ```bash
 cd esphome/tests
-g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe
-g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe
-g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe
+g++ -std=c++17 -O2 -Wall -Wextra -I . mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe
+g++ -std=c++17 -O2 -Wall -Wextra -I . mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe
+g++ -std=c++17 -O2 -Wall -Wextra -I . tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe
 ```
 
 Every number quoted in `docs/` is asserted there: change a curve, a coefficient,
@@ -88,7 +120,7 @@ pre-commit run -c esphome/.pre-commit-config.yaml --all-files
 
 # the same checks one by one, to narrow one down
 python esphome/script/run_ci_custom.py          # ESPHome's own checks (LF, namespace, imports, ...)
-cd esphome && yamllint -c .yamllint . && flake8 --config .flake8 components tests script
+cd esphome && yamllint -c .yamllint . && flake8 --config .flake8 tests script
 cd esphome && ruff check . && ruff format --check .
 ```
 
@@ -107,7 +139,7 @@ and `pcb/` out of its file list.
 ## Adding a gas or a curve
 
 The MQ component already covers MQ-2 ... MQ-309A and their gases: check
-[`../esphome/components/mq_gas_sensors/README.md`](../esphome/components/mq_gas_sensors/README.md)
+[`components/mq_gas_sensors.md`](components/mq_gas_sensors.md)
 for the `sensor_type` / `gas` / `curve` keys and the coefficient table before
 adding anything. A new constant has to be asserted in the host test and cited in
 `docs/`.

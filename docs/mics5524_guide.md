@@ -1,7 +1,7 @@
 # MiCS-5524 guide - hardware, wiring and calibration
 
 Component reference:
-[`../esphome/components/mics_5524_gas_sensor/README.md`](../esphome/components/mics_5524_gas_sensor/README.md).
+[`components/mics_5524.md`](components/mics_5524.md).
 Formulas and provenance: [`mics5524_conversion.md`](mics5524_conversion.md).
 
 ## What it is (and is not)
@@ -119,8 +119,8 @@ packages:
 
 ## Publishing several gases
 
-The package instantiates one `mics_5524_gas_sensor` entry per gas of the vendor
-table, all reading the same `A0`:
+The package declares all five gases as sub-sensors of one `mics_5524` hub, all
+converted from the same `A0` reading:
 
 | Entity (suffix of `friendly_name`) | Vendor curve |
 |---|---|
@@ -138,21 +138,21 @@ required for the four extra gases (only CO also ships with
 **They are not five measurements.** There is a single analog output, so all five
 entities are the same `ratio = (VCC - V_AO) / x_air` pushed through five
 different curves: a reading shown as some ppm of H2 becomes a different number
-when the same signal is read as CO, purely because the curves differ. Each entry
-captures and persists its own clean-air reference on the first boot, and the
-ratio / scaled-voltage diagnostics are linked to the H2 entry only (the ratio is
-identical for all five). Use the extra entities to see how the other gases would
-interpret the same signal, never as independent readings - keep the alerting on
-`H2 trace` (and the MQ-8).
+when the same signal is read as CO, purely because the curves differ. The hub
+captures and persists one clean-air reference on the first boot and every gas
+converts from it, and the ratio / scaled-voltage diagnostics belong to the hub
+(the ratio is identical for all five). Use the extra entities to see how the
+other gases would interpret the same signal, never as independent readings - keep
+the alerting on `H2 trace` (and the MQ-8).
 
-Only the H2 entry logs its value (`log_ppm: true` in
-[`../esphome/packages/mics5524.yaml`](../esphome/packages/mics5524.yaml)): one
-`INFO` line per update, e.g. `[I][mics_5524_gas_sensor]: 'H2': 0.0 ppm`.  The
-four views stay silent, and the whole chain per gas
-(`V_AO=… V, x=…, ratio=… -> … ppm`) is logged at `DEBUG` - set the
-`mics_5524_gas_sensor` tag back to `DEBUG` under `logger.logs` to read it
-([`troubleshooting.md`](troubleshooting.md#reading-the-log) explains the `[S]`
-lines that `esphome logs` adds on top).
+The conversion of each gas is logged at `DEBUG`
+(`'H2': ratio=… -> … ppm`), the boot, warm-up and calibration messages at
+`INFO`; there is no separate value line upstream.  Set the `mics_5524` tag back
+to `DEBUG` under `logger.logs` to read the per-update chain - the `[S]` lines
+that `esphome logs` adds on top are explained in
+[`troubleshooting.md`](troubleshooting.md#reading-the-log).  Keep the whole tag
+at `INFO` in normal operation: that is the coverage of
+[`../esphome/config.yaml`](../esphome/config.yaml).
 
 ## Confidence checklist before trusting a reading
 

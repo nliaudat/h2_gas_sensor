@@ -180,9 +180,9 @@ esphome run config.yaml           # flash over USB, later over OTA
 
 5. **Pin the result** once you trust it: `r0: 0.2899` for the MQ-8 or
    `air_reference: <value>` for the MiCS, using the value printed in the log
-   (`R0 = ... kOhm`, `air reference = ...`) and mirrored to the `MQ-8 logs` /
-   `MiCS-5524 logs` text sensor. A pinned value with no `calibration:` block is
-   the deterministic setup for a room that is not always clean.
+   (`R0 = ... kOhm`, `air reference = ...`) and mirrored to the `MQ-8 logs` text
+   sensor. A pinned value with no `calibration:` block is the deterministic setup
+   for a room that is not always clean.
 6. **Re-calibrate** after changing the wiring, the divider or `rl:`, and every
    few months - metal-oxide sensors drift.
 

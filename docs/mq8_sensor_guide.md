@@ -1,6 +1,6 @@
 # MQ-8 sensor guide — hardware, wiring and calibration
 
-Component reference: [`../esphome/components/mq_gas_sensors/README.md`](../esphome/components/mq_gas_sensors/README.md).
+Component reference: [`components/mq_gas_sensors.md`](components/mq_gas_sensors.md).
 Curve and formula details: [`mq8_h2_curve.md`](mq8_h2_curve.md).
 
 ## Bill of materials

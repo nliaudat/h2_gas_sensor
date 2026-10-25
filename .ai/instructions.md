@@ -41,21 +41,25 @@ Quality bar for any change:
 3. Every linter in section 3 reports clean.
 4. `docs/` is updated in the same change (section 9).
 
-A second component, `esphome/components/mics_5524_gas_sensor/`, covers the
+A second component, `mics_5524` (merged into ESPHome, PR #21024), covers the
 100 - 1000 ppm trace band with its own two conversion models
-(`docs/mics5524_conversion.md`). It follows the same conventions as
-`mq_gas_sensors`: pure math in its own header, host tested, opt-in package, and
-"the numbers in `docs/` are asserted by the host test".
+(`docs/mics5524_conversion.md`). It follows the same conventions: pure math in
+its own header, host tested, opt-in package, and "the numbers in `docs/` are
+asserted by the host test".
 
-A third component, `esphome/components/tsdb/`, keeps a persistent history of the
-readings in a time-series database on a LittleFS partition
+A third component, `tsdb` (`github://pr#20892`), keeps a persistent history of
+the readings in a time-series database on a LittleFS partition
 (`docs/data_logging.md`). It is the only component that adds a *flash partition*
 (the two OTA slots shrink by half of `partition_size`) and the only one that
 pulls third-party code in at build time (esp_tsdb and LittleFS from the ESP-IDF
-component registry, both pinned in `components/tsdb/__init__.py`). Its pure
+component registry, pinned by version in its own `__init__.py`). Its pure
 arithmetic lives in `tsdb_math.h`, it is host tested the same way, and the
 geometry it prints in the log is static-asserted against the real engine macros
 in `tsdb.cpp`.
+
+None of the three lives in this repository: `config.yaml` fetches them from the
+pull requests (revisions and the one local patch in `docs/development.md`), and
+only their math headers are vendored next to the host tests.
 
 ---
 
@@ -76,9 +80,7 @@ h2_gas_sensor/                      git root
     ├── secrets.yaml                wifi credentials - GIT-IGNORED
     ├── pyproject.toml              ruff settings (ESPHome parity)
     ├── .clang-format .clang-tidy .flake8 .yamllint .pre-commit-config.yaml
-    ├── components/mq_gas_sensors/  MQ-2 ... MQ-309A component (C++ + Python codegen)
-    ├── components/mics_5524_gas_sensor/  MiCS-5524 component (same layout and conventions)
-    ├── components/tsdb/                  history component (partition + LittleFS + esp_tsdb)
+    ├── components/                 (none: the components come from the PRs, see config.yaml)
     ├── packages/                   mq8.yaml (T/RH links commented), dht22.yaml, mics5524.yaml, board.yaml, tsdb.yaml, ...
     ├── script/                     vendored ESPHome CI linter + wrapper
     └── tests/                      host tests + config fixtures
@@ -90,9 +92,9 @@ Rules that follow from the map:
 * `config.yaml` still carries the log-level lines of the parent project
   (`canbus`, `toptronic`) and a commented `packages/debug.yaml` include that is
   not shipped - harmless, but delete them when you touch that file.
-* The component directory name **is** the YAML platform name
-  (`components/mq_gas_sensors` -> `platform: mq_gas_sensors`). Never rename one
-  without the other, and never use uppercase in a component directory.
+* The upstream component directory name **is** the YAML platform name
+  (`mq_gas_sensors` -> `platform: mq_gas_sensors`). Never rename one without the
+  other.
 * There is exactly **one** MQ-8 package, `packages/mq8.yaml` (`id: mq8`): never add
   a variant for another T/RH sensor - the ambient sensors are linked by id
   (`temperature:`/`humidity:`), so any platform works. The T/RH sensor examples
@@ -112,11 +114,11 @@ change is considered done.
 | ESPHome CI checks (UTF-8, LF, trailing whitespace, namespace, imports, `#define`, delays, ...) | `python esphome/script/run_ci_custom.py` (the `ci-custom` hook; from the git root) | **0 findings** |
 | Formatting of C++ | `pre-commit run -c esphome/.pre-commit-config.yaml clang-format --all-files` (pinned **v13.0.1**; the local `clang-format` 22.x formats differently) | no changes |
 | YAML | `cd esphome && yamllint -c .yamllint .` | no output |
-| Python (flake8) | `cd esphome && flake8 --config .flake8 components tests script` | no output |
+| Python (flake8) | `cd esphome && flake8 --config .flake8 tests script` | no output |
 | Python (ruff) | `cd esphome && ruff check . && ruff format --check .` | "All checks passed!" / "already formatted" |
-| Host test | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe` | "All mq_math tests passed." and no compiler warning |
-| Host test (MiCS-5524) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/mics_5524_gas_sensor mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe` | "All mics_math tests passed." and no compiler warning |
-| Host test (tsdb) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I ../components/tsdb tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe` | "All tsdb_math tests passed." and no compiler warning |
+| Host test | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I . mq_math_test.cpp -o mq_math_test.exe && mq_math_test.exe` | "All mq_math tests passed." and no compiler warning |
+| Host test (MiCS-5524) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I . mics_math_test.cpp -o mics_math_test.exe && mics_math_test.exe` | "All mics_math tests passed." and no compiler warning |
+| Host test (tsdb) | `cd esphome/tests && g++ -std=c++17 -O2 -Wall -Wextra -I . tsdb_math_test.cpp -o tsdb_math_test.exe && tsdb_math_test.exe` | "All tsdb_math tests passed." and no compiler warning |
 | Config validation | `cd esphome && esphome config config.yaml` | "Configuration is valid!" |
 | Config validation (history fixture) | `cd esphome && esphome config tests/test_tsdb.yaml` | "Configuration is valid!" (the history package on stand-in sensors; its negative cases are listed in the fixture header) |
 | Build | `cd esphome && esphome compile config.yaml` | "Successfully compiled program." |
@@ -218,9 +220,9 @@ lines allowed.
 
 * `esphome/config.yaml` holds only `substitutions`, `external_components`, logging,
   includes and one-line toggles; real content goes into `esphome/packages/*.yaml`.
-* `external_components` lists the component folders explicitly
-  (`components: [mq_gas_sensors, mics_5524_gas_sensor]`): a new folder under
-  `esphome/components/` must be added there, it is not loaded automatically.
+* `external_components` lists the components of the pull requests explicitly
+  (`components: [mq_gas_sensors]`): a new component has to be added there, it is
+  not loaded automatically.
 * `packages/mq8.yaml` is the single MQ-8 package and the only place that defines
   `id: mq8`: the optional T/RH sensor and the MQDataScience compensation live in
   it as commented blocks (linked by id), so no second package is ever needed and
@@ -297,13 +299,13 @@ measurement. `docs/mqdatascience_comparison.md` records the same-curve ambiguity
 ### 7.5 Provenance / attribution
 
 When adding data or formulas, update the Credits in
-`esphome/components/mq_gas_sensors/README.md` and the sources table in
+`docs/components/mq_gas_sensors.md` and the sources table in
 `docs/README.md`: MQUnifiedsensor/MQSensorsLib and MQDataScience are MIT, the
 SolderedElectronics curve table is a GPL-3.0 data reference. Vendored ESPHome
 scripts stay unmodified and are credited in `esphome/script/README.md`. The two
 engines of the history component (esp_tsdb, LittleFS) are not vendored - they are
-pinned by version in `components/tsdb/__init__.py` and credited in
-`components/tsdb/README.md`, `docs/README.md` and `esphome/readme.md#licence`.
+pinned by version in the upstream `tsdb/__init__.py` and credited in
+`docs/components/tsdb.md`, `docs/README.md` and `esphome/readme.md#licence`.
 
 ### 7.6 History (the local copy of the measurement)
 
@@ -331,7 +333,7 @@ pinned by version in `components/tsdb/__init__.py` and credited in
   correction constants needs assertions in `esphome/tests/mq_math_test.cpp` (MQ)
   or `esphome/tests/mics_math_test.cpp` (MiCS-5524), with expected values
   recomputed from first principles (never copied from the implementation).
-  Anything in `esphome/components/tsdb/tsdb_math.h` (int16 encoding, file
+  Anything in `esphome/tests/tsdb_math.h` (int16 encoding, file
   geometry, capacity, retention) is asserted in `esphome/tests/tsdb_math_test.cpp`
   the same way - including every number `docs/data_logging.md` quotes.
 * Keep the test building with `-Wall -Wextra` and zero warnings.
@@ -368,7 +370,7 @@ pinned by version in `components/tsdb/__init__.py` and credited in
   scratch folders, absolute paths): a fresh clone has to be enough, and every
   number needs a public source.
 * Component API/options are documented in
-  `esphome/components/mq_gas_sensors/README.md`; project-level topics (hardware,
+  `docs/components/mq_gas_sensors.md`; project-level topics (hardware,
   thresholds, curve provenance, comparisons) in `docs/`.
 
 ---

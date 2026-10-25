@@ -39,7 +39,7 @@ averaging that `MQUnifiedsensor::getVoltage()` does with `retries`.
 * Optional temperature/humidity compensation (`correction_mode: mqdatascience`,
   needs `temperature:`/`humidity:` sensor ids) ported from
   [MQDataScience](https://github.com/abcdaaaaaaaaa/MQDataScience) - see
-  [`docs/temperature_humidity_correction.md`](../../../docs/temperature_humidity_correction.md).
+  [`docs/temperature_humidity_correction.md`](../temperature_humidity_correction.md).
 * Optional alternative coefficient dataset (`curve: mqdatascience`) for a
   side-by-side comparison; the default `curve: standard` is unchanged.
 * Analog input from an existing voltage sampler (`voltage:`) **or** from a pin
@@ -99,7 +99,7 @@ sensor:
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
 | `voltage_multiplier` | `1.0` | Scales the sampled AO voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `voltage_divider:`. |
 | `voltage_divider` | – | `r1`/`r2` in kOhm (r1 in series with AO, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
-| `adc_input_max` | `3.3` | Largest voltage the ADC input measures correctly (ESP32 VDD; `6.144` for an ADS1115) - the configuration is **rejected** above it. A declared value is authoritative, the rule `mics_5524` follows as well. |
+| `adc_input_max` | `3.3` | Largest voltage the ADC input measures correctly (ESP32 VDD; `6.144` for an ADS1115) - the configuration is **rejected** above it. A declared value is authoritative (the rule the merged `mics_5524` follows) **with** [`../../patches/pr20896-adc-input-max.patch`](../../patches/pr20896-adc-input-max.patch); the current PR head clamps it to the range the ADC measures at its attenuation (2.45 V at 12 dB). |
 | `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Sensor supply voltage in V (used for RS). |
 | `rl` | `10.0` | Load resistor of the module in kOhm. |
@@ -117,10 +117,10 @@ sensor:
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm` (the alarm ceiling does not move); `scaled` clips to `max_ppm * correction` (MQDataScience's own behaviour). |
 | `curve` | `standard` | `standard` (SolderedElectronics/MQUnifiedsensor) or `mqdatascience` (their dataset, ~11 % lower for MQ-8 H2). Cannot be combined with `coefficient_a:`/`coefficient_b:`. |
 | `temperature`, `humidity` | – | `id`s of the ambient temperature (°C) / relative humidity (%) sensors. **Linking both selects `correction_mode: mqdatascience`**; a half-wired pair (only one of the two) is rejected at config time. |
-| `correction_sensor` | – | Optional `id` of a sensor receiving the applied correction factor (1.0000 = uncorrected). |
+| `correction_sensor` | – | Optional sub-entity receiving the applied correction factor (1.0000 = uncorrected), declared inline (`name:`, `icon:`, `filters:`). |
 | `calibration` | – | See below. |
-| `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional `id`s of sensors that receive the RS/R0 ratio, RS (kOhm) and AO voltage (V). |
-| `log_sensor` | – | Optional `id` of a `text_sensor` that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
+| `ratio_sensor`, `rs_sensor`, `voltage_sensor` | – | Optional sub-entities receiving the RS/R0 ratio, RS (kOhm) and AO voltage (V); declared inline like `correction_sensor`. |
+| `log_sensor` | – | Optional text sensor that mirrors the component log into Home Assistant (per-update chain, calibration messages, warnings) - the same text the serial console prints. Declared inline (`name:`), not by id. The per-update line is mirrored at most every 30 s (the console keeps every line), calibration messages and warnings immediately. |
 | `log_ppm` | `false` | Log the value that is about to be published at **`INFO`** on every update, e.g. `[I][mq_gas_sensors]: 'MQ-8 H2': 93.7 ppm` - the "normal mode" line. The detailed chain (`V=... RS=... ratio=... (correction=...) -> ... ppm`) stays at `DEBUG` and appears once the `mq_gas_sensors` tag is back at `DEBUG`. Console only: the line is *not* mirrored to `log_sensor` (a text state per second would flood the recorder). |
 | `update_interval` | `60s` | Normal sensor polling interval.  The shipped `packages/mq8.yaml` overrides it with its `mq8_update_interval` (`1s` by default). |
 
@@ -159,21 +159,16 @@ provide it, in order of precedence:
    `persist: false`). Once a valid `R0` is stored it is restored at boot and the
    calibration is skipped - important for a battery room, where the air is *not*
    clean when hydrogen is present.
-3. **On demand** - force a new calibration from an automation or a button:
-   ```yaml
-   esphome:
-     on_boot:
-       - delay: 5min
-       - lambda: id(mq8).request_calibration();   # sensor must be in clean air
-   ```
-   The calibrated value is logged (`R0 = ... kOhm`), so it can be pinned with
-   `r0:` afterwards if you prefer a static configuration.
+3. **On every boot** - `persist: false` in the `calibration:` block re-runs the
+   calibration after each reboot instead of restoring R0 from flash.
 
-   A request is **deferred until `warmup_time` has elapsed** (the calibration
-   needs a settled sensor) and the state stays `unknown` while the calibration is
-   pending or running - a calibration *changes* `R0`, so the previous value must
-   not stay visible. A request while one is already pending/running is ignored
-   with a warning. `packages/mq8.yaml` wires the *MQ-8 recalibrate* button to it.
+The component exposes **no runtime recalibration call** and no YAML action for
+one, so there is no recalibrate button: to re-calibrate a device that already has
+an R0 in flash, re-flash it with a new `r0:` pinned or with `persist: false`.
+Nothing is published while the calibration is pending or running - a calibration
+*changes* `R0`, so the previous value must not stay visible. (The merged
+`mics_5524` hub does expose `mics_5524.request_calibration` - see
+[`mics_5524.md`](mics_5524.md).)
 
 Other calibration facts:
 
@@ -339,7 +334,7 @@ your own coefficients fitted to the port's convention.
   `INFO` - the "normal mode" line, e.g. `'MQ-8 H2': 93.7 ppm`.  The chain above
   stays at `DEBUG`, so the shipped configuration (tag at `INFO`) shows the value
   and the whole measurement chain only appears once the tag is back at `DEBUG`
-  (see [`../../config.yaml`](../../config.yaml)).  Invalid readings log nothing
+  (see [`../../esphome/config.yaml`](../../esphome/config.yaml)).  Invalid readings log nothing
   here: the one-time warnings cover them.
 * A reading whose AO voltage is ≤ 10 mV (unplugged/shorted/open circuit) is
   logged as a warning and published as `unknown` instead of `0 ppm`, so a
@@ -365,17 +360,18 @@ your own coefficients fitted to the port's convention.
 | `analog output reads 0.0000 V` warning | AO not connected, module not powered from 5 V, or the divider is wrong |
 | PPM far too low / flat | `rl:` does not match the module's real load resistor, or the divider ratio is not compensated with `voltage_multiplier` |
 | PPM pinned at `max_ppm` | wrong `coefficient_a`/`coefficient_b` for the selected gas, or `ratio_mode` mismatch |
-| Values drift over weeks | MQ sensors drift; re-run `request_calibration()` in clean air |
+| Values drift over weeks | MQ sensors drift; re-flash with `r0:` pinned to the R0 measured in clean air (the component exposes no calibration action) |
 | `correction_sensor` stays at 1.0000 | the T/RH sensor has no state yet (check the one-time warning in the log), or `correction_mode` is `none` |
 
 ## Tests
 
-The measurement math lives in `mq_math.h` (no ESPHome/ESP-IDF dependency) and is
-covered by a host test:
+The measurement math lives in `mq_math.h` (no ESPHome/ESP-IDF dependency), vendored
+next to the host test from the component revision the build uses
+([`esphome/tests/mq_math.h`](../../esphome/tests/mq_math.h)):
 
 ```bash
 cd esphome/tests
-g++ -std=c++17 -O2 -I ../components/mq_gas_sensors mq_math_test.cpp -o mq_math_test
+g++ -std=c++17 -O2 -Wall -Wextra -I . mq_math_test.cpp -o mq_math_test
 ./mq_math_test
 ```
 
@@ -392,7 +388,7 @@ python tests/inspect_config.py tests/test_no_id.yaml   # show the resolved id
 ## Documentation
 
 Project documentation (hardware, thresholds, curve provenance, comparison with
-MQDataScience) lives in [`docs/`](../../../docs/README.md) at the repository root.
+MQDataScience) lives in [`docs/`](../README.md) at the repository root.
 
 ## Credits
 
@@ -408,6 +404,6 @@ MQDataScience) lives in [`docs/`](../../../docs/README.md) at the repository roo
   reference; the values themselves are the datasheet/miguel5612 fits).
 
 The repository itself is dual-licensed **Apache-2.0 OR MIT** - see
-[`LICENSE-APACHE`](../../../LICENSE-APACHE) and
-[`LICENSE-MIT`](../../../LICENSE-MIT). The upstream material credited above
+[`LICENSE-APACHE`](../../LICENSE-APACHE) and
+[`LICENSE-MIT`](../../LICENSE-MIT). The upstream material credited above
 keeps its own licence.

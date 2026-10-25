@@ -27,7 +27,7 @@
 #   estimate and keep the MQ-8 as the alarm reference.
 #
 # Published gases
-#   Upstream (`mics_5524_gas_sensor` PR) is a hub: one entry samples the single
+#   Upstream (`mics_5524`, merged into ESPHome) is a hub: one entry samples the single
 #   analog output once per `update_interval` and every configured gas
 #   (`hydrogen`, `carbon_monoxide`, `ammonia`, `ethanol`, `methane`) is published
 #   as its own sub-sensor from that one reading. They are *views* of one mixture,
@@ -38,10 +38,9 @@
 # Calibration
 #   The first boot calibrates the single clean-air reference after
 #   `calibration.delay` (max of delay and warm-up) and every gas converts from
-#   it. To re-calibrate, re-flash with a pinned reference instead: the upstream
-#   PR exposes no runtime recalibration call, so the local `recalibrate` button
-#   is intentionally absent here (it only exists against `components/`, which
-#   adds `request_calibration()` on top of the PR).
+#   it. Upstream exposes the runtime action `mics_5524.request_calibration` on
+#   the hub, so an automation or a button can re-calibrate without a re-flash
+#   (the commented block at the end of this file is that button).
 #   The calibrated value is logged ("air reference = ...") - it can also be
 #   pinned with `air_reference: <value>` instead of calibrating at boot.
 #
@@ -98,10 +97,10 @@ sensor:
       r1: ${mics_divider_r1}
       r2: ${mics_divider_r2}
     # 10k/20k maps the 5 V A0 maximum to 3.33 V, a hair above the ESP32 ADC's
-    # 3.3 V recommended maximum: accepted here, the very top of the range may clip.
-    # With an ADS1115 (no divider) remove `voltage_divider:`, set
-    # `voltage_multiplier: 1.0` and `adc_input_max: 6.144` / `adc_pin_max: 6.144`
-    # instead.
+    # 3.3 V recommended maximum: accepted here, the very top of the range may clip
+    # (the component checks the divider against this declared range).  With an
+    # ADS1115 instead: remove `voltage_divider:` and `adc_input_max:` (both only
+    # pair with a divider or a `pin:`) and set `voltage_multiplier: 1.0`.
     adc_input_max: 3.33
     vcc: 5.0  # module supply; the vendor model works on VCC - V_AO
     conversion: dfrobot
@@ -158,10 +157,20 @@ sensor:
       max_ppm: ${mics_ch4_max_ppm}
       # CH4 reports 0 below 1000 ppm - that is the vendor's own floor
 
-# No manual recalibration against the upstream PR: it exposes no runtime call,
-# so there is no `MiCS-5524 recalibrate` button here.  Re-flash with
-# `air_reference: <value>` pinned on the hub to skip the boot calibration.
-# (The local `components/` variant adds `request_calibration()` and the button.)
+# Re-calibration without a re-flash: the hub exposes `request_calibration()` as
+# the action `mics_5524.request_calibration: <hub id>`, so uncommenting the block
+# below adds the button.  It samples the same clean-air reference the boot
+# calibration uses - keep the module in clean air while it runs.
+#
+# button:
+#   - platform: template
+#     name: "MiCS-5524 recalibrate"
+#     icon: mdi:refresh
+#     on_press:
+#       - mics_5524.request_calibration: mics_hub
+#
+# Pinning `air_reference: <value>` on the hub skips the boot calibration
+# altogether.
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   100 - 300 ppm  = 0.25 - 0.75 % LEL -> trace / early detection (this sensor)

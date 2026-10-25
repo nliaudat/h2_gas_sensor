@@ -1,14 +1,16 @@
-# Validation-only regression config for the mics_5524_gas_sensor platform
+# Validation-only regression config for the mics_5524 platform
 # (run: esphome config tests/test_mics.yaml)
 #
-#   * vendor model (`conversion: dfrobot`) with the `pin:` sugar, an EN pin,
-#     automatic calibration in clean air, a `log_sensor:` mirror and the
-#     per-update `INFO` value line (`log_ppm: true`)
-#   * datasheet model (`conversion: datasheet`) with explicit coefficient_a/
-#     coefficient_b, a fixed r0, a shared external voltage source and no
-#     `log_ppm` (the default `false` keeps
-#     the value line off - like the four extra views of `packages/mics5524.yaml`)
-#   * diagnostics for both models
+#   * vendor model (`conversion: dfrobot`, the default) with the `pin:` sugar,
+#     an EN pin, automatic calibration in clean air, the ratio/voltage
+#     diagnostics and one gas sub-sensor
+#   * datasheet model (`conversion: datasheet`) on a shared external sampler,
+#     with explicit coefficient_a/coefficient_b, a fixed r0, rl and the RS
+#     diagnostic
+#   * vendor model with an explicit voltage_divider: and a pinned air_reference:
+#
+# The platform is built into ESPHome (pull request #21024 is merged), so this
+# fixture needs no external_components: entry.
 esphome:
   name: mics_test
 esp32:
@@ -17,10 +19,6 @@ esp32:
     type: esp-idf
 logger:
   level: INFO
-external_components:
-  - source:
-      type: local
-      path: ../components
 sensor:
   - platform: adc
     id: mics_ao
@@ -29,14 +27,14 @@ sensor:
     attenuation: 12db
     update_interval: never
 
-  - platform: mics_5524_gas_sensor
+  # vendor model on the `pin:` sugar: EN pin, automatic calibration in clean
+  # air, a 1.5x divider already wired, the diagnostics and one gas
+  - platform: mics_5524
     id: mics_h2
-    name: "H2 (MiCS-5524)"
-    gas: h2
-    conversion: dfrobot
     pin: GPIO32
     adc_attenuation: 12db
     voltage_multiplier: 1.5
+    adc_input_max: 3.33  # accepted trade-off of the 1.5x scaling
     vcc: 5.0
     sample_count: 4
     enable_pin:
@@ -47,35 +45,38 @@ sensor:
       delay: 3min
       sample_count: 10
       persist: false
-    ratio_sensor: mics_ratio
-    voltage_sensor: mics_voltage
-    log_sensor: mics_logs
-    log_ppm: true
+    ratio_sensor:
+      name: "MiCS ratio"
+      accuracy_decimals: 4
+    voltage_sensor:
+      name: "MiCS AO (scaled)"
+      accuracy_decimals: 3
+    hydrogen:
+      name: "H2 (MiCS-5524)"
 
-  - platform: mics_5524_gas_sensor
+  # datasheet model on a shared external sampler, with explicit coefficients,
+  # a fixed r0, rl and the RS diagnostic
+  - platform: mics_5524
     id: mics_co
-    name: "CO (MiCS-5524, datasheet model)"
-    gas: CO
     conversion: datasheet
     voltage: mics_ao
-    # ADS1115-style: no divider, so both limits are declared for the wider sampler
-    voltage_multiplier: 1.0
-    adc_input_max: 6.144
-    adc_pin_max: 6.144
     vcc: 5.0
     rl: 10.0
-    coefficient_a: 6.3
-    coefficient_b: -1.1
     r0: 700
-    min_ppm: 0
-    max_ppm: 1000
-    rs_sensor: mics_rs
+    rs_sensor:
+      name: "MiCS RS"
+      unit_of_measurement: kOhm
+      accuracy_decimals: 2
+    carbon_monoxide:
+      name: "CO (MiCS-5524, datasheet model)"
+      coefficient_a: 6.3
+      coefficient_b: -1.1
+      min_ppm: 1
+      max_ppm: 1000
 
-  - platform: mics_5524_gas_sensor
+  # vendor model with an explicit divider and a pinned clean-air reference
+  - platform: mics_5524
     id: mics_ch4
-    name: "CH4 (MiCS-5524, alias + pinned reference)"
-    gas: methane  # datasheet alias for CH4
-    conversion: dfrobot
     voltage: mics_ao
     voltage_divider:  # 10k/20k -> multiplier 1.5, 3.33 V at the ADC pin
       r1: 10.0
@@ -83,22 +84,5 @@ sensor:
     adc_input_max: 3.33  # accepted trade-off of the 10k/20k divider
     vcc: 5.0
     air_reference: 4.2  # pinned clean-air reference instead of a calibration
-
-  - platform: template
-    id: mics_ratio
-    name: "MiCS ratio"
-    accuracy_decimals: 4
-  - platform: template
-    id: mics_voltage
-    name: "MiCS AO (scaled)"
-    unit_of_measurement: V
-    accuracy_decimals: 3
-  - platform: template
-    id: mics_rs
-    name: "MiCS RS"
-    unit_of_measurement: kOhm
-    accuracy_decimals: 2
-text_sensor:
-  - platform: template
-    id: mics_logs
-    name: "MiCS logs"
+    methane:
+      name: "CH4 (MiCS-5524, divider + pinned reference)"

@@ -40,11 +40,10 @@
 # Calibration
 #   The first boot calibrates R0 in clean air after `calibration.delay` and stores
 #   it in flash (restored on the next boots, so the calibration is not repeated
-#   while hydrogen is present). The upstream PR exposes no runtime recalibration
+#   while hydrogen is present). The component exposes no runtime recalibration
 #   call, so there is intentionally no recalibrate button here: to force a new
 #   calibration, re-flash with `r0: <value>` pinned (see the log for
-#   "R0 = ... kOhm").  (The local `components/` variant adds
-#   `request_calibration()` and the button.)
+#   "R0 = ... kOhm"), or set `persist: false` to calibrate on every boot.
 
 substitutions:
   mq8_pin: GPIO39  # (input only pin), change to match your wiring
@@ -99,9 +98,11 @@ sensor:
       r2: ${mq8_divider_r2}
     # 10k/20k maps the 5 V AO maximum to 3.33 V, a hair above the ESP32 ADC's
     # 3.3 V recommended maximum, so the very top of the range may clip (use
-    # 10k/10k -> 2.5 V if the top of the range matters to you).  The declaration is
-    # authoritative - the same rule the MiCS-5524 package follows - instead of being
-    # clamped to the 2.45 V the ADC measures at 12 dB.
+    # 10k/10k -> 2.5 V if the top of the range matters to you).  The declaration
+    # is authoritative, the same rule the merged MiCS-5524 component follows -
+    # but only with ../../patches/pr20896-adc-input-max.patch applied to the PR:
+    # its current head clamps the declared value to the 2.45 V the ADC measures
+    # at 12 dB and refuses this wiring (see ../../docs/development.md).
     adc_input_max: 3.33
     vcc: 5.0
     rl: ${mq8_rl}
@@ -215,11 +216,9 @@ sensor:
   #     name: "${friendly_name} ambient humidity"
   #     accuracy_decimals: 0
 
-
-# No manual recalibration against the upstream PR: it exposes no runtime call,
-# so there is no `MQ-8 recalibrate` button here.  Re-flash with `r0: <value>`
-# pinned in the MQ-8 entry to skip the boot calibration.
-# (The local `components/` variant adds `request_calibration()` and the button.)
+# No manual recalibration: the component exposes no runtime call, so there is no
+# `MQ-8 recalibrate` button here.  Re-flash with `r0: <value>` pinned in the MQ-8
+# entry to skip the boot calibration.
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning
