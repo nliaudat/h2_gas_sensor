@@ -24,17 +24,10 @@ substitutions:
 ### set PYTHONPATH=.esphome\external_components\85e8b4d0
 
 external_components:
-  # mq_gas_sensors is built from this repo (esphome/components/mq_gas_sensors), not
-  # from PR #20896: it needs the divider-guard change that treats a declared
-  # 'adc_input_max:' as authoritative (the rule mics_5524 follows).  Switch back to
-  # `- source: github://pr#20896` / `components: [mq_gas_sensors]` /
-  # `refresh: always` once that change is in the PR - the local copy is the PR head
-  # plus that change, see docs/hardware.md and docs/mq8_sensor_guide.md.
-  - source:
-      type: local
-      path: components
+  - source: github://pr#20896
     components: [mq_gas_sensors]
-  - source: github://pr#21024 #github://pr#20521
+    refresh: always
+  - source: github://pr#21024
     components: [mics_5524]
     refresh: always
   - source: github://pr#20892
