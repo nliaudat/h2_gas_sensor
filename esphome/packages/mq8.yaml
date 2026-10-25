@@ -40,14 +40,11 @@
 # Calibration
 #   The first boot calibrates R0 in clean air after `calibration.delay` and stores
 #   it in flash (restored on the next boots, so the calibration is not repeated
-#   while hydrogen is present). To force a new calibration, press the
-#   "MQ-8 recalibrate" button in Home Assistant (or use the `button:` block at the
-#   end of this file / `esphome: on_boot: - lambda: id(mq8).request_calibration();`).
-#   A request is deferred until `warmup_time` has elapsed and the value stays
-#   `unknown` while the calibration is pending or running.
-#   The calibrated value is logged as "R0 = ... kOhm" and mirrored to the
-#   "${friendly_name} MQ-8 logs" text sensor (`log_sensor:` below) - it can also
-#   be pinned in the YAML with `r0: <value>`.
+#   while hydrogen is present). The upstream PR exposes no runtime recalibration
+#   call, so there is intentionally no recalibrate button here: to force a new
+#   calibration, re-flash with `r0: <value>` pinned (see the log for
+#   "R0 = ... kOhm").  (The local `components/` variant adds
+#   `request_calibration()` and the button.)
 
 substitutions:
   mq8_pin: GPIO39  # (input only pin), change to match your wiring
@@ -80,7 +77,7 @@ substitutions:
 sensor:
   - platform: adc
     id: ${name}_mq8_adc
-    name: "${friendly_name} MQ-8 AO voltage"
+    name: "MQ-8 AO voltage"
     pin: ${mq8_pin}
     attenuation: 12db
     # Diagnostic only: the gas entry below converts the ADC itself on every poll
@@ -93,7 +90,7 @@ sensor:
 
   - platform: mq_gas_sensors
     id: mq8
-    name: "${friendly_name} H2 (MQ-8)"
+    name: "H2 (MQ-8)"
     sensor_type: MQ-8
     gas: H2
     voltage: ${name}_mq8_adc
@@ -101,8 +98,10 @@ sensor:
       r1: ${mq8_divider_r1}
       r2: ${mq8_divider_r2}
     # 10k/20k maps the 5 V AO maximum to 3.33 V, a hair above the ESP32 ADC's
-    # 3.3 V recommended maximum: accepted here, the very top of the range may clip
-    # (use 10k/10k -> 2.5 V if the top of the range matters to you).
+    # 3.3 V recommended maximum, so the very top of the range may clip (use
+    # 10k/10k -> 2.5 V if the top of the range matters to you).  The declaration is
+    # authoritative - the same rule the MiCS-5524 package follows - instead of being
+    # clamped to the 2.45 V the ADC measures at 12 dB.
     adc_input_max: 3.33
     vcc: 5.0
     rl: ${mq8_rl}
@@ -140,10 +139,38 @@ sensor:
     # humidity: ${name}_mq8_humidity
     # correction_clamp: absolute  # default; keep the 10 000 ppm ceiling where it is
     # correction_mode: none  # the links select the model, this only opts out
-    # correction_sensor: ${name}_mq8_correction
-    ratio_sensor: ${name}_mq8_ratio
-    rs_sensor: ${name}_mq8_rs
-    log_sensor: ${name}_mq8_logs
+    # --- diagnostics: sub-entities of this gas sensor ---------------------------
+    # The component creates and publishes these entities itself and the schema
+    # supplies the units, the decimals and `entity_category: diagnostic`, so only
+    # the name, the icon and the publish throttle are set here; the ids are
+    # generated (no `${name}_...` id any more).  The factor sits at 1.0000 while
+    # no T/RH sensor is linked (or with `correction_mode: none`).  Drop a key to
+    # drop its entity.
+    correction_sensor:
+      name: "MQ-8 T-RH correction"
+      icon: mdi:thermometer-water
+      filters:
+        - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
+    ratio_sensor:
+      name: "MQ-8 RS-R0 ratio"
+      icon: mdi:chart-line
+      filters:
+        - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
+    rs_sensor:
+      name: "MQ-8 RS"
+      icon: mdi:omega
+      filters:
+        - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
+    # Text mirror of the log: the per-update chain (`V=... RS=... ratio=... ->
+    # ... ppm`), calibration messages and warnings - the same text the serial
+    # console shows, so the chain can be read from Home Assistant without setting
+    # the `mq_gas_sensors` tag back to DEBUG.  The per-update line is mirrored at
+    # most every 30 s (the console log keeps every line), calibration messages and
+    # warnings immediately; the state is the last message.  Drop the entity (and
+    # the `log_sensor:` key) if the recorded history is not wanted.
+    log_sensor:
+      name: "MQ-8 logs"
+      icon: mdi:text-box-multiple-outline
     # The "normal mode" log line: one INFO line per update with the published
     # value (`'MQ-8 H2': 93.7 ppm`); the detailed chain (V / RS / ratio /
     # correction) stays at DEBUG and needs the tag at DEBUG again - see the
@@ -188,70 +215,11 @@ sensor:
   #     name: "${friendly_name} ambient humidity"
   #     accuracy_decimals: 0
 
-  # The factor applied to the measured RS/R0 by the compensation above (1.0000 =
-  # uncorrected).  Enabled: it is the entity the `correction_sensor:` link points
-  # at, which the T/RH extension does from the outside (`!extend mq8`, e.g. in
-  # `packages/dht22.yaml`).  Without a linked T/RH sensor it publishes 1.0000.
-  - platform: template
-    id: ${name}_mq8_correction
-    name: "${friendly_name} MQ-8 T-RH correction"
-    accuracy_decimals: 4
-    icon: mdi:thermometer-water
-    entity_category: diagnostic
-    filters:
-      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
 
-  # Diagnostics required by `ratio_sensor:`/`rs_sensor:` in the MQ-8 entry above
-  # (remove all four keys/entities together if these entities are not wanted; the
-  # `log_sensor:` key and its `text_sensor` block further down are a separate
-  # pair and can be dropped on their own):
-  - platform: template
-    id: ${name}_mq8_ratio
-    name: "${friendly_name} MQ-8 RS-R0 ratio"
-    accuracy_decimals: 3
-    icon: mdi:chart-line
-    entity_category: diagnostic
-    filters:
-      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
-
-  - platform: template
-    id: ${name}_mq8_rs
-    name: "${friendly_name} MQ-8 RS"
-    unit_of_measurement: kOhm
-    accuracy_decimals: 3
-    icon: mdi:omega
-    entity_category: diagnostic
-    filters:
-      - throttle: ${mq8_diag_interval}  # diagnostic: slow this one down, not the gas entry
-
-# Mirror of the MQ-8 log (the id given by `log_sensor:` above): per-update chain
-# (`V=... RS=... ratio=... -> ... ppm`), calibration messages and warnings - the
-# same text the serial console shows, so the chain can be read from Home
-# Assistant without setting the `mq_gas_sensors` tag back to DEBUG.  The
-# per-update line is mirrored at most every 30 s (the console log keeps every
-# line), calibration messages and warnings immediately; the state is the last
-# message.  Drop the entity (and the `log_sensor:` key) if the recorded history
-# is not wanted.
-text_sensor:
-  - platform: template
-    id: ${name}_mq8_logs
-    name: "${friendly_name} MQ-8 logs"
-    icon: mdi:text-box-multiple-outline
-    entity_category: diagnostic
-
-# Force a new clean-air calibration of R0.  ONLY press it with the sensor in
-# clean air: the measured value is stored in flash and used from then on.  The
-# component defers the request until the warm-up window (`warmup_time`) has
-# ended and publishes `unknown` while the calibration is pending or running, so
-# a press cannot capture an unstable RS.
-button:
-  - platform: template
-    id: ${name}_mq8_recalibrate
-    name: "${friendly_name} MQ-8 recalibrate"
-    icon: mdi:refresh
-    entity_category: config
-    on_press:
-      - lambda: id(mq8).request_calibration();
+# No manual recalibration against the upstream PR: it exposes no runtime call,
+# so there is no `MQ-8 recalibrate` button here.  Re-flash with `r0: <value>`
+# pinned in the MQ-8 entry to skip the boot calibration.
+# (The local `components/` variant adds `request_calibration()` and the button.)
 
 # Reference thresholds for hydrogen in battery rooms (see ../../docs/h2_thresholds.md):
 #   4 000 ppm  = 10 % LEL  -> early warning

@@ -11,9 +11,13 @@
 # What it does NOT change
 #   The gas entities, their calibration, the alarm logic and the Home Assistant
 #   API are untouched: this package only reads the *last published value* of the
-#   sensors below once per interval (a sensor that has never published leaves the
-#   column empty, and `on_missing: skip` drops that row instead of writing a
-#   wrong one - a gap is honest, a zero is not).
+#   sensors in `columns:` once per interval (a sensor that has never published
+#   leaves the column empty, and `on_missing: skip` drops that row instead of
+#   writing a wrong one - a gap is honest, a zero is not).
+#   The diagnostics and the two 1 h averages are ordinary `platform: tsdb`
+#   entities (`tsdb_id: history`, declared in the `sensor:`/`text_sensor:` block
+#   at the end of this file), not keys of `tsdb:`. An entry left out is simply
+#   not created - there is no other place to remove it from.
 #
 # The partition (read this once)
 #   `partition_size: 512KB` adds a `littlefs` data partition to partitions.csv
@@ -101,104 +105,81 @@ tsdb:
     # The two alarm entities: the reason this database exists.
     - sensor: mq8
       name: h2_mq8_ppm
-      average_sensor: ${name}_history_h2_average
     - sensor: mics
       name: h2_trace_ppm
-      average_sensor: ${name}_history_trace_average
     - sensor: dht_temperature
       name: temperature
       scale_factor: 10
     - sensor: dht_humidity
       name: humidity
       scale_factor: 10
-  # Diagnostics of the logger itself (drop the ones you do not want, together
-  # with their sensor block below).
-  records_sensor: ${name}_history_records
-  used_sensor: ${name}_history_used
-  free_sensor: ${name}_history_free
-  oldest_sensor: ${name}_history_oldest
-  newest_sensor: ${name}_history_newest
-  errors_sensor: ${name}_history_errors
-  log_sensor: ${name}_history_logs
 
+# The store's own diagnostics and the two 1 h averages.  The `tsdb` hub owns the
+# data, the `tsdb` sensor platform only publishes it (`tsdb_id`), so every entity
+# is declared here - and only here - with the plain `sensor:` schema.  The
+# defaults of that platform already are bytes / diagnostic / 0 decimals (and
+# seconds + device_class duration for the two ages), so only the icons and the
+# names are repeated below.
 sensor:
-  - platform: template
-    id: ${name}_history_records
-    name: "${friendly_name} history records"
-    icon: mdi:database
-    entity_category: diagnostic
-    accuracy_decimals: 0
+  - platform: tsdb
+    tsdb_id: history
+    records:
+      name: "history records"
+      icon: mdi:database
+    used:
+      name: "history used"
+      icon: mdi:micro-sd
+    free:
+      name: "history free"
+      icon: mdi:micro-sd
+    # Ages of the oldest/newest stored row, in seconds - subtract them from the
+    # current time to place an event on a clock.
+    oldest_age:
+      name: "history oldest record age"
+      icon: mdi:clock-start
+    newest_age:
+      name: "history newest record age"
+      icon: mdi:clock-end
+    errors:
+      name: "history write errors"
+      icon: mdi:alert-circle-outline
+    # Aggregates of a column over `aggregate_window`, refreshed every
+    # `aggregate_interval`.  `column:` is the *name* of a row in `columns:`
+    # above, and needs `time_id` (set) - that is checked at the end of the
+    # config.  Without a row in the window the state stays `unknown`, never 0.
+    columns:
+      - column: h2_mq8_ppm
+        average:
+          name: "history H2 average 1h"
+          unit_of_measurement: ppm
+          icon: mdi:chart-timeline-variant
+          entity_category: diagnostic
+          accuracy_decimals: 0
+      - column: h2_trace_ppm
+        average:
+          name: "history H2 trace average 1h"
+          unit_of_measurement: ppm
+          icon: mdi:chart-timeline-variant
+          entity_category: diagnostic
+          accuracy_decimals: 0
 
-  - platform: template
-    id: ${name}_history_used
-    name: "${friendly_name} history used"
-    unit_of_measurement: B
-    icon: mdi:micro-sd
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  - platform: template
-    id: ${name}_history_free
-    name: "${friendly_name} history free"
-    unit_of_measurement: B
-    icon: mdi:micro-sd
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  - platform: template
-    id: ${name}_history_oldest
-    name: "${friendly_name} history oldest"
-    device_class: timestamp
-    icon: mdi:clock-start
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  - platform: template
-    id: ${name}_history_newest
-    name: "${friendly_name} history newest"
-    device_class: timestamp
-    icon: mdi:clock-end
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  - platform: template
-    id: ${name}_history_errors
-    name: "${friendly_name} history write errors"
-    icon: mdi:alert-circle-outline
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  # Aggregates of the last hour: what a chart needs for a window longer than the
-  # (excluded) 1 Hz stream - see ../../docs/home_assistant_alerts.md.
-  - platform: template
-    id: ${name}_history_h2_average
-    name: "${friendly_name} history H2 average 1h"
-    unit_of_measurement: ppm
-    icon: mdi:chart-timeline-variant
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
-  - platform: template
-    id: ${name}_history_trace_average
-    name: "${friendly_name} history H2 trace average 1h"
-    unit_of_measurement: ppm
-    icon: mdi:chart-timeline-variant
-    entity_category: diagnostic
-    accuracy_decimals: 0
-
+# Text mirror of the store's messages: the per-record warnings, the mount/open
+# lines and the CSV dump of the `history dump (log)` button - the same lines the
+# `tsdb` tag prints to the console, so the history can be read from Home
+# Assistant without a serial connection.
 text_sensor:
-  - platform: template
-    id: ${name}_history_logs
-    name: "${friendly_name} history logs"
-    icon: mdi:text-box-multiple-outline
-    entity_category: diagnostic
+  - platform: tsdb
+    tsdb_id: history
+    log:
+      name: "history logs"
+      icon: mdi:text-box-multiple-outline
 
 button:
   # Commit the buffered rows now (the next sync is at most `sync_interval` away
   # anyway - this is for "I am about to cut the power").
   - platform: template
     id: ${name}_history_flush
-    name: "${friendly_name} history flush"
+    name: "history flush"
     icon: mdi:content-save
     entity_category: config
     on_press:
@@ -208,7 +189,7 @@ button:
   # `esphome logs config.yaml` while the board is reachable, or over USB.
   - platform: template
     id: ${name}_history_dump
-    name: "${friendly_name} history dump (log)"
+    name: "history dump (log)"
     icon: mdi:file-delimited-outline
     entity_category: config
     on_press:
@@ -218,7 +199,7 @@ button:
   # the history is gone - there is no confirmation dialog.
   - platform: template
     id: ${name}_history_clear
-    name: "${friendly_name} history clear"
+    name: "history clear"
     icon: mdi:delete-forever
     entity_category: config
     on_press:

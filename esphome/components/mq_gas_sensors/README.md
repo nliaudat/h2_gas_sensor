@@ -99,7 +99,7 @@ sensor:
 | `adc_samples` | `1` | Only for `pin:`; ADC multisampling of the generated sensor. |
 | `voltage_multiplier` | `1.0` | Scales the sampled AO voltage: the **inverse of the divider ratio** (`1.5` for 10k/20k). Low-level alternative to `voltage_divider:`. |
 | `voltage_divider` | – | `r1`/`r2` in kOhm (r1 in series with AO, r2 to GND); derives `voltage_multiplier = (r1 + r2) / r2` (`1.5` for 10k/20k). Mutually exclusive with `voltage_multiplier`. |
-| `adc_input_max` | `3.3` | Largest voltage the ADC measures correctly (ESP32 VDD; `6.144` for an ADS1115) - a warning is logged above it. |
+| `adc_input_max` | `3.3` | Largest voltage the ADC input measures correctly (ESP32 VDD; `6.144` for an ADS1115) - the configuration is **rejected** above it. A declared value is authoritative, the rule `mics_5524` follows as well. |
 | `adc_pin_max` | `3.6` | Largest voltage the pin may ever see (ESP32 datasheet absolute maximum, VDD + 0.3 V) - the configuration is **rejected** above it. |
 | `vcc` | `5.0` | Sensor supply voltage in V (used for RS). |
 | `rl` | `10.0` | Load resistor of the module in kOhm. |
@@ -239,7 +239,9 @@ referenced by id, so any temperature/humidity source works.
   may read non-linearly, hence `adc_input_max: 3.33` in the packages); use 10k/10k
   (5 V -> 2.5 V) if that matters, or an ADS1115 (0-5 V input, `adc_input_max:
   6.144`). Configurations that could exceed `adc_pin_max` (3.6 V by default) are
-  rejected at compile time.
+  rejected at compile time, and so are those that could exceed `adc_input_max`: a
+  declared value is authoritative (the rule `mics_5524` follows too), without one
+  the range of the ADC the reading comes from applies.
 * Use an ADC1 pin (ESP32: GPIO32-39); ADC2 is unavailable while WiFi is active.
 * The load resistor `RL` of cheap breakouts is often **1 kOhm** instead of
   10 kOhm - measure it and set `rl:` accordingly, otherwise `RS` (and therefore

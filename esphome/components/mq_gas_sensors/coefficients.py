@@ -22,25 +22,26 @@ Everything here is resolved at code generation time, so a wrong ``sensor_type`` 
 ``gas`` combination fails the build instead of silently producing garbage at
 runtime.
 
-Alternative curves (``CURVE_VARIANTS``)
----------------------------------------
-``curve: mqdatascience`` selects the ``a`` / ``b`` / regression method published
-by https://github.com/abcdaaaaaaaaa/MQDataScience instead of the
-SolderedElectronics/MQUnifiedsensor values, for a side-by-side comparison in
-Home Assistant. Both datasets are fits of the same datasheet curve; the
-MQDataScience MQ-8 H2 fit reports ~11 % lower ppm at every concentration (see
-``docs/mqdatascience_comparison.md``), so ``standard`` stays the default.
+Alternative curves: ``curve: mqdatascience`` selects the ``a`` / ``b`` /
+regression method published by https://github.com/abcdaaaaaaaaa/MQDataScience
+instead of the SolderedElectronics/MQUnifiedsensor values.
 
-Temperature/humidity correction (``CORRECTION_COEFFICIENTS``)
-------------------------------------------------------------
-``correction_mode: mqdatascience`` needs the ``a`` / ``b`` / ``c`` constants of
-MQDataScience's ``Correction.cpp`` (``correction = a + c * exp(b * T)``, with
-``a``/``b``/``c`` interpolated over the relative humidity). Only the sensor
-types that use the one-segment 33 %/85 % variant are listed; MQ-9 and MQ-131 use
-two segments (30/60/85 %) and are therefore rejected at compile time.
+Temperature/humidity correction: ``correction_mode: mqdatascience`` needs the
+``a`` / ``b`` / ``c`` constants of MQDataScience's ``Correction.cpp``. Only the
+sensor types using the one-segment 33 %/85 % variant are listed.
 """
 
 from dataclasses import dataclass
+import math
+
+#: Upper clamp of the magnitude of ``a`` / ``b`` in the firmware, mirroring
+#: MQUnifiedsensor's ``MQ_MAX_A`` / ``MQ_MAX_B`` (``mqmath::clamp_a()`` /
+#: ``mqmath::clamp_b()``). A coefficient outside this range is clamped here as
+#: well, so that the firmware evaluates exactly what :func:`resolve_sensor`
+#: returns; a user supplied value is checked against it in ``sensor.py`` before
+#: it gets this far.
+MQ_MAX_A = 1e30
+MQ_MAX_B = 100.0
 
 CUSTOM_TYPE = "CUSTOM"
 
@@ -136,8 +137,6 @@ def corrected_types() -> list[str]:
 
 @dataclass(frozen=True)
 class ResolvedSensor:
-    """Fully resolved sensor configuration handed to the C++ component."""
-
     type_key: str
     label: str
     gas: str
@@ -155,23 +154,16 @@ class ResolvedSensor:
 
 
 def normalize_type(value: str) -> str:
-    """``"mq-8"`` / ``"MQ_8"`` / ``"MQ8"`` -> ``"MQ8"``."""
     return str(value).strip().upper().replace("-", "").replace("_", "").replace(" ", "")
 
 
 def normalize_gas(value: str) -> str:
-    """``"h2"`` / ``"H-2"`` -> ``"H2"``; ``"ethyl alcohol"`` -> ``"ETHYL_ALCOHOL"``."""
     return str(value).strip().upper().replace("-", "_").replace(" ", "_")
 
 
 def sensor_types() -> list[str]:
     """Canonical type keys, e.g. ``["MQ2", ..., "MQ309A", "CUSTOM"]``."""
     return list(SENSOR_TYPES)
-
-
-def gases_for(type_key: str) -> list[str]:
-    """Gas keys available for `type_key` (empty for types without coefficients)."""
-    return sorted(SENSOR_TYPES[type_key]["gases"])
 
 
 def label_for(type_key: str) -> str:
@@ -217,7 +209,6 @@ SENSOR_TYPES: dict[str, dict] = {
         "max_ppm": 10000.0,
         "gases": {  # alcohol
             "LPG": (44771.0, -3.245),
-            "CH4": (2e31, 19.01),
             "CO": (521853.0, -3.821),
             "ALCOHOL": (0.3934, -1.504),
             "BENZENE": (4.8387, -2.68),
@@ -397,6 +388,18 @@ SENSOR_TYPES: dict[str, dict] = {
 }
 
 
+def _clamp_coefficient(value: float, limit: float, key: str) -> float:
+    """Clamp a user supplied coefficient to the range the firmware evaluates.
+
+    ``_validate_config()`` in ``sensor.py`` warns when the returned value differs
+    from ``value``. A non-finite value is rejected instead of being turned into 0,
+    which would silently drop the curve.
+    """
+    if not math.isfinite(value):
+        raise ValueError(f"'{key}' must be a finite number, got {value}")
+    return max(-limit, min(limit, value))
+
+
 def resolve_sensor(
     type_key: str,
     gas: str | None = None,
@@ -448,7 +451,7 @@ def resolve_sensor(
         if a is None or b is None:
             raise ValueError(
                 f"{definition['label']} has no built-in coefficients, "
-                f"set both 'a:' and 'b:' in the configuration"
+                f"set both 'coefficient_a:' and 'coefficient_b:' in the configuration"
             )
 
     resolved_method = method or definition["method"]
@@ -473,8 +476,8 @@ def resolve_sensor(
         label=definition["label"],
         gas=gas_key,
         method=resolved_method,
-        a=float(a),
-        b=float(b),
+        a=_clamp_coefficient(float(a), MQ_MAX_A, "coefficient_a"),
+        b=_clamp_coefficient(float(b), MQ_MAX_B, "coefficient_b"),
         ratio_in_clean_air=float(
             definition["ratio_in_clean_air"]
             if ratio_in_clean_air is None

@@ -44,9 +44,13 @@ AO ──[ 10k ]──┬──> GPIO34 (ADC1_CH6)
   ESP32's 3.3 V recommended maximum, where the top of the range can read
   non-linearly; that is why the packages declare `adc_input_max: 3.33`. Use
   10k/10k (5 V -> 2.5 V) if the top of the AO range matters to you, or an ADS1115.
-* The component enforces this: the configuration is **rejected at compile time**
-  when `vcc / voltage_multiplier` exceeds `adc_pin_max` (3.6 V by default), and a
-  warning is logged when it exceeds `adc_input_max` (3.3 V).
+* The component enforces this exactly like the MiCS-5524 package does: the
+  configuration is **rejected at compile time** when `vcc / voltage_multiplier`
+  exceeds `adc_pin_max` (3.6 V by default; that can damage the pin) and when it
+  exceeds `adc_input_max`. A declared `adc_input_max` is authoritative, because the
+  range of the sampler the reading comes from cannot always be read off the
+  configuration; without one the ESP32 range applies (3.3 V recommended, 2.45 V
+  measured at `attenuation: 12db`).
 * GPIO34/35/36/39 are input-only, which is fine (and they are not strapping
   pins). Do not use GPIO12.
 

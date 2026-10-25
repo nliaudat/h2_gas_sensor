@@ -22,19 +22,19 @@ sensor:
     model: ${dht22_model}
     pin: ${dht22_pin}
     temperature:
-      name: "${friendly_name} ambient temperature"
+      name: "Temperature"
       id: dht_temperature
     humidity:
-      name: "${friendly_name} ambient humidity"
+      name: "Humidity"
       id: dht_humidity
     update_interval: ${dht22_update_interval}
 
   # Merges the two ambient links into the MQ-8 entry of `packages/mq8.yaml` (the
   # keys its commented compensation block documents).  Both links present =>
-  # `correction_mode` resolves to `mqdatascience`; the third key routes the
-  # applied factor to the `MQ-8 T-RH correction` diagnostic entity of the package.
+  # `correction_mode` resolves to `mqdatascience`, and the applied factor shows up
+  # in the `MQ-8 T-RH correction` diagnostic, which the package itself creates
+  # (`correction_sensor:` is a sub-entity of the gas sensor, no id to link).
   - platform: mq_gas_sensors
     id: !extend mq8
     temperature: dht_temperature
     humidity: dht_humidity
-    correction_sensor: ${name}_mq8_correction

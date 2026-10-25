@@ -324,10 +324,23 @@ database slow in earlier engine versions.
    [tsdb] history.tsdb: 1790361000,52.0000,7.0000,21.4000,45.1000
    [tsdb] history.tsdb: csv-dump end (60 rows, 61 older skipped)
    ```
-3. **Diagnostics** - `... history records`, `... history used/free`,
-   `... history oldest/newest`, `... history write errors` and the
-   `... history logs` text sensor describe the store itself; `oldest`/`newest`
-   are `timestamp` sensors, so the covered window is visible at a glance.
+3. **Diagnostics** - the `history records`, `history used`/`history free`,
+   `history oldest/newest record age`, `history write errors` sensors and the
+   `history logs` text sensor describe the store itself. They are ordinary
+   `platform: tsdb` entities bound with `tsdb_id: history`, not keys of `tsdb:`,
+   so dropping an entry from that block removes the entity; the ages are
+   `duration` sensors in **seconds** (subtract them from the current time to
+   place an event on a clock), so the covered window is visible at a glance.
+
+   ```yaml
+   sensor:
+     - platform: tsdb
+       tsdb_id: history
+       records: {name: "history records"}
+       columns:
+         - column: h2_mq8_ppm
+           average: {name: "history H2 average 1h", unit_of_measurement: ppm}
+   ```
 4. **`... history clear`** deletes every stored row. The calibration of the
    sensors lives elsewhere (NVS) and is not touched.
 

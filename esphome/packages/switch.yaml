@@ -1,5 +1,5 @@
 switch:
   - platform: restart
-    name: "${friendly_name} restart"
+    name: "restart"
     icon: "mdi:restart"
     id: ${name}_reboot

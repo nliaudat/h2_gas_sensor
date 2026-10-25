@@ -38,7 +38,7 @@ packages:
 |---|---|---|
 | `web.yaml` | - (HTTP) | captive portal + dashboard web server on the open fallback AP; `local: true` embeds the UI so it renders without internet; drop the include for a build without port 80 |
 | `mq8.yaml` | MQ-8 | ADC + gas sensor; the ambient T/RH sensor blocks and the comment-only compensation keys are inside |
-| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:`/`correction_sensor:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity |
+| `dht22.yaml` | DHT22 (ambient T/RH) | links `temperature:`/`humidity:` into `id: mq8` with `!extend`, which selects the compensation and feeds the `MQ-8 T-RH correction` entity the package already declares |
 | `mics5524.yaml` | MiCS-5524 | additive (`id: mics`), trace band, own calibration |
 | `alarm.yaml` | Buzzer + 2 x SK6812 | local pre-alarm (buzzer + status LEDs); merges its bands into `id: mq8` with `!extend`, so it must stay after `mq8.yaml` |
 | `tsdb.yaml` | - (history) | logs the four readings of the two gas sensors and the ambient pair into a time-series database on its own `littlefs` flash partition (`id: history`); adds a diagnostics/button/aggregate surface and costs each OTA slot half of `partition_size` - see [`../docs/data_logging.md`](../docs/data_logging.md) |

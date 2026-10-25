@@ -24,7 +24,7 @@
 // which is algebraically the same as their `(ratio / (a * correction))^(1 / b)`.
 //
 // This header is intentionally free of ESPHome / ESP-IDF dependencies so the very
-// same code can be unit tested on the host (see esphome/tests/mq_math_test.cpp).
+// same code can be unit tested on the host (see tests/components/mq_gas_sensors/mq_math_test.cpp).
 //
 
 #include <cfloat>
@@ -50,7 +50,9 @@ enum RatioMode : uint8_t {
 static constexpr double MQ_MAX_A = 1e30;
 static constexpr double MQ_MAX_B = 100.0;
 
-/// pow() with the fast paths of the reference implementation.
+/// Largest relative spread `(max - min) / mean` a clean-air calibration accepts.
+inline constexpr float MAX_CALIBRATION_SPREAD = 0.25f;
+
 inline double safe_pow(double base, double exponent) {
   if (exponent == 0.0)
     return 1.0;
@@ -61,7 +63,6 @@ inline double safe_pow(double base, double exponent) {
   return std::pow(base, exponent);
 }
 
-/// True when `log_ppm` cannot be turned into a finite float again.
 inline bool will_overflow(double log_ppm) {
   const double max_log = std::log10(static_cast<double>(FLT_MAX));
   const double min_log = std::log10(static_cast<double>(FLT_MIN));
@@ -90,30 +91,33 @@ inline float clamp_b(float b) {
   return b;
 }
 
-/// ADC counts -> volt, MQUnifiedsensor::setADC() / getVoltage().
-inline float voltage_from_adc(uint32_t raw, uint8_t bits, float volt_resolution) {
-  const double full_scale = safe_pow(2.0, static_cast<double>(bits)) - 1.0;
-  if (full_scale <= 0.0)
-    return 0.0f;
-  return static_cast<float>(static_cast<double>(raw) * static_cast<double>(volt_resolution) / full_scale);
-}
-
 /// Sensor resistance in kOhm, MQUnifiedsensor::getRS() / calibrate().
-/// Returns 0 for a non-positive / non-finite input voltage instead of +inf.
 inline float rs_from_voltage(float voltage, float vcc, float rl) {
   if (!std::isfinite(voltage) || voltage <= 0.0f)
-    return 0.0f;
+    return NAN;
   const double rs =
       (static_cast<double>(vcc) * static_cast<double>(rl) / static_cast<double>(voltage)) - static_cast<double>(rl);
   if (!std::isfinite(rs) || rs < 0.0)
-    return 0.0f;
+    return NAN;
   return static_cast<float>(rs);
 }
 
-/// RS / R0 (or R0 / RS) ratio, MQUnifiedsensor::readSensorR0Rs() + correction factor.
+/// RS / R0 (or R0 / RS) ratio, MQUnifiedsensor::readSensorR0Rs() + correction
+/// factor, which is added here and nowhere else, so that R0 stays the value a
+/// clean air calibration measured.
+///
+/// A ratio of 0 is the saturated end of the measuring range, which
+/// `ppm_from_ratio()` turns into the top of the range. An unusable input gives
+/// NaN and the caller publishes `unknown`.
 inline float ratio_from_rs(float rs, float r0, float correction_factor, RatioMode mode) {
-  if (!std::isfinite(rs) || rs <= 0.0f || !std::isfinite(r0) || r0 <= 0.0f)
+  if (!std::isfinite(rs) || rs < 0.0f)
+    return NAN;
+  // RS = 0 is a real reading (V_AO at VCC): the saturated end in either
+  // convention, since RS / R0 falls to 0 and R0 / RS grows without bound.
+  if (rs == 0.0f)
     return 0.0f;
+  if (!std::isfinite(r0) || r0 <= 0.0f)
+    return NAN;
   double ratio;
   if (mode == RATIO_R0_RS) {
     ratio = static_cast<double>(r0) / static_cast<double>(rs);
@@ -121,28 +125,67 @@ inline float ratio_from_rs(float rs, float r0, float correction_factor, RatioMod
     ratio = static_cast<double>(rs) / static_cast<double>(r0);
   }
   ratio += static_cast<double>(correction_factor);
-  if (!std::isfinite(ratio) || ratio <= 0.0)
-    return 0.0f;
+  if (!std::isfinite(ratio))
+    return NAN;
+  if (ratio <= 0.0) {
+    // The correction factor moved the ratio past zero. RS / R0 falls as the
+    // concentration rises, so in the datasheet convention this is a reading above
+    // the range the curve covers: it reports as the saturated end instead of
+    // `unknown`, which would hide it. R0 / RS moves the other way, so the ratio
+    // then sits below the clean-air end of the curve: that stays unknown.
+    return mode == RATIO_R0_RS ? NAN : 0.0f;
+  }
   return static_cast<float>(ratio);
 }
 
 /// R0 from a clean air reading, MQUnifiedsensor::calibrate().
-/// `ratio_in_clean_air` is the RS/R0 value taken from the sensor datasheet.
-inline float r0_from_clean_air(float rs_air, float ratio_in_clean_air, float correction_factor) {
+/// `ratio_in_clean_air` is the RS/R0 value taken from the sensor datasheet. The
+/// correction factor plays no part here: applied to the ratio, it leaves clean
+/// air at `ratio_in_clean_air` plus the factor, applied here it would move R0 by
+/// a resistance that has nothing to do with the sensor.
+inline float r0_from_clean_air(float rs_air, float ratio_in_clean_air) {
   if (!std::isfinite(rs_air) || rs_air <= 0.0f || !std::isfinite(ratio_in_clean_air) || ratio_in_clean_air <= 0.0f)
     return 0.0f;
-  double r0 = static_cast<double>(rs_air) / static_cast<double>(ratio_in_clean_air);
-  r0 += static_cast<double>(correction_factor);
+  const double r0 = static_cast<double>(rs_air) / static_cast<double>(ratio_in_clean_air);
   if (!std::isfinite(r0) || r0 < 0.0)
     return 0.0f;
   return static_cast<float>(r0);
 }
 
+/// True when the clean-air samples describe a settled input.
+///
+/// A calibration turns the mean of the samples into the R0 every later reading is
+/// divided by, so samples that disagree by more than `MAX_CALIBRATION_SPREAD` of
+/// their mean show that the sensor was not in clean, still air: the average is
+/// worthless and must not become the reference. Unusable values are never settled.
+inline bool calibration_is_stable(float min_value, float max_value, float mean) {
+  if (!std::isfinite(min_value) || !std::isfinite(max_value) || !std::isfinite(mean) || mean <= 0.0f)
+    return false;
+  const double spread = static_cast<double>(max_value) - static_cast<double>(min_value);
+  return spread <= static_cast<double>(MAX_CALIBRATION_SPREAD) * static_cast<double>(mean);
+}
+
+/// True when a source state is recent enough to be used.
+///
+/// `has_state()` stays true after the last publish, so a source that stops
+/// updating (a failed I2C device, a dead remote source) would otherwise keep
+/// correcting readings with a frozen value. `last_ms` is the loop timestamp of
+/// the last finite state; the unsigned subtraction also handles the wrap.
+inline bool source_is_fresh(bool seen, uint32_t last_ms, uint32_t now_ms, uint32_t max_age_ms) {
+  return seen && (now_ms - last_ms) <= max_age_ms;
+}
+
 /// ratio (+ a, b) -> PPM, MQUnifiedsensor::readSensorR0Rs().
-/// FLT_MAX signals "out of range / not evaluable" so the caller can clamp it.
+/// FLT_MAX signals "above the range" so the caller can clamp it: a ratio of
+/// exactly 0 is RS at 0 (V_AO at VCC), the output of a saturated sensor, and
+/// must never be read as clean air. NaN (unusable input, or coefficients the
+/// method cannot evaluate - a curve with a = 0 has no solution) makes the caller
+/// publish `unknown`.
 inline float ppm_from_ratio(float a, float b, float ratio, RegressionMethod method) {
-  if (!std::isfinite(ratio) || ratio <= 0.0f || a == 0.0f)
-    return 0.0f;
+  if (!std::isfinite(ratio))
+    return NAN;
+  if (ratio <= 0.0f)
+    return FLT_MAX;
 
   double log_ppm;
   if (method == REGRESSION_EXPONENTIAL) {
@@ -150,30 +193,41 @@ inline float ppm_from_ratio(float a, float b, float ratio, RegressionMethod meth
   } else if (method == REGRESSION_INVERSE) {
     // PPM = (ratio / a)^(1/b), MQDataScience inverseYaxb().
     log_ppm = (std::log10(static_cast<double>(ratio)) - std::log10(static_cast<double>(a))) / static_cast<double>(b);
-  } else {
+  } else if (method == REGRESSION_LINEAR) {
     log_ppm = (std::log10(static_cast<double>(ratio)) - static_cast<double>(b)) / static_cast<double>(a);
+  } else {
+    // An unknown method has no formula; evaluating it as one of the known ones
+    // would publish a plausible but wrong concentration.
+    return NAN;
   }
+
+  if (!std::isfinite(log_ppm))
+    return NAN;
 
   double ppm;
   if (will_overflow(log_ppm)) {
-    ppm = (std::isnan(log_ppm) || log_ppm > 0.0) ? static_cast<double>(FLT_MAX) : 0.0;
+    ppm = log_ppm > 0.0 ? static_cast<double>(FLT_MAX) : 0.0;
   } else {
     ppm = safe_pow(10.0, log_ppm);
   }
 
-  if (std::isnan(ppm) || std::isinf(ppm))
+  if (std::isnan(ppm))
+    return NAN;
+  if (std::isinf(ppm))
     ppm = static_cast<double>(FLT_MAX);
   if (ppm < 0.0)
     ppm = 0.0;
   return static_cast<float>(ppm);
 }
 
-/// Clamp a PPM reading to the datasheet range of the sensor (NaN stays NaN).
+/// Clamp a PPM reading to the measuring range (NaN stays NaN).
 inline float clamp_ppm(float ppm, float min_ppm, float max_ppm) {
   if (!std::isfinite(ppm))
     return NAN;
+  if (ppm <= 0.0f)
+    return 0.0f;
   if (ppm < min_ppm)
-    return min_ppm;
+    return 0.0f;
   if (ppm > max_ppm)
     return max_ppm;
   return ppm;
@@ -210,16 +264,10 @@ inline float linear_interpolate(float x, float x0, float x1, float y0, float y1)
                             static_cast<double>(y0));
 }
 
-/// Relative humidity (in %) and ambient temperature (in degC) -> correction
-/// coefficient, MQDataScience `calculateCorrection()` for the MQ-8:
-///
-///     a = interp(RH, 33, 85, a33, a85)  (same for b and c)
-///     correction = a + c * exp(b * T)
-///
-/// Relative humidity is clamped to [33, 85] % and the temperature to
-/// [-10, 50] degC. Returns 1.0 (i.e. "no correction") when an input is not a
-/// finite number or the model degenerates, so a missing/failed temperature or
-/// humidity reading can never invalidate the PPM measurement.
+/// Relative humidity (%) and ambient temperature (degC) -> correction
+/// coefficient `a + c * exp(b * T)` (MQDataScience `calculateCorrection()`).
+/// The inputs are clamped to the fitted domain; unusable inputs report 1.0
+/// ("no correction"), so a missing source never invalidates the measurement.
 inline float correction_coefficient(float rh, float temperature, const TcCorrectionCoefficients &coeffs) {
   if (!std::isfinite(rh) || !std::isfinite(temperature))
     return 1.0f;
@@ -253,6 +301,17 @@ inline float apply_correction(float ratio, float correction) {
   if (!std::isfinite(ratio) || !std::isfinite(correction) || correction <= 0.0f)
     return ratio;
   return static_cast<float>(static_cast<double>(ratio) / static_cast<double>(correction));
+}
+
+/// Inverse of `apply_correction()`: `ratio_eff = ratio * correction`.
+///
+/// Under `ratio_mode: r0_rs` the ratio grows as the gas concentration falls, so
+/// the MQDataScience correction has to move it the other way to keep the same
+/// physical meaning.
+inline float apply_correction_inverse(float ratio, float correction) {
+  if (!std::isfinite(ratio) || !std::isfinite(correction) || correction <= 0.0f)
+    return ratio;
+  return static_cast<float>(static_cast<double>(ratio) * static_cast<double>(correction));
 }
 
 /// Where the correction comes from (mirrors `CORRECTION_MODES` in `__init__.py`).
