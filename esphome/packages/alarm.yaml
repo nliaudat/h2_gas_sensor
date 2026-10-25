@@ -118,7 +118,7 @@ light:
   # state cannot leave a half-applied colour behind.
   - platform: esp32_rmt_led_strip
     id: ${name}_alarm_led
-    name: "${friendly_name} alarm LEDs"
+    name: "alarm LEDs"
     pin: ${alarm_led_pin}
     num_leds: ${alarm_led_count}
     chipset: ${alarm_led_chipset}
@@ -319,7 +319,7 @@ button:
   # every band change, or by selecting an effect on the light entity).
   - platform: template
     id: ${name}_alarm_test
-    name: "${friendly_name} alarm test"
+    name: "alarm test"
     icon: mdi:music-note
     entity_category: config
     on_press:

@@ -93,7 +93,8 @@ sensor:
     humidity: air_humidity
     # correction_mode: none          # only to opt out again
     correction_clamp: absolute       # default: keep max_ppm as the ceiling
-    correction_sensor: mq8_correction  # optional diagnostic entity
+    correction_sensor:               # optional diagnostic entity (a sub-entity)
+      name: "MQ-8 T-RH correction"
 ```
 
 The shipped package
@@ -117,16 +118,16 @@ sensor:
     id: !extend mq8                  # the entry of packages/mq8.yaml
     temperature: air_temperature
     humidity: air_humidity
-    correction_sensor: mq8_correction  # optional diagnostic (the factor applied)
 ```
 
 Both variants define the same two keys, so any platform works (SHT4x, DHT22,
 BME280, a sensor imported from Home Assistant, ...): only the ids are used,
-wherever they are defined. The shipped `packages/mq8.yaml` enables the
-`MQ-8 T-RH correction` entity (`${name}_mq8_correction`) and
-`packages/dht22.yaml` links it with `correction_sensor:`, so the applied factor
-is visible in Home Assistant (1.0000 = uncorrected, either because no T/RH sensor
-is linked or because `correction_mode: none` was written). The package also
+wherever they are defined. `packages/mq8.yaml` itself declares the
+`MQ-8 T-RH correction` entity as a sub-entity of the gas sensor
+(`correction_sensor:`), so nothing has to be linked for it: it stays at 1.0000
+while no T/RH sensor is linked or while `correction_mode: none` is written, and
+shows the applied factor as soon as both links are present (`packages/dht22.yaml`
+only adds `temperature:` / `humidity:`). The package also
 carries commented `sht4x` and `dht` examples that define
 `${name}_mq8_temperature` / `${name}_mq8_humidity`, for the "uncomment and go"
 setup. The DHT11 resolves only 1 °C / 1 % RH over 0 - 50 °C / 20 - 90 % RH, which
@@ -139,7 +140,7 @@ is about the ±3 % the compensation shifts indoors - prefer the SHT4x (or a DHT2
 | `humidity` | – | `id` of a relative humidity sensor (%). |
 | `correction_mode` | `mqdatascience` when both links are set, otherwise `none` | `none` or `mqdatascience` - only needed to opt out or to be explicit. |
 | `correction_clamp` | `absolute` | `absolute` clips to `max_ppm`; `scaled` clips to `max_ppm × correction` (MQDataScience's own behaviour). |
-| `correction_sensor` | – | Optional diagnostic entity receiving the applied factor (1.0000 = uncorrected). |
+| `correction_sensor` | enabled in `packages/mq8.yaml` | Diagnostic sub-entity of the gas sensor receiving the applied factor (1.0000 = uncorrected). Set `name:` / `icon:` / `filters:` on it, or delete the key to drop the entity. |
 
 ## Behaviour and safety rules
 

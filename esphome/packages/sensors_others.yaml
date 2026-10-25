@@ -5,7 +5,7 @@ substitutions:
 
 sensor:
   - platform: wifi_signal
-    name: "${friendly_name} WiFi Signal"
+    name: "WiFi Signal"
     update_interval: ${wifi_signal_update_interval}
     entity_category: "diagnostic"
     id: ${name}_wifi_signal_db

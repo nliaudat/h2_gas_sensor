@@ -20,40 +20,29 @@ substitutions:
 
   ### time
   TZ: "Europe/Zurich"  # timezone
+  
+### set PYTHONPATH=.esphome\external_components\85e8b4d0
 
 external_components:
-  - source: github://pr#19717
+  # mq_gas_sensors is built from this repo (esphome/components/mq_gas_sensors), not
+  # from PR #20896: it needs the divider-guard change that treats a declared
+  # 'adc_input_max:' as authoritative (the rule mics_5524 follows).  Switch back to
+  # `- source: github://pr#20896` / `components: [mq_gas_sensors]` /
+  # `refresh: always` once that change is in the PR - the local copy is the PR head
+  # plus that change, see docs/hardware.md and docs/mq8_sensor_guide.md.
+  - source:
+      type: local
+      path: components
     components: [mq_gas_sensors]
-    refresh: 1h
-
-  - source: github://pr#19721
-    components: [mics_5524_gas_sensor]
-    refresh: 1h
-
-  - source: github://pr#19728
+  - source: github://pr#21024 #github://pr#20521
+    components: [mics_5524]
+    refresh: always
+  - source: github://pr#20892
     components: [tsdb]
-    refresh: 1h
-
-  # TEMPORARY (debug): build `tsdb` from this working tree instead of PR #19728,
-  # so the new setup-failure diagnostics are flashed.  The last matching source
-  # wins (esphome/loader.py installs its finder at sys.meta_path[0]).  Remove
-  # this block before committing.  `path` is relative to this file.
-  # - source:
-      # type: local
-      # path: components
-    # components: [tsdb]
-
-# external_components:
-  # - source:
-      # type: local
-      # path: components
-    # components: [mq_gas_sensors, mics_5524_gas_sensor, tsdb]  # every component folder must be listed here
-
-# external_components:
-#   - source:
-#       type: local
-#       path: components
-#     components: [mics_5524_gas_sensor]  # every component folder must be listed here
+    refresh: always
+  - source: github://pr#20077
+    components: [wifi]
+    refresh: always
 
 # Enable logging
 logger:
@@ -87,7 +76,7 @@ logger:
     # `ESPHOME_LOG_STATES=0`) switches them off - see
     # ../docs/troubleshooting.md#reading-the-log
     mq_gas_sensors: INFO
-    mics_5524_gas_sensor: INFO
+    mics_5524: INFO
     # The history component: INFO keeps the boot banner (partition, capacity,
     # buffer pool), the warnings and the CSV dump of the "history dump" button;
     # only the per-write DEBUG lines are dropped. Set it back to DEBUG to see
