@@ -6,9 +6,9 @@
 #     reference to a declared entity)
 #   * `log_ppm: true` - the per-update `INFO` value line of the "normal mode"
 #   * `adc_input_max: 3.33`: the 10k/20k divider (1.5) maps the 5 V maximum to
-#     3.33 V, so the declared range has to be authoritative - that is what
-#     patches/pr20896-adc-input-max.patch makes it (the merged mics_5524
-#     component behaves the same way)
+#     3.33 V, above the 2.45 V the ADC measures at 12 dB; a declared range is
+#     authoritative (like the merged mics_5524 component), so the config builds
+#     and only logs a warning that the top of the range flattens
 esphome:
   name: mq_no_id_test
 esp32:

@@ -112,8 +112,9 @@ explicit opt-out. `mics5524.yaml` can be added on top of it (it uses `id: mics`)
   overrides commented in [`../esphome/config.yaml`](../esphome/config.yaml), and
   any pin change needs a new clean-air calibration.
 * Recommended divider: **10 kΩ in series, 20 kΩ to ground** -> ×1.5 -> 3.33 V at
-  the pin for a 5 V output. To cover the whole range use 10k/10k (2.5 V) or an
-  ADS1115 (`voltage_multiplier: 1.0`, `adc_input_max` / `adc_pin_max: 6.144`).
+  the pin for a 5 V output. To cover the whole range use 9.1k instead of the 20k
+  (2.37 V) or an ADS1115 (`voltage_multiplier: 1.0`, `adc_input_max` /
+  `adc_pin_max: 6.144`).
 * MiCS-5524: `EN` -> the configured GPIO; most modules are enabled by a LOW level
   (`inverted: true`).
 * Optional SHT4x (the I2C example in `packages/mq8.yaml`): `VDD` 3.3 V, `GND`,

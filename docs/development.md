@@ -27,7 +27,7 @@ recorded here. `refresh: always` re-fetches on every `esphome config`/`compile`.
 
 | Component | Source | Revision this tree was verified against |
 |---|---|---|
-| `mq_gas_sensors` | `github://pr#20896` | `320bab784c7fbeb1cc0509855f10473394a7fba5` |
+| `mq_gas_sensors` | `github://pr#20896` | `f493561faf8cef8700af37b821ba8f1675726a04` |
 | `tsdb` | `github://pr#20892` | `40b8d412def3b607013bc61a6765554eada28444` |
 | `mics_5524` | merged into ESPHome (PR #21024) | ESPHome `2026.11.0-dev` as installed |
 | `wifi` `ap_mode:` | merged into ESPHome (PR #20077) | ESPHome `2026.11.0-dev` as installed |
@@ -38,16 +38,15 @@ revision in its banner), so a host test run always asserts the code the build
 uses. When a PR head changes a header, re-copy it, re-run the tests and update
 the numbers in `docs/` - the banner is the only local addition.
 
-`mq_gas_sensors` needs one local patch on this hardware: the PCB feeds both gas
-sensors through a 10k/20k divider (5 V -> 3.33 V), and the current PR head
-refuses a declared `adc_input_max:` above the ADC's 2.45 V measuring range.
-[`../patches/pr20896-adc-input-max.patch`](../patches/pr20896-adc-input-max.patch)
-(`git apply` in an `esphome/esphome` checkout at the revision above) makes the
-declared range authoritative again, the way the merged `mics_5524` component
-treats it - see [`../patches/README.md`](../patches/README.md). **Until it is
-applied, `esphome config config.yaml` fails in `packages/mq8.yaml`** with
-"the sensor output can reach 5.00 V and the configured wiring maps that to
-3.33 V at the ADC input".
+`mq_gas_sensors` needs no local patch: the PCB feeds both gas sensors through a
+10k/20k divider (5 V -> 3.33 V), and a declared `adc_input_max:` is authoritative
+in the PR head since `f493561faf`, the way the merged `mics_5524` component
+treats it - `esphome config config.yaml` builds and only warns that conversions
+above the 2.45 V the ADC measures at `attenuation: 12db` flatten. That warning is
+not noise for the MQ-8: its AO is at 4.98 V (3.32 V on the pin) already at
+4 000 ppm, so the alarm band of `alarm.yaml` reads in the compressed part of the
+ADC. [`mq8_sensor_guide.md`](mq8_sensor_guide.md#analog-output-and-the-adc) lists
+the two improvements (9.1k instead of the 20k, or an ADS1115 on the free I2C).
 
 ## Validate configurations (no hardware needed)
 

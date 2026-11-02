@@ -209,7 +209,7 @@ mount error, the format result and whether the partition held data at all - cost
 
 A build on 2026-10-25 - components taken straight from their upstream revisions
 (`mq_gas_sensors` at PR #20896 head `320bab78`, `tsdb` at PR #20892 head
-`40b8d41`, `mics_5524` merged, plus `patches/pr20896-adc-input-max.patch`) -
+`40b8d41`, `mics_5524` merged) -
 came out at **1 008 939 B of flash (64.1 %)** and **51 752 B of static DRAM
 (28.6 %)**: -804 B / -1 980 B against the table, i.e. the upstream components are
 slightly leaner than the retired local copies. That ESPHome summary does not

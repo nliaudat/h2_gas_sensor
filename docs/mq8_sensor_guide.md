@@ -40,17 +40,24 @@ AO ──[ 10k ]──┬──> GPIO34 (ADC1_CH6)
   connected 3.3 V sensor).
 * **The ESP32 ADC pins are not 5 V tolerant.** The absolute maximum is VDD + 0.3 V
   (3.6 V), so never wire `AO` straight to a GPIO and never rely on the series
-  resistor alone. With 10k/20k a 5 V output reaches **3.33 V** - a hair above the
-  ESP32's 3.3 V recommended maximum, where the top of the range can read
-  non-linearly; that is why the packages declare `adc_input_max: 3.33`. Use
-  10k/10k (5 V -> 2.5 V) if the top of the AO range matters to you, or an ADS1115.
-* The component enforces this exactly like the MiCS-5524 package does: the
-  configuration is **rejected at compile time** when `vcc / voltage_multiplier`
-  exceeds `adc_pin_max` (3.6 V by default; that can damage the pin) and when it
-  exceeds `adc_input_max`. A declared `adc_input_max` is authoritative, because the
-  range of the sampler the reading comes from cannot always be read off the
-  configuration; without one the ESP32 range applies (3.3 V recommended, 2.45 V
-  measured at `attenuation: 12db`).
+  resistor alone. With 10k/20k a 5 V output reaches **3.33 V** - above the 2.45 V
+  a 12 dB ADC measures, where the top of the range reads non-linearly and clips
+  around 3.1 V; that is why the packages declare `adc_input_max: 3.33`. Use
+  9.1k instead of the 20k (5 V -> 2.37 V) if the top of the AO range matters to
+  you, or an ADS1115.
+* The component enforces the pin limit exactly like the MiCS-5524 package does:
+  the configuration is **rejected at compile time** when `vcc / voltage_multiplier`
+  exceeds `adc_pin_max` (3.6 V by default; that can damage the pin). A declared
+  `adc_input_max` is authoritative - it is what the divider is checked against -
+  because the range of the sampler the reading comes from cannot always be read
+  off the configuration; without one the ESP32 range applies (2.45 V measured at
+  `attenuation: 12db`). A declaration above the attenuation range is accepted and
+  logged, not refused: the conversion flattens above it, which on a 5 V module
+  through the 10k/20k divider is exactly where the alarm thresholds are (AO 4.98 V
+  -> 3.32 V on the pin at 4 000 ppm). To keep the band out of that region, fit
+  9.1 k instead of the 20 k (5 V -> 2.37 V) - or read the node with an ADS1115 on
+  the spare I2C (`gain: 4.096`), whose 125 uV step resolves the ~9 mV the band
+  spans.
 * GPIO34/35/36/39 are input-only, which is fine (and they are not strapping
   pins). Do not use GPIO12.
 

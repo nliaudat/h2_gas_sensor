@@ -143,15 +143,17 @@ sensor A0 ──[ R3 / R5 = 10 kΩ ]──┬── ADC-n ──> left socket (S
 * C1/C2 filter the divider node (source impedance 10 k ∥ 20 k = 6.7 kΩ → ~0.7 ms),
   which is why the default sampling of the packages (`sample_count:`, `sample_interval:`)
   can stay as it is.
-* 3.33 V is a hair above the 3.3 V "recommended maximum" of the ESP32 ADC, so the
-  very top of the range can clip - both packages declare `adc_input_max: 3.33` for
-  that reason. The merged `mics_5524` component takes a declared range as
-  authoritative; `mq_gas_sensors` only does with
-  [`../patches/pr20896-adc-input-max.patch`](../patches/pr20896-adc-input-max.patch)
-  applied (its current PR head clamps the value to the 2.45 V the ADC measures at
-  `attenuation: 12db`) - see [`development.md`](development.md#upstream-revisions).
-  Fit 10 k / 10 k (2.5 V) instead of the 20 k if you want the whole range
-  unambiguous and set `mq8_divider_r2` / `mics_divider_r2` to `10.0`.
+* 3.33 V is above the 2.45 V the ESP32 ADC measures at `attenuation: 12db`: the
+  conversion flattens above that (and saturates around 3.1 V), so the divider
+  cannot use the top of the ADC scale. Both packages declare
+  `adc_input_max: 3.33` and both take a declared range as authoritative, so the
+  configuration builds; for the MQ-8 the flattening is real, though - its AO is
+  at 4.98 V (3.32 V on the pin) already at 4 000 ppm, so the alarm band of
+  `alarm.yaml` sits in the compressed part of the ADC. Fit 9.1 k instead of the
+  20 k (2.37 V, inside the range, `mq8_divider_r2: "9.1"`) - but that leaves only
+  ~7 mV between 4 000 and 10 000 ppm - or read the divider node with an ADS1115
+  (`gain: 4.096`, 125 uV per step) as described in
+  [`mq8_sensor_guide.md`](mq8_sensor_guide.md#analog-output-and-the-adc).
 * The MQ-8 header is `VCC` (5 V) / `GND` / `D0` / `A0`: only `A0` is used, the
   digital output stays open. It sits inside the module outline printed as `MQ-9` -
   the MQ-8 and the MQ-9 module share the 4-pin interface and the outline, so
