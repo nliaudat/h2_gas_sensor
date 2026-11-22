@@ -21,9 +21,14 @@ esp32:
 logger:
   level: INFO
 external_components:
-  - source: github://pr#20896
+  # Pinned like config.yaml: the PR head needs the unreleased ESPHome 2026.12.0-dev
+  # (CONF_SAMPLE_INTERVAL), see docs/development.md.
+  - source:
+      type: git
+      url: https://github.com/esphome/esphome.git
+      ref: f493561faf8cef8700af37b821ba8f1675726a04
     components: [mq_gas_sensors]
-    refresh: always
+    refresh: never
 
 sensor:
   # Stand-ins for the ambient sensors of the package (no I2C/1-wire hardware):

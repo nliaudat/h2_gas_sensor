@@ -21,13 +21,25 @@ automatically.
 
 ## Upstream revisions
 
-The build tracks the PR heads (`github://pr#...` cannot be pinned to a commit),
+The build tracks the PR heads by default (`github://pr#...` follows the head),
 so the state the documentation and the host tests were written against is
 recorded here. `refresh: always` re-fetches on every `esphome config`/`compile`.
 
+`mq_gas_sensors` is the one exception: it is pinned with the long form
+(`type: git` + `ref:`) to the revision below. Since `b8971d6d2f`
+(2026-11-21) the PR head imports `CONF_SAMPLE_INTERVAL` from
+`esphome.components.const`, a constant that only exists in the unreleased
+ESPHome 2026.12.0-dev (core PR #22900), so ESPHome 2026.11.0 fails during
+`esphome config` with `ImportError: cannot import name
+'CONF_SAMPLE_INTERVAL'`. The long form is the only way to pin a PR head;
+revert to `source: github://pr#20896` + `refresh: always` once a release with
+that constant is installed and the tree has been re-verified against the head
+(a head update that touches `mq_math.h` also needs a fresh vendor copy and a
+host test run, see below).
+
 | Component | Source | Revision this tree was verified against |
 |---|---|---|
-| `mq_gas_sensors` | `github://pr#20896` | `f493561faf8cef8700af37b821ba8f1675726a04` |
+| `mq_gas_sensors` | pinned to `f493561faf...` (long form in `config.yaml`) | `f493561faf8cef8700af37b821ba8f1675726a04` |
 | `tsdb` | `github://pr#20892` | `40b8d412def3b607013bc61a6765554eada28444` |
 | `mics_5524` | merged into ESPHome (PR #21024) | ESPHome `2026.11.0-dev` as installed |
 | `wifi` `ap_mode:` | merged into ESPHome (PR #20077) | ESPHome `2026.11.0-dev` as installed |

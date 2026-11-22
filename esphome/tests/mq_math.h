@@ -1,7 +1,7 @@
 // VENDORED - do not edit. Copy of the component header the build compiles, so the
 // host test next to it asserts the same code that runs on the device.
-//   component: mq_gas_sensors (github://pr#20896 head)
-//   revision:  320bab784c7fbeb1cc0509855f10473394a7fba5
+//   component: mq_gas_sensors (github://pr#20896, pinned in config.yaml)
+//   revision:  f493561faf8cef8700af37b821ba8f1675726a04
 //   licence:   MIT (c) the ESPHome authors
 // Keep the code below byte-identical to that revision; only this banner is local.
 

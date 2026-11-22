@@ -24,13 +24,27 @@ substitutions:
 ### Components come from their upstream pull requests only - this repository keeps
 ### no copy of them. `mics_5524` and the `wifi` `ap_mode:` option (which replaced
 ### the older `ap: coexist:`) are merged into ESPHome and built in; `mq_gas_sensors`
-### and `tsdb` are still PR-only. `refresh: always` tracks the PR head: a build
-### needs network access for the first fetch on a machine, later builds reuse the
-### clone in .esphome/external_components/.
+### and `tsdb` are still PR-only. A build needs network access for the first fetch
+### on a machine, later builds reuse the clone in .esphome/external_components/.
+###
+### `mq_gas_sensors` is pinned to the PR revision this tree was verified against
+### (docs/development.md). Since `b8971d6d2f` (2026-11-21) the PR head imports
+### `CONF_SAMPLE_INTERVAL` from `esphome.components.const`, a module constant that
+### only exists in the unreleased ESPHome 2026.12.0-dev (core PR #22900); with the
+### installed ESPHome 2026.11.0 `esphome config` fails with
+### "cannot import name 'CONF_SAMPLE_INTERVAL'". `github://pr#...` follows the PR
+### head and cannot be pinned, hence the long form with `ref:`. Switch back to
+### `- source: github://pr#20896` / `refresh: always` once ESPHome 2026.12.0 (or a
+### newer 2026.11.x) is installed and the tree has been re-verified against the
+### head - the host tests vendor `mq_math.h`, so a head update also needs a
+### re-copy and a test run.
 external_components:
-  - source: github://pr#20896
+  - source:
+      type: git
+      url: https://github.com/esphome/esphome.git
+      ref: f493561faf8cef8700af37b821ba8f1675726a04
     components: [mq_gas_sensors]
-    refresh: always
+    refresh: never
   - source: github://pr#20892
     components: [tsdb]
     refresh: always
